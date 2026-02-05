@@ -1,0 +1,217 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Role {
+  email     String        @id @db.VarChar(255)
+  role      String        @db.VarChar(64)
+  createdAt Int           @map("created_at")
+  updatedAt Int           @map("updated_at")
+  verified  VerifiedUser[]
+
+  @@map("roles")
+}
+
+model ScoutingEntry {
+  id          Int     @id @default(autoincrement())
+  clientId    String  @unique @map("client_id") @db.VarChar(255)
+  teamNumber  String? @map("team_number") @db.VarChar(255)
+  matchNumber String? @map("match_number") @db.VarChar(255)
+  alliance    String? @db.VarChar(255)
+  scoutName   String? @map("scout_name") @db.VarChar(255)
+  eventName   String? @map("event_name") @db.VarChar(255)
+  data        String  @db.LongText
+  timestamp   BigInt
+
+  @@index([teamNumber], map: "idx_scouting_team")
+  @@index([matchNumber], map: "idx_scouting_match")
+  @@index([eventName], map: "idx_scouting_event")
+  @@index([scoutName], map: "idx_scouting_scout")
+  @@map("scouting_entries")
+}
+
+model PitEntry {
+  id         String  @id
+  teamNumber String? @map("team_number") @db.VarChar(255)
+  eventName  String? @map("event_name") @db.VarChar(255)
+  scoutName  String? @map("scout_name") @db.VarChar(255)
+  data       String  @db.LongText
+  timestamp  BigInt
+
+  @@index([teamNumber], map: "idx_pit_team")
+  @@index([eventName], map: "idx_pit_event")
+  @@index([scoutName], map: "idx_pit_scout")
+  @@map("pit_entries")
+}
+
+model Scout {
+  name               String             @id @db.VarChar(255)
+  pis                Int
+  pisFromPredictions Int                @map("pis_from_predictions")
+  totalPredictions   Int                @map("total_predictions")
+  correctPredictions Int                @map("correct_predictions")
+  currentStreak      Int                @map("current_streak")
+  longestStreak      Int                @map("longest_streak")
+  createdAt          BigInt             @map("created_at")
+  lastUpdated        BigInt             @map("last_updated")
+  predictions        Prediction[]
+  achievements       ScoutAchievement[]
+
+  @@map("scouts")
+}
+
+model Prediction {
+  id              String   @id
+  scoutName       String   @map("scout_name") @db.VarChar(255)
+  eventName       String   @map("event_name") @db.VarChar(255)
+  matchNumber     String   @map("match_number") @db.VarChar(255)
+  predictedWinner String   @map("predicted_winner") @db.VarChar(255)
+  wager           Int?
+  actualWinner    String?  @map("actual_winner") @db.VarChar(255)
+  isCorrect       Boolean? @map("is_correct")
+  pointsAwarded   Int?     @map("points_awarded")
+  timestamp       BigInt
+  verified        Boolean  @default(false)
+  scout           Scout    @relation(fields: [scoutName], references: [name], onDelete: Cascade)
+
+  @@index([scoutName], map: "idx_predictions_scout")
+  @@index([eventName, matchNumber], map: "idx_predictions_event_match")
+  @@unique([scoutName, eventName, matchNumber], map: "idx_predictions_unique")
+  @@map("predictions")
+}
+
+model ScoutAchievement {
+  scoutName     String  @map("scout_name") @db.VarChar(255)
+  achievementId String  @map("achievement_id") @db.VarChar(255)
+  unlockedAt    BigInt  @map("unlocked_at")
+  progress      Float?
+  scout         Scout   @relation(fields: [scoutName], references: [name], onDelete: Cascade)
+
+  @@id([scoutName, achievementId])
+  @@map("scout_achievements")
+}
+
+model EventSetting {
+  id           Int     @id
+  currentEvent String? @map("current_event") @db.VarChar(255)
+  eventsJson   String  @map("events_json") @db.LongText
+  updatedAt    Int     @map("updated_at")
+
+  @@map("event_settings")
+}
+
+model RecentUser {
+  email        String  @id @db.VarChar(255)
+  firstSeenAt  String  @map("first_seen_at") @db.VarChar(255)
+  lastSeenAt   String  @map("last_seen_at") @db.VarChar(255)
+  acknowledged Boolean @default(false)
+  displayName  String? @map("display_name") @db.VarChar(255)
+  photoUrl     String? @map("photo_url") @db.VarChar(255)
+
+  @@index([acknowledged], map: "idx_recent_users_ack")
+  @@index([lastSeenAt], map: "idx_recent_users_last_seen")
+  @@map("recent_users")
+}
+
+model VerifiedUser {
+  id         Int    @id @default(autoincrement())
+  email      String @db.VarChar(255)
+  role       String @db.VarChar(64)
+  verifiedAt Int    @map("verified_at")
+  roleRef    Role?  @relation(fields: [email], references: [email], onDelete: Cascade)
+
+  @@index([verifiedAt], map: "idx_verified_users_verified_at")
+  @@index([email], map: "idx_verified_users_email")
+  @@map("verified_users")
+}
+
+model ScoutScheduleMatch {
+  eventKey   String  @map("event_key") @db.VarChar(255)
+  matchNumber String @map("match_number") @db.VarChar(255)
+  startTime  String? @map("start_time") @db.VarChar(255)
+  redTeams   String? @map("red_teams") @db.LongText
+  blueTeams  String? @map("blue_teams") @db.LongText
+  createdAt  Int     @map("created_at")
+  updatedAt  Int     @map("updated_at")
+
+  @@id([eventKey, matchNumber])
+  @@map("scout_schedule_matches")
+}
+
+model ScoutScheduleAssignment {
+  eventKey   String  @map("event_key") @db.VarChar(255)
+  matchNumber String @map("match_number") @db.VarChar(255)
+  matchOrder Int?   @map("match_order")
+  position   String  @db.VarChar(255)
+  scoutEmail String  @map("scout_email") @db.VarChar(255)
+  startTime  String? @map("start_time") @db.VarChar(255)
+  createdAt  Int     @map("created_at")
+  updatedAt  Int     @map("updated_at")
+
+  @@id([eventKey, matchNumber, position])
+  @@index([eventKey, scoutEmail], map: "idx_schedule_email")
+  @@index([eventKey, matchOrder], map: "idx_schedule_match_order")
+  @@map("scout_schedule_assignments")
+}
+
+model ScheduleProgress {
+  eventKey           String @id @map("event_key") @db.VarChar(255)
+  lastCompletedMatch Int    @map("last_completed_match")
+  lastUpdated        Int    @map("last_updated")
+
+  @@map("schedule_progress")
+}
+
+model ScheduleNotification {
+  eventKey    String @map("event_key") @db.VarChar(255)
+  matchNumber String @map("match_number") @db.VarChar(255)
+  scoutEmail  String @map("scout_email") @db.VarChar(255)
+  sentAt      Int    @map("sent_at")
+
+  @@id([eventKey, matchNumber, scoutEmail])
+  @@index([eventKey, scoutEmail], map: "idx_schedule_notifications_email")
+  @@map("schedule_notifications")
+}
+
+model PushSubscription {
+  id        Int     @id @default(autoincrement())
+  email     String? @db.VarChar(255)
+  endpoint  String  @unique @db.VarChar(1024)
+  p256dh    String? @db.VarChar(512)
+  auth      String? @db.VarChar(512)
+  dataJson  String? @map("data_json") @db.LongText
+  userAgent String? @map("user_agent") @db.VarChar(512)
+  createdAt Int     @map("created_at")
+  lastUsed  Int     @map("last_used")
+
+  @@index([email], map: "idx_push_subscriptions_email")
+  @@map("push_subscriptions")
+}
+
+model FormDefinition {
+  id         String  @id @db.VarChar(255)
+  name       String  @db.VarChar(255)
+  year       String  @db.VarChar(255)
+  description String? @db.VarChar(255)
+  formType   String  @map("form_type") @db.VarChar(64)
+  status     String  @db.VarChar(64)
+  dbHost     String? @map("db_host") @db.VarChar(255)
+  dbName     String? @map("db_name") @db.VarChar(255)
+  dbUser     String? @map("db_user") @db.VarChar(255)
+  dbPass     String? @map("db_pass") @db.VarChar(255)
+  dbEngine   String  @map("db_engine") @db.VarChar(64)
+  webhookUrl String? @map("webhook_url") @db.VarChar(1024)
+  webhookMethod String? @map("webhook_method") @db.VarChar(16)
+  webhookAuthHeader String? @map("webhook_auth_header") @db.VarChar(512)
+  schemaJson String  @map("schema_json") @db.LongText
+  createdAt  Int     @map("created_at")
+  updatedAt  Int     @map("updated_at")
+
+  @@index([year], map: "idx_form_definitions_year")
+  @@map("form_definitions")
+}

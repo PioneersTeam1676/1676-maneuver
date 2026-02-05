@@ -1,0 +1,51 @@
+import Dashboard from "@/pages/Dashboard";
+import LandingPage from "@/pages/LandingPage";
+import { Toaster } from "@/components/ui/sonner";
+import { PWAUpdatePrompt } from '@/components/PWAUpdatePrompt';
+import MatchReminderBackground from "@/components/MatchReminderBackground";
+import { useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+
+const MainLayout = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { canAccessPath, defaultRoute, user, ready } = useAuth();
+
+  useEffect(() => {
+    if (!ready) return;
+    
+    // If user is not logged in and not on a public page, show landing page
+    if (!user && location.pathname === '/') {
+      return; // Stay on landing page
+    }
+    
+    const permitted = canAccessPath(location.pathname);
+    if (!permitted) {
+      navigate(defaultRoute, { replace: true });
+      return;
+    }
+  }, [location.pathname, canAccessPath, defaultRoute, navigate, user, ready]);
+
+  // Show landing page for unauthenticated users on root path
+  if (location.pathname === '/' && !user) {
+    return (
+      <>
+        <LandingPage />
+        <Toaster />
+        <PWAUpdatePrompt />
+      </>
+    );
+  }
+
+  return (
+    <div className="flex min-h-dvh w-full flex-col bg-background">
+      <Dashboard />
+      <MatchReminderBackground />
+      <Toaster />
+      <PWAUpdatePrompt />
+    </div>
+  );
+};
+
+export default MainLayout;

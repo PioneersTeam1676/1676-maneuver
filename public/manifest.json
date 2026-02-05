@@ -1,0 +1,65 @@
+{
+  "name": "Pioneer Scouting - A FRC Strategy Suite",
+  "short_name": "Pioneer Scouting",
+  "description": "Pioneer Scouting is an offline-first FRC scouting suite to collect, analyze, and visualize match and pit data efficiently.",
+  "theme_color": "#FFCC00",
+  "background_color": "#ffffff",
+  "display": "standalone",
+  "scope": "/",
+  "start_url": "/",
+  "categories": ["sports", "utilities", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Quick Scout",
+      "short_name": "Scout",
+      "description": "Start scouting a match",
+      "url": "/game-start",
+      "icons": [{
+        "src": "/QuickScoutShortcut.png",
+        "sizes": "96x96",
+        "type": "image/png"
+      }]
+    },
+    {
+      "name": "Team Stats",
+      "short_name": "Stats", 
+      "description": "View team analytics",
+      "url": "/team-stats",
+      "icons": [{
+        "src": "/TeamStatsShortcut.png",
+        "sizes": "96x96",
+        "type": "image/png"
+      }]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/desktop-screenshot.png",
+      "sizes": "1920x1079",
+      "type": "image/png",
+      "form_factor": "wide",
+  "label": "Pioneer Scouting desktop view"
+    },
+    {
+      "src": "/screenshots/mobile-screenshot.png",
+      "sizes": "430x932", 
+      "type": "image/png",
+      "form_factor": "narrow",
+  "label": "Pioneer Scouting mobile view"
+    }
+  ],
+  "icons": [
+    {
+      "src": "/pioneer.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pioneer.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

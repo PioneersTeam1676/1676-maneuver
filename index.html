@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    
+    <!-- Favicon and Icons -->
+  <link rel="icon" href="/pioneer.png" type="image/png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/pioneer.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/pioneer.png" />
+    
+    <!-- Apple Touch Icons -->
+  <link rel="apple-touch-icon" href="/pioneer.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/pioneer.png" />
+    
+    <!-- Android Chrome Icons -->
+  <link rel="icon" type="image/png" sizes="192x192" href="/pioneer.png" />
+  <link rel="icon" type="image/png" sizes="512x512" href="/pioneer.png" />
+    
+    <!-- Web App Manifest (optional) -->
+    <link rel="manifest" href="/manifest.json" />
+    
+    <!-- Theme Color for Android -->
+    <meta name="theme-color" content="#000000" />
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+  <meta name="title" content="Pioneer Scouting - FRC Strategy Suite by Team 1676" />
+    <meta
+      name="description"
+  content="Pioneer Scouting by FRC Team 1676 is an offline-first scouting application for FIRST Robotics Competition. Collect match data, analyze team performance, conduct pit scouting, and develop alliance strategies."
+    />
+    <meta name="author" content="FRC Team 1676 - The Pascack Pi-oneers" />
+    <meta
+      name="keywords"
+  content="FRC scouting, Pioneer Scouting, Reefscape scouting, robotics, FRC, data visualization, match data, scouting app, robotics competition"
+    />
+    <meta name="robots" content="index, follow" />
+
+    <!-- Open Graph (OG) Meta Tags for Social Sharing -->
+    <meta
+      property="og:title"
+  content="Pioneer Scouting - FRC Strategy Suite by Team 1676"
+    />
+    <meta
+      property="og:description"
+  content="Pioneer Scouting is an offline-first FRC scouting suite developed by Team 1676 to collect, analyze, and visualize match and pit data efficiently."
+    />
+  <meta property="og:image" content="https://scouting.1676.team/pioneer.png" />
+  <meta property="og:url" content="https://scouting.1676.team" />
+    <meta property="og:type" content="website" />
+    
+    <!-- PWA Support -->
+    <meta name="mobile-web-app-capable" content="yes">
+  <meta name="application-name" content="Pioneer Scouting">
+
+    <!-- iOS Safari -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Pioneer Scouting" />
+
+    <!-- Microsoft Tiles -->
+    <meta name="msapplication-TileColor" content="#000000" />
+    <meta name="msapplication-TileImage" content="/android-chrome-192x192.png" />
+
+  <link rel="preload" as="image" href="/pioneer.png" />
+
+  <title>Pioneer Scouting</title>
+  </head>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-QC65PEFPDJ"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-QC65PEFPDJ');
+  </script>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,6040 @@
+{
+  "entries": [
+    {
+      "teamNumber": "737",
+      "eventName": "2025casd",
+      "scoutName": "AK",
+      "weight": 105,
+      "drivetrain": "Mecanum",
+      "programmingLanguage": "LabVIEW",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 0,
+        "coralL2": 2,
+        "coralL3": 4,
+        "coralL4": 8,
+        "totalAlgae": 5,
+        "algaeNetShots": true,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": false,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 737 - Strong coral placement, consistent auto",
+      "id": "pit-737-2025casd-test-0",
+      "timestamp": 1756980581094.0498
+    },
+    {
+      "teamNumber": "840",
+      "eventName": "2025casd",
+      "scoutName": "RW",
+      "weight": 122,
+      "drivetrain": "Tank Drive",
+      "programmingLanguage": "LabVIEW",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 2,
+        "coralL2": 1,
+        "coralL3": 1,
+        "coralL4": 9,
+        "totalAlgae": 7,
+        "algaeNetShots": true,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": false,
+        "canDeepClimb": true,
+        "canPark": true
+      },
+      "notes": "Team 840 - Consistent performance, no major issues",
+      "id": "pit-840-2025casd-test-1",
+      "timestamp": 1756989562789.9473
+    },
+    {
+      "teamNumber": "727",
+      "eventName": "2025mrcmp",
+      "scoutName": "KL",
+      "weight": 114,
+      "drivetrain": "Mecanum",
+      "programmingLanguage": "LabVIEW",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 1
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 2,
+        "coralL2": 3,
+        "coralL3": 2,
+        "coralL4": 7,
+        "totalAlgae": 5,
+        "algaeNetShots": false,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": false,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 727 - Well-rounded robot, good strategy",
+      "id": "pit-727-2025mrcmp-test-2",
+      "timestamp": 1756888401082.1042
+    },
+    {
+      "teamNumber": "829",
+      "eventName": "2025mrcmp",
+      "scoutName": "KL",
+      "weight": 85,
+      "drivetrain": "Mecanum",
+      "programmingLanguage": "LabVIEW",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": false,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 1
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 2,
+        "coralL2": 1,
+        "coralL3": 6,
+        "coralL4": 2,
+        "totalAlgae": 7,
+        "algaeNetShots": true,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": false,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 829 - Fast cycle times, good driver",
+      "id": "pit-829-2025mrcmp-test-3",
+      "timestamp": 1756996142281.9524
+    },
+    {
+      "teamNumber": "486",
+      "eventName": "2025ontor",
+      "scoutName": "AK",
+      "weight": 103,
+      "drivetrain": "Swerve",
+      "programmingLanguage": "Java",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": false,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 1,
+        "coralL2": 0,
+        "coralL3": 4,
+        "coralL4": 3,
+        "totalAlgae": 0,
+        "algaeNetShots": false,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": true,
+        "canPark": true
+      },
+      "notes": "Team 486 - Fast robot, aggressive playstyle",
+      "id": "pit-486-2025ontor-test-4",
+      "timestamp": 1756806176538.7957
+    },
+    {
+      "teamNumber": "275",
+      "eventName": "2025njfla",
+      "scoutName": "ET",
+      "weight": 83,
+      "drivetrain": "H-Drive",
+      "programmingLanguage": "Java",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 3,
+        "coralL2": 2,
+        "coralL3": 4,
+        "coralL4": 2,
+        "totalAlgae": 4,
+        "algaeNetShots": false,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": true,
+        "canPark": false
+      },
+      "notes": "Team 275 - Fast robot, aggressive playstyle",
+      "id": "pit-275-2025njfla-test-5",
+      "timestamp": 1757193331767.3296
+    },
+    {
+      "teamNumber": "446",
+      "eventName": "2025casd",
+      "scoutName": "AK",
+      "weight": 116,
+      "drivetrain": "West Coast",
+      "programmingLanguage": "Python",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 1
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 3,
+        "coralL2": 1,
+        "coralL3": 3,
+        "coralL4": 0,
+        "totalAlgae": 2,
+        "algaeNetShots": true,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": false,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 446 - Fast robot, aggressive playstyle",
+      "id": "pit-446-2025casd-test-6",
+      "timestamp": 1757059270879.699
+    },
+    {
+      "teamNumber": "618",
+      "eventName": "2025mrcmp",
+      "scoutName": "ET",
+      "weight": 111,
+      "drivetrain": "Swerve",
+      "programmingLanguage": "Java",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 1,
+        "coralL2": 2,
+        "coralL3": 4,
+        "coralL4": 7,
+        "totalAlgae": 3,
+        "algaeNetShots": false,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": true,
+        "canPark": true
+      },
+      "notes": "Team 618 - Innovative design, unique mechanisms",
+      "id": "pit-618-2025mrcmp-test-7",
+      "timestamp": 1756962259804.7822
+    },
+    {
+      "teamNumber": "606",
+      "eventName": "2025pawar",
+      "scoutName": "KL",
+      "weight": 91,
+      "drivetrain": "Tank Drive",
+      "programmingLanguage": "LabVIEW",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 1
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 3,
+        "coralL2": 1,
+        "coralL3": 4,
+        "coralL4": 0,
+        "totalAlgae": 2,
+        "algaeNetShots": true,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": true,
+        "canPark": true
+      },
+      "notes": "Team 606 - Well-rounded robot, good strategy",
+      "id": "pit-606-2025pawar-test-8",
+      "timestamp": 1756842412642.2104
+    },
+    {
+      "teamNumber": "325",
+      "eventName": "2025casd",
+      "scoutName": "MR",
+      "weight": 118,
+      "drivetrain": "West Coast",
+      "programmingLanguage": "Java",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 1
+        },
+        "position3": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 2,
+        "coralL2": 3,
+        "coralL3": 4,
+        "coralL4": 0,
+        "totalAlgae": 1,
+        "algaeNetShots": false,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": true,
+        "canPark": true
+      },
+      "notes": "Team 325 - Well-rounded robot, good strategy",
+      "id": "pit-325-2025casd-test-9",
+      "timestamp": 1756829125849.1125
+    },
+    {
+      "teamNumber": "121",
+      "eventName": "2025ontor",
+      "scoutName": "MR",
+      "weight": 83,
+      "drivetrain": "Mecanum",
+      "programmingLanguage": "Python",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 3,
+        "coralL2": 4,
+        "coralL3": 0,
+        "coralL4": 9,
+        "totalAlgae": 2,
+        "algaeNetShots": true,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 121 - Algae specialist, accurate net shots",
+      "id": "pit-121-2025ontor-test-10",
+      "timestamp": 1756812097849.8147
+    },
+    {
+      "teamNumber": "972",
+      "eventName": "2025pawar",
+      "scoutName": "BH",
+      "weight": 83,
+      "drivetrain": "Swerve",
+      "programmingLanguage": "C++",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 3,
+        "coralL2": 4,
+        "coralL3": 1,
+        "coralL4": 0,
+        "totalAlgae": 5,
+        "algaeNetShots": true,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": true,
+        "canPark": false
+      },
+      "notes": "Team 972 - Fast robot, aggressive playstyle",
+      "id": "pit-972-2025pawar-test-11",
+      "timestamp": 1756760339998.1077
+    },
+    {
+      "teamNumber": "240",
+      "eventName": "2025mrcmp",
+      "scoutName": "ET",
+      "weight": 88,
+      "drivetrain": "Swerve",
+      "programmingLanguage": "Java",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 1
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 1,
+        "coralL2": 1,
+        "coralL3": 1,
+        "coralL4": 1,
+        "totalAlgae": 4,
+        "algaeNetShots": false,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": false,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 240 - Reliable climber, defensive capabilities",
+      "id": "pit-240-2025mrcmp-test-12",
+      "timestamp": 1757120612849.6038
+    },
+    {
+      "teamNumber": "294",
+      "eventName": "2025ontor",
+      "scoutName": "AK",
+      "weight": 123,
+      "drivetrain": "H-Drive",
+      "programmingLanguage": "Python",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 1
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 2,
+        "coralL2": 2,
+        "coralL3": 2,
+        "coralL4": 7,
+        "totalAlgae": 5,
+        "algaeNetShots": true,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": false
+      },
+      "notes": "Team 294 - Fast cycle times, good driver",
+      "id": "pit-294-2025ontor-test-13",
+      "timestamp": 1757167339596.4973
+    },
+    {
+      "teamNumber": "588",
+      "eventName": "2025ontor",
+      "scoutName": "TM",
+      "weight": 121,
+      "drivetrain": "West Coast",
+      "programmingLanguage": "Python",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 1
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 1
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 0,
+        "coralL2": 4,
+        "coralL3": 5,
+        "coralL4": 9,
+        "totalAlgae": 1,
+        "algaeNetShots": true,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 588 - Well-rounded robot, good strategy",
+      "id": "pit-588-2025ontor-test-14",
+      "timestamp": 1757161039052.5735
+    },
+    {
+      "teamNumber": "916",
+      "eventName": "2025mrcmp",
+      "scoutName": "RW",
+      "weight": 114,
+      "drivetrain": "West Coast",
+      "programmingLanguage": "Python",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 2,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 2,
+        "coralL2": 3,
+        "coralL3": 3,
+        "coralL4": 8,
+        "totalAlgae": 0,
+        "algaeNetShots": true,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": true,
+        "canPark": true
+      },
+      "notes": "Team 916 - Reliable climber, defensive capabilities",
+      "id": "pit-916-2025mrcmp-test-15",
+      "timestamp": 1757012308134.4495
+    },
+    {
+      "teamNumber": "721",
+      "eventName": "2025njfla",
+      "scoutName": "BH",
+      "weight": 113,
+      "drivetrain": "Tank Drive",
+      "programmingLanguage": "Java",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 3,
+        "coralL2": 1,
+        "coralL3": 5,
+        "coralL4": 1,
+        "totalAlgae": 5,
+        "algaeNetShots": false,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": true,
+        "canPark": true
+      },
+      "notes": "Team 721 - Innovative design, unique mechanisms",
+      "id": "pit-721-2025njfla-test-16",
+      "timestamp": 1757074386689.1533
+    },
+    {
+      "teamNumber": "812",
+      "eventName": "2025mrcmp",
+      "scoutName": "SC",
+      "weight": 114,
+      "drivetrain": "Tank Drive",
+      "programmingLanguage": "Python",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 1
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 2,
+        "coralL2": 0,
+        "coralL3": 2,
+        "coralL4": 2,
+        "totalAlgae": 2,
+        "algaeNetShots": false,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": false,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 812 - Strong coral placement, consistent auto",
+      "id": "pit-812-2025mrcmp-test-17",
+      "timestamp": 1757285395902.356
+    },
+    {
+      "teamNumber": "384",
+      "eventName": "2025pawar",
+      "scoutName": "ET",
+      "weight": 118,
+      "drivetrain": "Tank Drive",
+      "programmingLanguage": "C++",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 1,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 2,
+        "coralL2": 0,
+        "coralL3": 5,
+        "coralL4": 4,
+        "totalAlgae": 4,
+        "algaeNetShots": true,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 384 - Reliable climber, defensive capabilities",
+      "id": "pit-384-2025pawar-test-18",
+      "timestamp": 1756940428427.6062
+    },
+    {
+      "teamNumber": "369",
+      "eventName": "2025mrcmp",
+      "scoutName": "RW",
+      "weight": 93,
+      "drivetrain": "Tank Drive",
+      "programmingLanguage": "LabVIEW",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": false,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 0,
+        "coralL2": 3,
+        "coralL3": 4,
+        "coralL4": 5,
+        "totalAlgae": 4,
+        "algaeNetShots": false,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": true,
+        "canPark": true
+      },
+      "notes": "Team 369 - Innovative design, unique mechanisms",
+      "id": "pit-369-2025mrcmp-test-19",
+      "timestamp": 1757088700251.2703
+    },
+    {
+      "teamNumber": "1582",
+      "eventName": "2025pawar",
+      "scoutName": "BH",
+      "weight": 114,
+      "drivetrain": "Swerve",
+      "programmingLanguage": "C++",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": false,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 1
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 3,
+        "coralL2": 0,
+        "coralL3": 4,
+        "coralL4": 3,
+        "totalAlgae": 2,
+        "algaeNetShots": false,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": true,
+        "canPark": true
+      },
+      "notes": "Team 1582 - Fast cycle times, good driver",
+      "id": "pit-1582-2025pawar-test-20",
+      "timestamp": 1757347877136.491
+    },
+    {
+      "teamNumber": "5108",
+      "eventName": "2025ontor",
+      "scoutName": "AK",
+      "weight": 100,
+      "drivetrain": "West Coast",
+      "programmingLanguage": "Java",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 1,
+        "coralL2": 2,
+        "coralL3": 1,
+        "coralL4": 9,
+        "totalAlgae": 7,
+        "algaeNetShots": true,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": true,
+        "canPark": true
+      },
+      "notes": "Team 5108 - Strong coral placement, consistent auto",
+      "id": "pit-5108-2025ontor-test-21",
+      "timestamp": 1756951545765.2742
+    },
+    {
+      "teamNumber": "8814",
+      "eventName": "2025casd",
+      "scoutName": "SC",
+      "weight": 80,
+      "drivetrain": "Swerve",
+      "programmingLanguage": "Java",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 1,
+        "coralL2": 4,
+        "coralL3": 2,
+        "coralL4": 6,
+        "totalAlgae": 4,
+        "algaeNetShots": false,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": true,
+        "canPark": true
+      },
+      "notes": "Team 8814 - Fast robot, aggressive playstyle",
+      "id": "pit-8814-2025casd-test-22",
+      "timestamp": 1757079641598.4072
+    },
+    {
+      "teamNumber": "2788",
+      "eventName": "2025ontor",
+      "scoutName": "BH",
+      "weight": 119,
+      "drivetrain": "West Coast",
+      "programmingLanguage": "C++",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 1
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 0,
+        "coralL2": 3,
+        "coralL3": 3,
+        "coralL4": 5,
+        "totalAlgae": 3,
+        "algaeNetShots": false,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 2788 - Consistent performance, no major issues",
+      "id": "pit-2788-2025ontor-test-23",
+      "timestamp": 1757134220636.544
+    },
+    {
+      "teamNumber": "5136",
+      "eventName": "2025ontor",
+      "scoutName": "SC",
+      "weight": 108,
+      "drivetrain": "Swerve",
+      "programmingLanguage": "Python",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 1,
+        "coralL2": 1,
+        "coralL3": 4,
+        "coralL4": 0,
+        "totalAlgae": 4,
+        "algaeNetShots": false,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 5136 - Innovative design, unique mechanisms",
+      "id": "pit-5136-2025ontor-test-24",
+      "timestamp": 1757188087436.0232
+    },
+    {
+      "teamNumber": "4549",
+      "eventName": "2025casd",
+      "scoutName": "ET",
+      "weight": 104,
+      "drivetrain": "Swerve",
+      "programmingLanguage": "C++",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 1
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 1,
+        "coralL2": 1,
+        "coralL3": 5,
+        "coralL4": 1,
+        "totalAlgae": 5,
+        "algaeNetShots": true,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": false,
+        "canDeepClimb": false,
+        "canPark": false
+      },
+      "notes": "Team 4549 - Strong coral placement, consistent auto",
+      "id": "pit-4549-2025casd-test-25",
+      "timestamp": 1757247294223.138
+    },
+    {
+      "teamNumber": "8612",
+      "eventName": "2025njfla",
+      "scoutName": "SC",
+      "weight": 113,
+      "drivetrain": "Swerve",
+      "programmingLanguage": "Java",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 3,
+        "coralL2": 4,
+        "coralL3": 5,
+        "coralL4": 1,
+        "totalAlgae": 0,
+        "algaeNetShots": true,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": true,
+        "canPark": true
+      },
+      "notes": "Team 8612 - Fast robot, aggressive playstyle",
+      "id": "pit-8612-2025njfla-test-26",
+      "timestamp": 1756984763876.3928
+    },
+    {
+      "teamNumber": "5774",
+      "eventName": "2025ontor",
+      "scoutName": "RW",
+      "weight": 106,
+      "drivetrain": "H-Drive",
+      "programmingLanguage": "C++",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 1
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 0,
+        "coralL2": 3,
+        "coralL3": 1,
+        "coralL4": 5,
+        "totalAlgae": 7,
+        "algaeNetShots": false,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": true,
+        "canPark": true
+      },
+      "notes": "Team 5774 - Algae specialist, accurate net shots",
+      "id": "pit-5774-2025ontor-test-27",
+      "timestamp": 1757078048239.533
+    },
+    {
+      "teamNumber": "2723",
+      "eventName": "2025ontor",
+      "scoutName": "JD",
+      "weight": 109,
+      "drivetrain": "H-Drive",
+      "programmingLanguage": "Java",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": false,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 2,
+        "coralL2": 3,
+        "coralL3": 0,
+        "coralL4": 6,
+        "totalAlgae": 7,
+        "algaeNetShots": false,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": false,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 2723 - Strong coral placement, consistent auto",
+      "id": "pit-2723-2025ontor-test-28",
+      "timestamp": 1757045539165.2976
+    },
+    {
+      "teamNumber": "3968",
+      "eventName": "2025njfla",
+      "scoutName": "TM",
+      "weight": 95,
+      "drivetrain": "West Coast",
+      "programmingLanguage": "LabVIEW",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 1,
+        "coralL2": 0,
+        "coralL3": 3,
+        "coralL4": 4,
+        "totalAlgae": 3,
+        "algaeNetShots": true,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": true,
+        "canPark": true
+      },
+      "notes": "Team 3968 - Strong coral placement, consistent auto",
+      "id": "pit-3968-2025njfla-test-29",
+      "timestamp": 1756874618705.36
+    },
+    {
+      "teamNumber": "5399",
+      "eventName": "2025ontor",
+      "scoutName": "RW",
+      "weight": 85,
+      "drivetrain": "Swerve",
+      "programmingLanguage": "LabVIEW",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 3,
+        "coralL2": 4,
+        "coralL3": 5,
+        "coralL4": 5,
+        "totalAlgae": 7,
+        "algaeNetShots": true,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": true,
+        "canPark": true
+      },
+      "notes": "Team 5399 - Algae specialist, accurate net shots",
+      "id": "pit-5399-2025ontor-test-30",
+      "timestamp": 1756916883525.6973
+    },
+    {
+      "teamNumber": "3592",
+      "eventName": "2025ontor",
+      "scoutName": "TM",
+      "weight": 108,
+      "drivetrain": "Swerve",
+      "programmingLanguage": "LabVIEW",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 2,
+        "coralL2": 2,
+        "coralL3": 2,
+        "coralL4": 4,
+        "totalAlgae": 2,
+        "algaeNetShots": false,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": false,
+        "canDeepClimb": true,
+        "canPark": true
+      },
+      "notes": "Team 3592 - Fast robot, aggressive playstyle",
+      "id": "pit-3592-2025ontor-test-31",
+      "timestamp": 1757233387630.0598
+    },
+    {
+      "teamNumber": "4248",
+      "eventName": "2025pawar",
+      "scoutName": "ET",
+      "weight": 97,
+      "drivetrain": "Swerve",
+      "programmingLanguage": "C++",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 2,
+        "coralL2": 3,
+        "coralL3": 4,
+        "coralL4": 1,
+        "totalAlgae": 1,
+        "algaeNetShots": true,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": false,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 4248 - Reliable climber, defensive capabilities",
+      "id": "pit-4248-2025pawar-test-32",
+      "timestamp": 1756920556097.4734
+    },
+    {
+      "teamNumber": "6753",
+      "eventName": "2025casd",
+      "scoutName": "MR",
+      "weight": 94,
+      "drivetrain": "H-Drive",
+      "programmingLanguage": "LabVIEW",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 1,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 1,
+        "coralL2": 3,
+        "coralL3": 2,
+        "coralL4": 3,
+        "totalAlgae": 2,
+        "algaeNetShots": false,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 6753 - Algae specialist, accurate net shots",
+      "id": "pit-6753-2025casd-test-33",
+      "timestamp": 1757289264829.0942
+    },
+    {
+      "teamNumber": "3915",
+      "eventName": "2025mrcmp",
+      "scoutName": "RW",
+      "weight": 83,
+      "drivetrain": "H-Drive",
+      "programmingLanguage": "LabVIEW",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 0,
+        "coralL2": 1,
+        "coralL3": 6,
+        "coralL4": 7,
+        "totalAlgae": 5,
+        "algaeNetShots": false,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 3915 - Fast cycle times, good driver",
+      "id": "pit-3915-2025mrcmp-test-34",
+      "timestamp": 1757049542053.6702
+    },
+    {
+      "teamNumber": "1510",
+      "eventName": "2025pawar",
+      "scoutName": "KL",
+      "weight": 108,
+      "drivetrain": "Tank Drive",
+      "programmingLanguage": "Python",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 0,
+        "coralL2": 1,
+        "coralL3": 3,
+        "coralL4": 0,
+        "totalAlgae": 6,
+        "algaeNetShots": true,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": false,
+        "canDeepClimb": true,
+        "canPark": true
+      },
+      "notes": "Team 1510 - Well-rounded robot, good strategy",
+      "id": "pit-1510-2025pawar-test-35",
+      "timestamp": 1756859753654.7341
+    },
+    {
+      "teamNumber": "7152",
+      "eventName": "2025njfla",
+      "scoutName": "MR",
+      "weight": 123,
+      "drivetrain": "Swerve",
+      "programmingLanguage": "LabVIEW",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 1
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 2,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 1
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 3,
+        "coralL2": 1,
+        "coralL3": 6,
+        "coralL4": 3,
+        "totalAlgae": 6,
+        "algaeNetShots": false,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": false,
+        "canDeepClimb": true,
+        "canPark": false
+      },
+      "notes": "Team 7152 - Fast robot, aggressive playstyle",
+      "id": "pit-7152-2025njfla-test-36",
+      "timestamp": 1757148838221.1875
+    },
+    {
+      "teamNumber": "1798",
+      "eventName": "2025mrcmp",
+      "scoutName": "MR",
+      "weight": 102,
+      "drivetrain": "H-Drive",
+      "programmingLanguage": "LabVIEW",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 0,
+        "coralL2": 1,
+        "coralL3": 1,
+        "coralL4": 6,
+        "totalAlgae": 5,
+        "algaeNetShots": false,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 1798 - Algae specialist, accurate net shots",
+      "id": "pit-1798-2025mrcmp-test-37",
+      "timestamp": 1756804392718.6611
+    },
+    {
+      "teamNumber": "2075",
+      "eventName": "2025njfla",
+      "scoutName": "ET",
+      "weight": 94,
+      "drivetrain": "H-Drive",
+      "programmingLanguage": "LabVIEW",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 3,
+        "coralL2": 0,
+        "coralL3": 5,
+        "coralL4": 3,
+        "totalAlgae": 3,
+        "algaeNetShots": false,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 2075 - Reliable climber, defensive capabilities",
+      "id": "pit-2075-2025njfla-test-38",
+      "timestamp": 1757204223670.864
+    },
+    {
+      "teamNumber": "6776",
+      "eventName": "2025mrcmp",
+      "scoutName": "BH",
+      "weight": 84,
+      "drivetrain": "Tank Drive",
+      "programmingLanguage": "Java",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 3,
+        "coralL2": 4,
+        "coralL3": 5,
+        "coralL4": 2,
+        "totalAlgae": 0,
+        "algaeNetShots": true,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": false,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 6776 - Fast cycle times, good driver",
+      "id": "pit-6776-2025mrcmp-test-39",
+      "timestamp": 1757335706608.462
+    },
+    {
+      "teamNumber": "7746",
+      "eventName": "2025pawar",
+      "scoutName": "SC",
+      "weight": 89,
+      "drivetrain": "West Coast",
+      "programmingLanguage": "Java",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": false,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 2,
+        "coralL2": 2,
+        "coralL3": 4,
+        "coralL4": 9,
+        "totalAlgae": 4,
+        "algaeNetShots": true,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 7746 - Fast robot, aggressive playstyle",
+      "id": "pit-7746-2025pawar-test-40",
+      "timestamp": 1757263962560.2793
+    },
+    {
+      "teamNumber": "1740",
+      "eventName": "2025mrcmp",
+      "scoutName": "TM",
+      "weight": 93,
+      "drivetrain": "H-Drive",
+      "programmingLanguage": "Python",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 2,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 0,
+        "coralL2": 2,
+        "coralL3": 0,
+        "coralL4": 9,
+        "totalAlgae": 2,
+        "algaeNetShots": true,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 1740 - Innovative design, unique mechanisms",
+      "id": "pit-1740-2025mrcmp-test-41",
+      "timestamp": 1757035199028.9534
+    },
+    {
+      "teamNumber": "6669",
+      "eventName": "2025ontor",
+      "scoutName": "JD",
+      "weight": 94,
+      "drivetrain": "Mecanum",
+      "programmingLanguage": "Python",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": false,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 2,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 0,
+        "coralL2": 0,
+        "coralL3": 4,
+        "coralL4": 7,
+        "totalAlgae": 5,
+        "algaeNetShots": false,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": false,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 6669 - Algae specialist, accurate net shots",
+      "id": "pit-6669-2025ontor-test-42",
+      "timestamp": 1756869958219.506
+    },
+    {
+      "teamNumber": "6485",
+      "eventName": "2025ontor",
+      "scoutName": "SC",
+      "weight": 101,
+      "drivetrain": "H-Drive",
+      "programmingLanguage": "Python",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 2,
+        "coralL2": 2,
+        "coralL3": 0,
+        "coralL4": 0,
+        "totalAlgae": 0,
+        "algaeNetShots": true,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": false,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 6485 - Well-rounded robot, good strategy",
+      "id": "pit-6485-2025ontor-test-43",
+      "timestamp": 1756766620019.1318
+    },
+    {
+      "teamNumber": "2734",
+      "eventName": "2025pawar",
+      "scoutName": "KL",
+      "weight": 102,
+      "drivetrain": "H-Drive",
+      "programmingLanguage": "Java",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 1,
+        "coralL2": 2,
+        "coralL3": 1,
+        "coralL4": 5,
+        "totalAlgae": 4,
+        "algaeNetShots": false,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": false
+      },
+      "notes": "Team 2734 - Fast robot, aggressive playstyle",
+      "id": "pit-2734-2025pawar-test-44",
+      "timestamp": 1757140767858.6875
+    },
+    {
+      "teamNumber": "7621",
+      "eventName": "2025pawar",
+      "scoutName": "MR",
+      "weight": 103,
+      "drivetrain": "Swerve",
+      "programmingLanguage": "LabVIEW",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": false,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 2,
+        "coralL2": 2,
+        "coralL3": 5,
+        "coralL4": 4,
+        "totalAlgae": 1,
+        "algaeNetShots": true,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": true,
+        "canPark": true
+      },
+      "notes": "Team 7621 - Innovative design, unique mechanisms",
+      "id": "pit-7621-2025pawar-test-45",
+      "timestamp": 1756852310557.2605
+    },
+    {
+      "teamNumber": "7477",
+      "eventName": "2025njfla",
+      "scoutName": "TM",
+      "weight": 83,
+      "drivetrain": "H-Drive",
+      "programmingLanguage": "Java",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 1,
+          "algaeProcessor": 1
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 1
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 1,
+        "coralL2": 3,
+        "coralL3": 5,
+        "coralL4": 3,
+        "totalAlgae": 2,
+        "algaeNetShots": false,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": true,
+        "canPark": true
+      },
+      "notes": "Team 7477 - Well-rounded robot, good strategy",
+      "id": "pit-7477-2025njfla-test-46",
+      "timestamp": 1756972096276.3284
+    },
+    {
+      "teamNumber": "6977",
+      "eventName": "2025pawar",
+      "scoutName": "RW",
+      "weight": 117,
+      "drivetrain": "West Coast",
+      "programmingLanguage": "Python",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 1
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 2,
+        "coralL2": 0,
+        "coralL3": 6,
+        "coralL4": 2,
+        "totalAlgae": 3,
+        "algaeNetShots": false,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 6977 - Innovative design, unique mechanisms",
+      "id": "pit-6977-2025pawar-test-47",
+      "timestamp": 1756768859462.9702
+    },
+    {
+      "teamNumber": "5049",
+      "eventName": "2025casd",
+      "scoutName": "AK",
+      "weight": 92,
+      "drivetrain": "Mecanum",
+      "programmingLanguage": "LabVIEW",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": false,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 2,
+        "coralL2": 2,
+        "coralL3": 0,
+        "coralL4": 2,
+        "totalAlgae": 1,
+        "algaeNetShots": true,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": false,
+        "canDeepClimb": true,
+        "canPark": true
+      },
+      "notes": "Team 5049 - Reliable climber, defensive capabilities",
+      "id": "pit-5049-2025casd-test-48",
+      "timestamp": 1756771408255.1072
+    },
+    {
+      "teamNumber": "4405",
+      "eventName": "2025pawar",
+      "scoutName": "MR",
+      "weight": 95,
+      "drivetrain": "Tank Drive",
+      "programmingLanguage": "Python",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 0,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 2,
+        "coralL2": 0,
+        "coralL3": 0,
+        "coralL4": 2,
+        "totalAlgae": 2,
+        "algaeNetShots": false,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 4405 - Fast cycle times, good driver",
+      "id": "pit-4405-2025pawar-test-49",
+      "timestamp": 1757262007211.8186
+    },
+    {
+      "teamNumber": "7128",
+      "eventName": "2025ontor",
+      "scoutName": "SC",
+      "weight": 90,
+      "drivetrain": "Tank Drive",
+      "programmingLanguage": "Python",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 2,
+        "coralL2": 0,
+        "coralL3": 4,
+        "coralL4": 3,
+        "totalAlgae": 6,
+        "algaeNetShots": true,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": false,
+        "canDeepClimb": true,
+        "canPark": true
+      },
+      "notes": "Team 7128 - Innovative design, unique mechanisms",
+      "id": "pit-7128-2025ontor-test-50",
+      "timestamp": 1757046318116.4539
+    },
+    {
+      "teamNumber": "8416",
+      "eventName": "2025ontor",
+      "scoutName": "SC",
+      "weight": 89,
+      "drivetrain": "H-Drive",
+      "programmingLanguage": "LabVIEW",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 0,
+          "algaeNet": 1,
+          "algaeProcessor": 1
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 3,
+        "coralL2": 0,
+        "coralL3": 3,
+        "coralL4": 1,
+        "totalAlgae": 2,
+        "algaeNetShots": false,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": true,
+        "canPark": true
+      },
+      "notes": "Team 8416 - Fast cycle times, good driver",
+      "id": "pit-8416-2025ontor-test-51",
+      "timestamp": 1757132571611.047
+    },
+    {
+      "teamNumber": "8044",
+      "eventName": "2025ontor",
+      "scoutName": "SC",
+      "weight": 88,
+      "drivetrain": "Swerve",
+      "programmingLanguage": "Python",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 0,
+        "coralL2": 0,
+        "coralL3": 3,
+        "coralL4": 0,
+        "totalAlgae": 4,
+        "algaeNetShots": true,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": false,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 8044 - Reliable climber, defensive capabilities",
+      "id": "pit-8044-2025ontor-test-52",
+      "timestamp": 1756998772432.265
+    },
+    {
+      "teamNumber": "3246",
+      "eventName": "2025njfla",
+      "scoutName": "TM",
+      "weight": 109,
+      "drivetrain": "H-Drive",
+      "programmingLanguage": "Python",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": false,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 1
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 2,
+        "coralL2": 4,
+        "coralL3": 1,
+        "coralL4": 2,
+        "totalAlgae": 4,
+        "algaeNetShots": false,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": true,
+        "canPark": true
+      },
+      "notes": "Team 3246 - Reliable climber, defensive capabilities",
+      "id": "pit-3246-2025njfla-test-53",
+      "timestamp": 1756994709946.1167
+    },
+    {
+      "teamNumber": "7477",
+      "eventName": "2025ontor",
+      "scoutName": "ET",
+      "weight": 90,
+      "drivetrain": "Tank Drive",
+      "programmingLanguage": "C++",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 0,
+        "coralL2": 2,
+        "coralL3": 1,
+        "coralL4": 9,
+        "totalAlgae": 1,
+        "algaeNetShots": false,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 7477 - Algae specialist, accurate net shots",
+      "id": "pit-7477-2025ontor-test-54",
+      "timestamp": 1756792180541.196
+    },
+    {
+      "teamNumber": "3558",
+      "eventName": "2025njfla",
+      "scoutName": "KL",
+      "weight": 85,
+      "drivetrain": "H-Drive",
+      "programmingLanguage": "Java",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 1,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 1,
+        "coralL2": 4,
+        "coralL3": 5,
+        "coralL4": 2,
+        "totalAlgae": 6,
+        "algaeNetShots": true,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 3558 - Reliable climber, defensive capabilities",
+      "id": "pit-3558-2025njfla-test-55",
+      "timestamp": 1757212011211.9136
+    },
+    {
+      "teamNumber": "8995",
+      "eventName": "2025ontor",
+      "scoutName": "TM",
+      "weight": 92,
+      "drivetrain": "H-Drive",
+      "programmingLanguage": "Java",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": false,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 3,
+        "coralL2": 0,
+        "coralL3": 3,
+        "coralL4": 0,
+        "totalAlgae": 0,
+        "algaeNetShots": false,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": false,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 8995 - Fast cycle times, good driver",
+      "id": "pit-8995-2025ontor-test-56",
+      "timestamp": 1757335331113.6492
+    },
+    {
+      "teamNumber": "2791",
+      "eventName": "2025casd",
+      "scoutName": "BH",
+      "weight": 96,
+      "drivetrain": "West Coast",
+      "programmingLanguage": "Python",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": false,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 1,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 0,
+        "coralL2": 4,
+        "coralL3": 4,
+        "coralL4": 2,
+        "totalAlgae": 1,
+        "algaeNetShots": false,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": true,
+        "canPark": true
+      },
+      "notes": "Team 2791 - Consistent performance, no major issues",
+      "id": "pit-2791-2025casd-test-57",
+      "timestamp": 1757273853532.9368
+    },
+    {
+      "teamNumber": "2821",
+      "eventName": "2025ontor",
+      "scoutName": "AN",
+      "weight": 93,
+      "drivetrain": "Tank Drive",
+      "programmingLanguage": "C++",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 2,
+        "coralL2": 1,
+        "coralL3": 6,
+        "coralL4": 5,
+        "totalAlgae": 0,
+        "algaeNetShots": false,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": true,
+        "canPark": true
+      },
+      "notes": "Team 2821 - Strong coral placement, consistent auto",
+      "id": "pit-2821-2025ontor-test-58",
+      "timestamp": 1756844500961.066
+    },
+    {
+      "teamNumber": "4532",
+      "eventName": "2025casd",
+      "scoutName": "RW",
+      "weight": 96,
+      "drivetrain": "Mecanum",
+      "programmingLanguage": "C++",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 2,
+        "coralL2": 2,
+        "coralL3": 2,
+        "coralL4": 7,
+        "totalAlgae": 5,
+        "algaeNetShots": false,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 4532 - Consistent performance, no major issues",
+      "id": "pit-4532-2025casd-test-59",
+      "timestamp": 1757134061452.5217
+    },
+    {
+      "teamNumber": "3362",
+      "eventName": "2025casd",
+      "scoutName": "AN",
+      "weight": 115,
+      "drivetrain": "West Coast",
+      "programmingLanguage": "C++",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 2,
+        "coralL2": 4,
+        "coralL3": 3,
+        "coralL4": 3,
+        "totalAlgae": 2,
+        "algaeNetShots": false,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 3362 - Algae specialist, accurate net shots",
+      "id": "pit-3362-2025casd-test-60",
+      "timestamp": 1757145471916.3071
+    },
+    {
+      "teamNumber": "8863",
+      "eventName": "2025pawar",
+      "scoutName": "RW",
+      "weight": 94,
+      "drivetrain": "Mecanum",
+      "programmingLanguage": "C++",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 2,
+        "coralL2": 4,
+        "coralL3": 1,
+        "coralL4": 1,
+        "totalAlgae": 7,
+        "algaeNetShots": false,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": false,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 8863 - Innovative design, unique mechanisms",
+      "id": "pit-8863-2025pawar-test-61",
+      "timestamp": 1757199146000.1206
+    },
+    {
+      "teamNumber": "3509",
+      "eventName": "2025njfla",
+      "scoutName": "ET",
+      "weight": 94,
+      "drivetrain": "Tank Drive",
+      "programmingLanguage": "C++",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 2,
+        "coralL2": 0,
+        "coralL3": 6,
+        "coralL4": 8,
+        "totalAlgae": 3,
+        "algaeNetShots": false,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 3509 - Innovative design, unique mechanisms",
+      "id": "pit-3509-2025njfla-test-62",
+      "timestamp": 1757027545351.6228
+    },
+    {
+      "teamNumber": "5993",
+      "eventName": "2025pawar",
+      "scoutName": "BH",
+      "weight": 91,
+      "drivetrain": "Mecanum",
+      "programmingLanguage": "C++",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 1,
+        "coralL2": 4,
+        "coralL3": 3,
+        "coralL4": 1,
+        "totalAlgae": 4,
+        "algaeNetShots": false,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": false
+      },
+      "notes": "Team 5993 - Fast cycle times, good driver",
+      "id": "pit-5993-2025pawar-test-63",
+      "timestamp": 1757030324382.253
+    },
+    {
+      "teamNumber": "4352",
+      "eventName": "2025mrcmp",
+      "scoutName": "AN",
+      "weight": 118,
+      "drivetrain": "Tank Drive",
+      "programmingLanguage": "Python",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 3,
+        "coralL2": 0,
+        "coralL3": 3,
+        "coralL4": 7,
+        "totalAlgae": 6,
+        "algaeNetShots": false,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": true,
+        "canPark": true
+      },
+      "notes": "Team 4352 - Strong coral placement, consistent auto",
+      "id": "pit-4352-2025mrcmp-test-64",
+      "timestamp": 1757360177721.4243
+    },
+    {
+      "teamNumber": "2417",
+      "eventName": "2025ontor",
+      "scoutName": "JD",
+      "weight": 101,
+      "drivetrain": "Mecanum",
+      "programmingLanguage": "Python",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 1
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 1,
+        "coralL2": 2,
+        "coralL3": 6,
+        "coralL4": 8,
+        "totalAlgae": 4,
+        "algaeNetShots": true,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 2417 - Strong coral placement, consistent auto",
+      "id": "pit-2417-2025ontor-test-65",
+      "timestamp": 1756901177071.3198
+    },
+    {
+      "teamNumber": "4244",
+      "eventName": "2025pawar",
+      "scoutName": "KL",
+      "weight": 107,
+      "drivetrain": "Swerve",
+      "programmingLanguage": "C++",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": false,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 2,
+        "coralL2": 0,
+        "coralL3": 6,
+        "coralL4": 1,
+        "totalAlgae": 6,
+        "algaeNetShots": false,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 4244 - Fast robot, aggressive playstyle",
+      "id": "pit-4244-2025pawar-test-66",
+      "timestamp": 1757097952141.112
+    },
+    {
+      "teamNumber": "7781",
+      "eventName": "2025njfla",
+      "scoutName": "AK",
+      "weight": 109,
+      "drivetrain": "Swerve",
+      "programmingLanguage": "LabVIEW",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 1,
+        "coralL2": 2,
+        "coralL3": 5,
+        "coralL4": 6,
+        "totalAlgae": 0,
+        "algaeNetShots": false,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": true,
+        "canPark": false
+      },
+      "notes": "Team 7781 - Strong coral placement, consistent auto",
+      "id": "pit-7781-2025njfla-test-67",
+      "timestamp": 1757056556589.0042
+    },
+    {
+      "teamNumber": "7858",
+      "eventName": "2025ontor",
+      "scoutName": "KL",
+      "weight": 109,
+      "drivetrain": "H-Drive",
+      "programmingLanguage": "C++",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": false,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 1,
+          "algaeProcessor": 1
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 1
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 1,
+        "coralL2": 0,
+        "coralL3": 0,
+        "coralL4": 7,
+        "totalAlgae": 7,
+        "algaeNetShots": true,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": false,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 7858 - Consistent performance, no major issues",
+      "id": "pit-7858-2025ontor-test-68",
+      "timestamp": 1757102100226.9414
+    },
+    {
+      "teamNumber": "8394",
+      "eventName": "2025mrcmp",
+      "scoutName": "AK",
+      "weight": 120,
+      "drivetrain": "West Coast",
+      "programmingLanguage": "Python",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 1,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 0,
+        "coralL2": 1,
+        "coralL3": 0,
+        "coralL4": 4,
+        "totalAlgae": 7,
+        "algaeNetShots": false,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 8394 - Fast robot, aggressive playstyle",
+      "id": "pit-8394-2025mrcmp-test-69",
+      "timestamp": 1757014101789.0032
+    },
+    {
+      "teamNumber": "4190",
+      "eventName": "2025casd",
+      "scoutName": "KL",
+      "weight": 123,
+      "drivetrain": "Swerve",
+      "programmingLanguage": "Python",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 1
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 1,
+        "coralL2": 2,
+        "coralL3": 1,
+        "coralL4": 8,
+        "totalAlgae": 3,
+        "algaeNetShots": true,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 4190 - Algae specialist, accurate net shots",
+      "id": "pit-4190-2025casd-test-70",
+      "timestamp": 1757001232486.6938
+    },
+    {
+      "teamNumber": "1376",
+      "eventName": "2025njfla",
+      "scoutName": "BH",
+      "weight": 101,
+      "drivetrain": "Mecanum",
+      "programmingLanguage": "LabVIEW",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 3,
+        "coralL2": 0,
+        "coralL3": 0,
+        "coralL4": 8,
+        "totalAlgae": 0,
+        "algaeNetShots": false,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": true,
+        "canPark": true
+      },
+      "notes": "Team 1376 - Innovative design, unique mechanisms",
+      "id": "pit-1376-2025njfla-test-71",
+      "timestamp": 1756975185703.5308
+    },
+    {
+      "teamNumber": "5731",
+      "eventName": "2025pawar",
+      "scoutName": "BH",
+      "weight": 117,
+      "drivetrain": "Tank Drive",
+      "programmingLanguage": "LabVIEW",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 3,
+        "coralL2": 3,
+        "coralL3": 5,
+        "coralL4": 7,
+        "totalAlgae": 2,
+        "algaeNetShots": false,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 5731 - Fast robot, aggressive playstyle",
+      "id": "pit-5731-2025pawar-test-72",
+      "timestamp": 1756949852136.2083
+    },
+    {
+      "teamNumber": "3572",
+      "eventName": "2025ontor",
+      "scoutName": "MR",
+      "weight": 109,
+      "drivetrain": "H-Drive",
+      "programmingLanguage": "LabVIEW",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": false,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 3,
+        "coralL2": 0,
+        "coralL3": 1,
+        "coralL4": 5,
+        "totalAlgae": 0,
+        "algaeNetShots": false,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": false,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 3572 - Fast cycle times, good driver",
+      "id": "pit-3572-2025ontor-test-73",
+      "timestamp": 1757289398822.7593
+    },
+    {
+      "teamNumber": "7856",
+      "eventName": "2025njfla",
+      "scoutName": "KL",
+      "weight": 100,
+      "drivetrain": "Mecanum",
+      "programmingLanguage": "Java",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 1
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 1
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 1
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 0,
+        "coralL2": 3,
+        "coralL3": 1,
+        "coralL4": 9,
+        "totalAlgae": 5,
+        "algaeNetShots": false,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": true,
+        "canPark": true
+      },
+      "notes": "Team 7856 - Fast cycle times, good driver",
+      "id": "pit-7856-2025njfla-test-74",
+      "timestamp": 1756907495062.2627
+    },
+    {
+      "teamNumber": "8329",
+      "eventName": "2025ontor",
+      "scoutName": "BH",
+      "weight": 95,
+      "drivetrain": "H-Drive",
+      "programmingLanguage": "C++",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": false,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 1
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 2,
+        "coralL2": 4,
+        "coralL3": 5,
+        "coralL4": 6,
+        "totalAlgae": 6,
+        "algaeNetShots": true,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": false,
+        "canDeepClimb": true,
+        "canPark": true
+      },
+      "notes": "Team 8329 - Algae specialist, accurate net shots",
+      "id": "pit-8329-2025ontor-test-75",
+      "timestamp": 1757318335213.9329
+    },
+    {
+      "teamNumber": "6076",
+      "eventName": "2025ontor",
+      "scoutName": "AK",
+      "weight": 82,
+      "drivetrain": "Tank Drive",
+      "programmingLanguage": "Python",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 3,
+        "coralL2": 4,
+        "coralL3": 1,
+        "coralL4": 7,
+        "totalAlgae": 6,
+        "algaeNetShots": false,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": true,
+        "canPark": true
+      },
+      "notes": "Team 6076 - Innovative design, unique mechanisms",
+      "id": "pit-6076-2025ontor-test-76",
+      "timestamp": 1757342072898.831
+    },
+    {
+      "teamNumber": "2854",
+      "eventName": "2025pawar",
+      "scoutName": "SC",
+      "weight": 108,
+      "drivetrain": "West Coast",
+      "programmingLanguage": "Python",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 0,
+        "coralL2": 2,
+        "coralL3": 2,
+        "coralL4": 2,
+        "totalAlgae": 4,
+        "algaeNetShots": false,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 2854 - Innovative design, unique mechanisms",
+      "id": "pit-2854-2025pawar-test-77",
+      "timestamp": 1757218453999.3606
+    },
+    {
+      "teamNumber": "5041",
+      "eventName": "2025njfla",
+      "scoutName": "BH",
+      "weight": 104,
+      "drivetrain": "H-Drive",
+      "programmingLanguage": "C++",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 1,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 1,
+        "coralL2": 0,
+        "coralL3": 1,
+        "coralL4": 4,
+        "totalAlgae": 4,
+        "algaeNetShots": true,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 5041 - Strong coral placement, consistent auto",
+      "id": "pit-5041-2025njfla-test-78",
+      "timestamp": 1757252779897.9788
+    },
+    {
+      "teamNumber": "7459",
+      "eventName": "2025pawar",
+      "scoutName": "MR",
+      "weight": 115,
+      "drivetrain": "Swerve",
+      "programmingLanguage": "LabVIEW",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 1,
+        "coralL2": 1,
+        "coralL3": 0,
+        "coralL4": 5,
+        "totalAlgae": 3,
+        "algaeNetShots": true,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": true,
+        "canPark": true
+      },
+      "notes": "Team 7459 - Algae specialist, accurate net shots",
+      "id": "pit-7459-2025pawar-test-79",
+      "timestamp": 1757216290010.0413
+    },
+    {
+      "teamNumber": "4340",
+      "eventName": "2025casd",
+      "scoutName": "TM",
+      "weight": 104,
+      "drivetrain": "West Coast",
+      "programmingLanguage": "Java",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 1
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 0,
+        "coralL2": 1,
+        "coralL3": 3,
+        "coralL4": 9,
+        "totalAlgae": 6,
+        "algaeNetShots": false,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 4340 - Fast robot, aggressive playstyle",
+      "id": "pit-4340-2025casd-test-80",
+      "timestamp": 1756941338971.3877
+    },
+    {
+      "teamNumber": "6748",
+      "eventName": "2025njfla",
+      "scoutName": "AN",
+      "weight": 87,
+      "drivetrain": "Swerve",
+      "programmingLanguage": "C++",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 3,
+        "coralL2": 0,
+        "coralL3": 4,
+        "coralL4": 6,
+        "totalAlgae": 0,
+        "algaeNetShots": true,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 6748 - Fast cycle times, good driver",
+      "id": "pit-6748-2025njfla-test-81",
+      "timestamp": 1757349486448.1252
+    },
+    {
+      "teamNumber": "7979",
+      "eventName": "2025pawar",
+      "scoutName": "AN",
+      "weight": 89,
+      "drivetrain": "Swerve",
+      "programmingLanguage": "Python",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 1
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 0,
+        "coralL2": 1,
+        "coralL3": 2,
+        "coralL4": 4,
+        "totalAlgae": 5,
+        "algaeNetShots": false,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 7979 - Strong coral placement, consistent auto",
+      "id": "pit-7979-2025pawar-test-82",
+      "timestamp": 1757140298322.1409
+    },
+    {
+      "teamNumber": "7376",
+      "eventName": "2025njfla",
+      "scoutName": "RW",
+      "weight": 86,
+      "drivetrain": "Mecanum",
+      "programmingLanguage": "C++",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": false,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 3,
+        "coralL2": 3,
+        "coralL3": 6,
+        "coralL4": 8,
+        "totalAlgae": 3,
+        "algaeNetShots": true,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": false,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 7376 - Fast cycle times, good driver",
+      "id": "pit-7376-2025njfla-test-83",
+      "timestamp": 1757087773774.2905
+    },
+    {
+      "teamNumber": "3803",
+      "eventName": "2025ontor",
+      "scoutName": "RW",
+      "weight": 80,
+      "drivetrain": "Swerve",
+      "programmingLanguage": "LabVIEW",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 1,
+        "coralL2": 0,
+        "coralL3": 4,
+        "coralL4": 4,
+        "totalAlgae": 4,
+        "algaeNetShots": true,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": false,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 3803 - Well-rounded robot, good strategy",
+      "id": "pit-3803-2025ontor-test-84",
+      "timestamp": 1757355276069.6497
+    }
+  ],
+  "lastUpdated": 1757361174041
+}

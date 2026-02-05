@@ -1,0 +1,156 @@
+[
+  {
+    "name": "Sarah Chen",
+    "pis": 245,
+    "pisFromPredictions": 210,
+    "totalPredictions": 42,
+    "correctPredictions": 38,
+    "currentStreak": 8,
+    "longestStreak": 12,
+    "lastPredictionHoursAgo": 2,
+    "achievements": [
+      { "achievementId": "scout_rookie", "daysAgo": 7 },
+      { "achievementId": "first_prediction", "daysAgo": 6 },
+      { "achievementId": "predictions_10", "daysAgo": 5 },
+      { "achievementId": "accuracy_70", "daysAgo": 4 },
+      { "achievementId": "accuracy_80", "daysAgo": 3 },
+      { "achievementId": "accuracy_90", "daysAgo": 2 },
+      { "achievementId": "streak_3", "daysAgo": 1 },
+      { "achievementId": "streak_5", "hoursAgo": 12 },
+      { "achievementId": "streak_10", "hoursAgo": 6 },
+      { "achievementId": "pis_100", "hoursAgo": 2 }
+    ]
+  },
+  {
+    "name": "Marcus Rodriguez",
+    "pis": 180,
+    "pisFromPredictions": 150,
+    "totalPredictions": 35,
+    "correctPredictions": 28,
+    "currentStreak": 5,
+    "longestStreak": 9,
+    "lastPredictionHoursAgo": 4,
+    "achievements": [
+      { "achievementId": "scout_rookie", "daysAgo": 8 },
+      { "achievementId": "first_prediction", "daysAgo": 7 },
+      { "achievementId": "predictions_10", "daysAgo": 6 },
+      { "achievementId": "accuracy_70", "daysAgo": 5 },
+      { "achievementId": "accuracy_80", "daysAgo": 4 },
+      { "achievementId": "streak_3", "daysAgo": 3 },
+      { "achievementId": "streak_5", "daysAgo": 2 },
+      { "achievementId": "pis_100", "daysAgo": 1 }
+    ]
+  },
+  {
+    "name": "Emma Thompson",
+    "pis": 95,
+    "pisFromPredictions": 75,
+    "totalPredictions": 18,
+    "correctPredictions": 12,
+    "currentStreak": 2,
+    "longestStreak": 4,
+    "lastPredictionDaysAgo": 1,
+    "achievements": [
+      { "achievementId": "scout_rookie", "daysAgo": 5 },
+      { "achievementId": "first_prediction", "daysAgo": 4 },
+      { "achievementId": "predictions_10", "daysAgo": 3 },
+      { "achievementId": "streak_3", "daysAgo": 2 }
+    ]
+  },
+  {
+    "name": "Alex Kim",
+    "pis": 500,
+    "pisFromPredictions": 290,
+    "totalPredictions": 58,
+    "correctPredictions": 52,
+    "currentStreak": 15,
+    "longestStreak": 18,
+    "lastPredictionMinutesAgo": 30,
+    "achievements": [
+      { "achievementId": "scout_rookie", "daysAgo": 10 },
+      { "achievementId": "first_prediction", "daysAgo": 9 },
+      { "achievementId": "predictions_10", "daysAgo": 8 },
+      { "achievementId": "predictions_50", "daysAgo": 7 },
+      { "achievementId": "accuracy_70", "daysAgo": 6 },
+      { "achievementId": "accuracy_80", "daysAgo": 5 },
+      { "achievementId": "streak_3", "daysAgo": 4 },
+      { "achievementId": "streak_5", "daysAgo": 3 },
+      { "achievementId": "streak_10", "daysAgo": 2 },
+      { "achievementId": "pis_100", "daysAgo": 1 }
+    ]
+  },
+  {
+    "name": "Jordan Smith",
+    "pis": 65,
+    "pisFromPredictions": 45,
+    "totalPredictions": 12,
+    "correctPredictions": 7,
+    "currentStreak": 0,
+    "longestStreak": 3,
+    "lastPredictionDaysAgo": 3,
+    "achievements": [
+      { "achievementId": "scout_rookie", "daysAgo": 3 },
+      { "achievementId": "first_prediction", "daysAgo": 2 },
+      { "achievementId": "predictions_10", "daysAgo": 1 },
+      { "achievementId": "streak_3", "hoursAgo": 12 }
+    ]
+  },
+  {
+    "name": "Riley Davis",
+    "pis": 800,
+    "pisFromPredictions": 390,
+    "totalPredictions": 78,
+    "correctPredictions": 71,
+    "currentStreak": 22,
+    "longestStreak": 25,
+    "lastPredictionMinutesAgo": 15,
+    "achievements": [
+      { "achievementId": "scout_rookie", "daysAgo": 15 },
+      { "achievementId": "first_prediction", "daysAgo": 14 },
+      { "achievementId": "predictions_10", "daysAgo": 13 },
+      { "achievementId": "predictions_50", "daysAgo": 12 },
+      { "achievementId": "accuracy_70", "daysAgo": 11 },
+      { "achievementId": "accuracy_80", "daysAgo": 10 },
+      { "achievementId": "accuracy_90", "daysAgo": 9 },
+      { "achievementId": "streak_3", "daysAgo": 8 },
+      { "achievementId": "streak_5", "daysAgo": 7 },
+      { "achievementId": "streak_10", "daysAgo": 6 },
+      { "achievementId": "streak_20", "daysAgo": 5 },
+      { "achievementId": "pis_100", "daysAgo": 4 },
+      { "achievementId": "pis_300", "daysAgo": 3 }
+    ]
+  },
+  {
+    "name": "Casey Park",
+    "pis": 25,
+    "pisFromPredictions": 15,
+    "totalPredictions": 3,
+    "correctPredictions": 1,
+    "currentStreak": 0,
+    "longestStreak": 1,
+    "lastPredictionDaysAgo": 7,
+    "achievements": [
+      { "achievementId": "scout_rookie", "daysAgo": 6 },
+      { "achievementId": "first_prediction", "daysAgo": 5 }
+    ]
+  },
+  {
+    "name": "Taylor Wilson",
+    "pis": 155,
+    "pisFromPredictions": 140,
+    "totalPredictions": 28,
+    "correctPredictions": 21,
+    "currentStreak": 4,
+    "longestStreak": 7,
+    "lastPredictionHoursAgo": 8,
+    "achievements": [
+      { "achievementId": "scout_rookie", "daysAgo": 6 },
+      { "achievementId": "first_prediction", "daysAgo": 5 },
+      { "achievementId": "accuracy_70", "daysAgo": 4 },
+      { "achievementId": "predictions_10", "daysAgo": 3 },
+      { "achievementId": "streak_3", "daysAgo": 2 },
+      { "achievementId": "streak_5", "daysAgo": 1 },
+      { "achievementId": "pis_100", "hoursAgo": 12 }
+    ]
+  }
+]

@@ -1,0 +1,725 @@
+{
+  "entries": [
+    {
+      "teamNumber": "3314",
+      "eventName": "2025pawar",
+      "scoutName": "SC",
+      "weight": 118,
+      "drivetrain": "Swerve",
+      "programmingLanguage": "C++",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 1
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 1,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 2,
+        "coralL2": 4,
+        "coralL3": 5,
+        "coralL4": 2,
+        "totalAlgae": 4,
+        "algaeNetShots": true,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": false,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "High-performance swerve robot with excellent coral placement. Fast cycle times.",
+      "robotPhoto": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/2wBDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwA/8A8A8A==",
+      "id": "pit-3314-2025pawar-phase2-0",
+      "timestamp": 1756868322335.392
+    },
+    {
+      "teamNumber": "2539",
+      "eventName": "2025pawar",
+      "scoutName": "MR",
+      "weight": 95,
+      "drivetrain": "Tank Drive",
+      "programmingLanguage": "Java",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 0,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 2,
+          "coralL4": 3,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 1,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 1,
+          "coralL2": 1,
+          "coralL3": 1,
+          "coralL4": 3,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 3,
+        "coralL2": 2,
+        "coralL3": 5,
+        "coralL4": 3,
+        "totalAlgae": 7,
+        "algaeNetShots": false,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": false,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Reliable tank drive, strong autonomous performance.",
+      "robotPhoto": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/2wBDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwA/8A8A8A==",
+      "id": "pit-2539-2025pawar-phase2-1",
+      "timestamp": 1757227270662.28
+    },
+    {
+      "teamNumber": "1168",
+      "eventName": "2025pawar",
+      "scoutName": "AK",
+      "weight": 102,
+      "drivetrain": "West Coast",
+      "programmingLanguage": "Python",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": false,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 2,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 1,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 1,
+        "coralL2": 3,
+        "coralL3": 4,
+        "coralL4": 4,
+        "totalAlgae": 5,
+        "algaeNetShots": false,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": true,
+        "canPark": false
+      },
+      "notes": "Algae specialist, innovative intake design.",
+      "robotPhoto": null,
+      "id": "pit-1168-2025pawar-phase2-2",
+      "timestamp": 1757212437732.8687
+    },
+    {
+      "teamNumber": "5895",
+      "eventName": "2025mrcmp",
+      "scoutName": "ET",
+      "weight": 110,
+      "drivetrain": "Mecanum",
+      "programmingLanguage": "C++",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 0,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 1,
+          "coralL4": 3,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 0,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 1,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 2,
+        "coralL2": 4,
+        "coralL3": 1,
+        "coralL4": 0,
+        "totalAlgae": 2,
+        "algaeNetShots": true,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": false,
+        "canDeepClimb": true,
+        "canPark": true
+      },
+      "notes": "Mecanum drive with precision placement capabilities.",
+      "robotPhoto": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/2wBDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwA/8A8A8A==",
+      "id": "pit-5895-2025mrcmp-phase2-3",
+      "timestamp": 1756782961945.6685
+    },
+    {
+      "teamNumber": "341",
+      "eventName": "2025mrcmp",
+      "scoutName": "AN",
+      "weight": 88,
+      "drivetrain": "Swerve",
+      "programmingLanguage": "Java",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 1,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 1
+        },
+        "position1": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 2,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 2,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 3,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 3,
+        "coralL2": 1,
+        "coralL3": 2,
+        "coralL4": 8,
+        "totalAlgae": 4,
+        "algaeNetShots": false,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Lightweight swerve, excellent mobility and defense.",
+      "robotPhoto": null,
+      "id": "pit-341-2025mrcmp-phase2-4",
+      "timestamp": 1756829346716.158
+    },
+    {
+      "teamNumber": "1600",
+      "eventName": "2025pawar",
+      "scoutName": "MR",
+      "weight": 92,
+      "drivetrain": "West Coast",
+      "programmingLanguage": "Python",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 1,
+          "coralL2": 1,
+          "coralL3": 2,
+          "coralL4": 1,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 0,
+        "coralL2": 0,
+        "coralL3": 4,
+        "coralL4": 6,
+        "totalAlgae": 4,
+        "algaeNetShots": false,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 1600 - Test data for Phase 2 workflow validation",
+      "robotPhoto": null,
+      "id": "pit-1600-2025pawar-phase2-5",
+      "timestamp": 1757238864562.6174
+    },
+    {
+      "teamNumber": "1700",
+      "eventName": "2025pawar",
+      "scoutName": "SC",
+      "weight": 118,
+      "drivetrain": "Tank Drive",
+      "programmingLanguage": "C++",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": false,
+        "algaeGroundPickup": false
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 1,
+          "coralL4": 2,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 2,
+        "coralL2": 3,
+        "coralL3": 1,
+        "coralL4": 5,
+        "totalAlgae": 0,
+        "algaeNetShots": false,
+        "algaeProcessor": false
+      },
+      "reportedEndgame": {
+        "canShallowClimb": false,
+        "canDeepClimb": false,
+        "canPark": false
+      },
+      "notes": "Team 1700 - Test data for Phase 2 workflow validation",
+      "robotPhoto": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/2wBDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwA/8A8A8A==",
+      "id": "pit-1700-2025pawar-phase2-6",
+      "timestamp": 1756940782119.253
+    },
+    {
+      "teamNumber": "1800",
+      "eventName": "2025mrcmp",
+      "scoutName": "AK",
+      "weight": 90,
+      "drivetrain": "Tank Drive",
+      "programmingLanguage": "Python",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": false,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 1,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 1,
+          "coralL2": 1,
+          "coralL3": 1,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 1,
+          "coralL4": 2,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 2,
+        "coralL2": 4,
+        "coralL3": 0,
+        "coralL4": 6,
+        "totalAlgae": 4,
+        "algaeNetShots": true,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": false,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 1800 - Test data for Phase 2 workflow validation",
+      "robotPhoto": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/2wBDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwA/8A8A8A==",
+      "id": "pit-1800-2025mrcmp-phase2-7",
+      "timestamp": 1757097601522.9832
+    },
+    {
+      "teamNumber": "1900",
+      "eventName": "2025mrcmp",
+      "scoutName": "AK",
+      "weight": 88,
+      "drivetrain": "Mecanum",
+      "programmingLanguage": "Java",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": false,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 1,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 2,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 1,
+          "coralL2": 1,
+          "coralL3": 2,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 1,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 0,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 1,
+          "coralL4": 1,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 0,
+        "coralL2": 0,
+        "coralL3": 2,
+        "coralL4": 8,
+        "totalAlgae": 1,
+        "algaeNetShots": false,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": true,
+        "canPark": true
+      },
+      "notes": "Team 1900 - Test data for Phase 2 workflow validation",
+      "robotPhoto": null,
+      "id": "pit-1900-2025mrcmp-phase2-8",
+      "timestamp": 1757088279308.189
+    },
+    {
+      "teamNumber": "2000",
+      "eventName": "2025mrcmp",
+      "scoutName": "MR",
+      "weight": 80,
+      "drivetrain": "Mecanum",
+      "programmingLanguage": "Java",
+      "groundPickupCapabilities": {
+        "coralGroundPickup": true,
+        "algaeGroundPickup": true
+      },
+      "reportedAutoScoring": {
+        "position0": {
+          "coralL1": 1,
+          "coralL2": 1,
+          "coralL3": 1,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position1": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 1,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        },
+        "position2": {
+          "coralL1": 1,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 3,
+          "algaeNet": 0,
+          "algaeProcessor": 0
+        },
+        "position3": {
+          "coralL1": 0,
+          "coralL2": 0,
+          "coralL3": 2,
+          "coralL4": 3,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        },
+        "position4": {
+          "coralL1": 0,
+          "coralL2": 1,
+          "coralL3": 0,
+          "coralL4": 2,
+          "algaeNet": 1,
+          "algaeProcessor": 0
+        }
+      },
+      "reportedTeleopScoring": {
+        "coralL1": 3,
+        "coralL2": 2,
+        "coralL3": 5,
+        "coralL4": 3,
+        "totalAlgae": 6,
+        "algaeNetShots": false,
+        "algaeProcessor": true
+      },
+      "reportedEndgame": {
+        "canShallowClimb": true,
+        "canDeepClimb": false,
+        "canPark": true
+      },
+      "notes": "Team 2000 - Test data for Phase 2 workflow validation",
+      "robotPhoto": null,
+      "id": "pit-2000-2025mrcmp-phase2-9",
+      "timestamp": 1756973347224.441
+    }
+  ],
+  "lastUpdated": 1757364849744
+}

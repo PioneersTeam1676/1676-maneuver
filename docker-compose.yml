@@ -1,0 +1,28 @@
+version: "3.9"
+
+services:
+  api:
+    build: ./server
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+      - DB_HOST=${DB_HOST:-mysql}
+      - DB_PORT=${DB_PORT:-3306}
+      - DB_NAME=${DB_NAME:-maneuver}
+      - DB_USER=${DB_USER:-root}
+      - DB_PASSWORD=${DB_PASSWORD:-}
+      - FORM_DB_SECRET=${FORM_DB_SECRET:-}
+      - FORM_DB_PORT=${FORM_DB_PORT:-3306}
+      - FORM_DB_HOST=${FORM_DB_HOST:-}
+      - VITE_FORM_DB_HOST=${VITE_FORM_DB_HOST:-}
+      # Optional: override full Prisma connection string
+      # - DATABASE_URL=${DATABASE_URL}
+      - CORS_ORIGIN=https://scouting.team1676.org,https://api.team1676.org,http://localhost:5173
+      - API_BASE_PATH=/scouting
+      - EXTRA_API_PREFIXES=/api
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
+      - VAPID_CONTACT_EMAIL=${VAPID_CONTACT_EMAIL}
+      - MATCH_NOTIFICATION_LOOKAHEAD=${MATCH_NOTIFICATION_LOOKAHEAD:-5}
+    restart: unless-stopped

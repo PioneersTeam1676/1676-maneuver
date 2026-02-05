@@ -1,0 +1,72 @@
+Schedule Automation Ideas (Brainstorm)
+
+Goal: Allow a user to upload a Google Sheet link, CSV, or JSON and automatically ingest the qualification match schedule into the app.
+
+Inputs to support:
+- Google Sheets link (public or authenticated)
+- CSV upload (standard TBA-like format; columns: matchNumber, red1, red2, red3, blue1, blue2, blue3, startTime)
+- TBA JSON (matches endpoint response)
+
+Approach:
+1) Unified schedule schema
+   - matchNumber: string|number
+   - compLevel: 'qm'|'qf'|'sf'|'f' (default 'qm')
+   - red: [team1, team2, team3]
+   - blue: [team1, team2, team3]
+   - startTime: number (epoch millis) | null
+   - eventKey: string
+
+2) CSV ingestion
+   - Parse headers case-insensitively
+   - Accept variations like: 'Match', 'MatchNumber', 'match_number'
+   - Trim team numbers; allow 'frc1676' or '1676'
+   - Validate rows; skip invalid lines with warnings; dedupe by match+alliances
+
+3) Google Sheets ingestion
+   - Option A: Public CSV export using Sheets publish-to-web or gid export
+     Example: https://docs.google.com/spreadsheets/d/<ID>/export?format=csv&gid=<GID>
+   - Option B: Private via Google API if signed-in; use Drive/Sheets API with OAuth token from Google Sign-In
+   - Map columns like CSV ingestion
+
+4) TBA JSON ingestion
+   - Use /event/{event_key}/matches (or /matches/{event_key}) response
+   - Filter for comp_level === 'qm'
+   - Map alliances.red.team_keys and alliances.blue.team_keys to numeric strings
+   - start_time: use 'time' field if present
+
+5) Validation & feedback
+   - Show summary before import: total matches, duplicates skipped, teams found, missing teams
+   - Persist to localStorage (key: `event_schedule_${eventKey}`)
+   - Provide export-backout options
+
+6) Automation extras
+   - If a Google Sheet URL is provided, auto-detect gid and set up a refresh button
+   - If signed-in with Google, store a short-lived token and allow re-fetch with one click
+
+7) Edge cases
+   - Partial schedules (ingest what exists)
+   - Team remappings (e.g., leading zeros) normalize to plain numbers
+   - Time zones (parse start times in event timezone if provided)
+
+8) UI ideas
+   - Add to JSON Data Transfer page a new "Match Schedule" card with Upload CSV / Paste GSheet URL / Load from TBA
+   - Preview table with first 10 rows
+   - Validate button to highlight issues
+
+9) File format examples
+   CSV header example:
+     matchNumber,red1,red2,red3,blue1,blue2,blue3,startTime
+   TBA minimal JSON:
+     [{
+       "comp_level": "qm",
+       "match_number": 12,
+       "alliances": {"red": {"team_keys":["frc123","frc456","frc789"]}, "blue": {"team_keys":["frc111","frc222","frc333"]}},
+       "time": 1730000000
+     }]
+
+10) Storage contract
+   - Save under localStorage: event_schedule_<eventKey>
+   - Value: JSON.stringify({ updatedAt, eventKey, matches: UnifiedSchedule[] })
+
+11) Automation pipeline
+   - Detect format -> parse -> normalize -> validate -> preview -> save
