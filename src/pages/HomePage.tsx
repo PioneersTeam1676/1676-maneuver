@@ -549,7 +549,7 @@ const HomePage = () => {
               <CardDescription>Matches where you are scheduled to scout.</CardDescription>
             </div>
             <Button asChild size="sm">
-              <Link to="/game-start" className="flex items-center gap-2">
+              <Link to="/game-start" className="flex items-center gap-2 text-primary-foreground hover:text-primary-foreground">
                 <Users className="h-4 w-4" />
                 Match Flow
               </Link>

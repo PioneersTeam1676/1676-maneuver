@@ -52,6 +52,7 @@ type AuthContextValue = {
   login: () => void
   logout: () => void
   ready: boolean
+  authorizationReady: boolean
   roleAssignments: RoleAssignments
   setRole: (email: string, role: UserRole) => void
   removeRole: (email: string) => void
@@ -273,6 +274,7 @@ const routePermissions: Array<{ pattern: RegExp; minRole: UserRole | null }> = [
   { pattern: /^\/match-strategy$/, minRole: 'lead' },
   { pattern: /^\/team-stats$/, minRole: 'lead' },
   { pattern: /^\/pit-scouting$/, minRole: 'lead' },
+  { pattern: /^\/drive-scouting$/, minRole: 'lead' },
   { pattern: /^\/pick-list$/, minRole: 'lead' },
   { pattern: /^\/strategy-overview$/, minRole: 'lead' },
   { pattern: /^\/pit-assignments$/, minRole: 'lead' },
@@ -329,6 +331,7 @@ declare global {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [ready, setReady] = useState(false)
+  const [authorizationReady, setAuthorizationReady] = useState(false)
   const [roleAssignments, setRoleAssignments] = useState<RoleAssignments>(() => {
     try {
       const raw = localStorage.getItem(ROLE_STORAGE_KEY)
@@ -546,7 +549,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Clean up any invalid roles from localStorage on mount
-    const validRoles = new Set<UserRole>(['pending', 'scout', 'lead', 'admin', 'ultra_admin'])
+    const validRoles = new Set<UserRole>(['pending', 'scout', 'lead', 'form_maker', 'admin', 'ultra_admin'])
     setRoleAssignments((prev) => {
       const cleaned = Object.entries(prev).reduce<RoleAssignments>((acc, [email, role]) => {
         if (validRoles.has(role)) {
@@ -654,6 +657,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   useEffect(() => {
+    if (!ready) return
+    if (!user) {
+      setAuthorizationReady(true)
+      return
+    }
+
+    setAuthorizationReady(false)
     let cancelled = false
 
     const run = async () => {
@@ -663,6 +673,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!cancelled) {
           console.error('Failed to load roles from API', error)
         }
+      } finally {
+        if (!cancelled) {
+          setAuthorizationReady(true)
+        }
       }
     }
 
@@ -671,7 +685,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [fetchRoleAssignmentsFromApi])
+  }, [ready, user, fetchRoleAssignmentsFromApi])
 
   const upsertRecentUser = useCallback(
     (payload: { email: string; name?: string | null; picture?: string | null; acknowledged?: boolean }) => {
@@ -916,14 +930,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     setPlayerStation('red-1')
   }, [])
-
-  useEffect(() => {
-    if (!user) return
-    void fetchRoleAssignmentsFromApi().catch((error) => {
-      console.error('Failed to refresh roles after user change', error)
-    })
-  }, [user, fetchRoleAssignmentsFromApi])
-
 
   const login = useCallback(() => {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
@@ -1282,6 +1288,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     login,
     logout,
     ready,
+    authorizationReady,
     roleAssignments,
     setRole,
     removeRole,
@@ -1309,6 +1316,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     login,
     logout,
     ready,
+    authorizationReady,
     roleAssignments,
     setRole,
     removeRole,

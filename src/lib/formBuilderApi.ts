@@ -1,5 +1,5 @@
 import { apiDelete, apiGet, apiPost, apiPut, ApiError } from "@/lib/apiClient"
-import type { FormDefinition, FormSummary } from "@/types/formBuilder"
+import type { FormDbConfig, FormDefinition, FormField, FormSummary } from "@/types/formBuilder"
 
 type FormsListResponse = {
   forms: FormSummary[]
@@ -7,6 +7,12 @@ type FormsListResponse = {
 
 type FormResponse = {
   form: FormDefinition
+}
+
+type SeasonDbConfigResponse = {
+  year: string
+  db: FormDbConfig
+  updatedAt?: string | null
 }
 
 export type FormAction = "generate_sql" | "push" | "migrate" | "update_backend"
@@ -60,7 +66,8 @@ const safeIdentifier = (value: string) =>
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "") || "field"
 
-const normalizeFormType = (value: string | undefined) => (value === "pit" ? "pit" : "match")
+const normalizeFormType = (value: string | undefined) =>
+  value === "pit" ? "pit" : value === "drive" ? "drive" : "match"
 
 const buildTableName = (form: FormDefinition) => {
   const year = safeIdentifier(form.year || "unknown")
@@ -69,7 +76,7 @@ const buildTableName = (form: FormDefinition) => {
   return `scouting_${year}_${type}_${idPart}`
 }
 
-const fieldTypeToSql = (field: FormDefinition["schema"]["sections"][number]["fields"][number]) => {
+const fieldTypeToSql = (field: FormField) => {
   switch (field.type) {
     case "long_text":
       return "TEXT"
@@ -89,14 +96,26 @@ const fieldTypeToSql = (field: FormDefinition["schema"]["sections"][number]["fie
       return "DATE"
     case "time":
       return "TIME"
+    case "image":
+      return "TEXT"
     case "short_text":
     default:
       return "VARCHAR(255)"
   }
 }
 
-const flattenFields = (schema: FormDefinition["schema"]) =>
-  Array.isArray(schema.sections) ? schema.sections.flatMap((section) => section.fields || []) : []
+const flattenFields = (schema: FormDefinition["schema"]) => {
+  if (Array.isArray(schema.pages) && schema.pages.length > 0) {
+    return schema.pages.flatMap((page) =>
+      Array.isArray(page.sections)
+        ? page.sections.flatMap((section) => section.fields || [])
+        : []
+    )
+  }
+  return Array.isArray(schema.sections)
+    ? schema.sections.flatMap((section) => section.fields || [])
+    : []
+}
 
 const buildSqlForForm = (form: FormDefinition, mode: "create" | "migrate") => {
   const tableName = buildTableName(form)
@@ -109,8 +128,8 @@ const buildSqlForForm = (form: FormDefinition, mode: "create" | "migrate") => {
   const fieldColumns: Array<{ name: string; definition: string }> = []
 
   for (const field of flattenFields(form.schema)) {
-    const label = field.label || field.id || "field"
-    let columnName = safeIdentifier(label)
+    const baseName = field.key || field.label || field.id || "field"
+    let columnName = safeIdentifier(baseName)
     let counter = 2
     while (used.has(columnName)) {
       columnName = `${columnName}_${counter}`
@@ -245,4 +264,23 @@ export const runFormAction = async (
       message: "Generated locally because the API route is unavailable.",
     }
   }
+}
+
+export const getSeasonDbConfig = async (year: string): Promise<SeasonDbConfigResponse> => {
+  const normalizedYear = String(year || "").trim()
+  if (!normalizedYear) {
+    throw new Error("Season year is required")
+  }
+  return apiGet<SeasonDbConfigResponse>(`/forms/seasons/${encodeURIComponent(normalizedYear)}/db`)
+}
+
+export const updateSeasonDbConfig = async (
+  year: string,
+  db: FormDbConfig
+): Promise<SeasonDbConfigResponse> => {
+  const normalizedYear = String(year || "").trim()
+  if (!normalizedYear) {
+    throw new Error("Season year is required")
+  }
+  return apiPut<SeasonDbConfigResponse>(`/forms/seasons/${encodeURIComponent(normalizedYear)}/db`, { db })
 }

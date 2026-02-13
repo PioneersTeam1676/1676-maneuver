@@ -11,6 +11,7 @@ const DEFAULT_DB_PORT = process.env.FORM_DB_PORT || process.env.VITE_FORM_DB_POR
 
 const CLIENT_CACHE = new Map()
 const SCHEMA_READY = new Map()
+let SEASON_DB_TABLE_READY = false
 
 const normalizeString = (value) => (typeof value === "string" ? value.trim() : "")
 
@@ -18,6 +19,22 @@ const parseYear = (value) => {
   if (!value) return null
   const match = String(value).match(/(19|20)\d{2}/)
   return match ? match[0] : null
+}
+
+const ensureSeasonDbConfigTable = async () => {
+  if (SEASON_DB_TABLE_READY) return
+  await mainPrisma.$executeRawUnsafe(
+    `CREATE TABLE IF NOT EXISTS season_db_configs (
+      year VARCHAR(16) PRIMARY KEY,
+      db_host VARCHAR(255) NOT NULL,
+      db_name VARCHAR(255) NOT NULL,
+      db_user VARCHAR(255) NOT NULL,
+      db_pass VARCHAR(255) NULL,
+      db_engine VARCHAR(64) NOT NULL DEFAULT 'mysql',
+      updated_at INT NOT NULL
+    )`
+  )
+  SEASON_DB_TABLE_READY = true
 }
 
 const resolveSeasonSelector = ({ year, formId, eventName, eventKey }) => {
@@ -29,15 +46,41 @@ const resolveSeasonSelector = ({ year, formId, eventName, eventKey }) => {
   }
 }
 
+const getLatestFormForYear = async (year) => {
+  if (!year) return null
+
+  const rows = await mainPrisma.formDefinition.findMany({
+    where: { year },
+    orderBy: { updatedAt: "desc" },
+    take: 200,
+  })
+
+  if (!rows.length) return null
+
+  const withDbConfig = rows.find((row) => {
+    return Boolean(normalizeString(row.dbHost) || DEFAULT_DB_HOST) &&
+      Boolean(normalizeString(row.dbName)) &&
+      Boolean(normalizeString(row.dbUser))
+  })
+
+  return withDbConfig || rows[0]
+}
+
 const getFormForSeason = async ({ year, formId }) => {
-  if (formId) {
-    return mainPrisma.formDefinition.findUnique({ where: { id: formId } })
-  }
   if (year) {
-    return mainPrisma.formDefinition.findFirst({
-      where: { year },
-      orderBy: { updatedAt: "desc" },
-    })
+    return getLatestFormForYear(year)
+  }
+  if (formId) {
+    const explicitForm = await mainPrisma.formDefinition.findUnique({ where: { id: formId } })
+    if (!explicitForm) return null
+
+    const explicitYear = normalizeString(explicitForm.year)
+    if (explicitYear) {
+      const seasonForm = await getLatestFormForYear(explicitYear)
+      if (seasonForm) return seasonForm
+    }
+
+    return explicitForm
   }
   return mainPrisma.formDefinition.findFirst({
     orderBy: { updatedAt: "desc" },
@@ -73,6 +116,38 @@ const ensureSeasonSchema = async (dbConfig, cacheKey) => {
 }
 
 const getSeasonDbConfig = async (selector) => {
+  if (selector?.year) {
+    try {
+      await ensureSeasonDbConfigTable()
+      const rows = await mainPrisma.$queryRawUnsafe(
+        "SELECT year, db_host as dbHost, db_name as dbName, db_user as dbUser, db_pass as dbPass FROM season_db_configs WHERE year = ? LIMIT 1",
+        selector.year,
+      )
+      const seasonConfig = Array.isArray(rows) && rows.length ? rows[0] : null
+      if (seasonConfig) {
+        const host = normalizeString(seasonConfig.dbHost) || DEFAULT_DB_HOST
+        const name = normalizeString(seasonConfig.dbName)
+        const user = normalizeString(seasonConfig.dbUser)
+        const pass = seasonConfig.dbPass ? decryptSecret(seasonConfig.dbPass) : ""
+        const port = normalizeString(DEFAULT_DB_PORT) || "3306"
+
+        if (host && name && user) {
+          return {
+            formId: null,
+            year: selector.year,
+            host,
+            name,
+            user,
+            pass,
+            port,
+          }
+        }
+      }
+    } catch (error) {
+      console.warn("Failed to load season_db_configs row, falling back to form definitions", error)
+    }
+  }
+
   const form = await getFormForSeason(selector)
   if (!form) return null
 

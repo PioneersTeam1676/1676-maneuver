@@ -10,10 +10,11 @@ import { useAuth } from "@/contexts/AuthContext";
 const MainLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { canAccessPath, defaultRoute, user, ready } = useAuth();
+  const { canAccessPath, defaultRoute, user, ready, authorizationReady } = useAuth();
 
   useEffect(() => {
     if (!ready) return;
+    if (user && !authorizationReady) return;
     
     // If user is not logged in and not on a public page, show landing page
     if (!user && location.pathname === '/') {
@@ -25,7 +26,7 @@ const MainLayout = () => {
       navigate(defaultRoute, { replace: true });
       return;
     }
-  }, [location.pathname, canAccessPath, defaultRoute, navigate, user, ready]);
+  }, [location.pathname, canAccessPath, defaultRoute, navigate, user, ready, authorizationReady]);
 
   // Show landing page for unauthenticated users on root path
   if (location.pathname === '/' && !user) {

@@ -1,5 +1,5 @@
 export type FormStatus = "draft" | "published" | "archived"
-export type FormType = "match" | "pit"
+export type FormType = "match" | "pit" | "drive"
 
 export type FormFieldType =
   | "short_text"
@@ -13,6 +13,7 @@ export type FormFieldType =
   | "slider"
   | "date"
   | "time"
+  | "image"
 
 export type FormField = {
   id: string
@@ -36,6 +37,13 @@ export type FormSection = {
   fields: FormField[]
 }
 
+export type FormPage = {
+  id: string
+  title: string
+  description?: string
+  sections: FormSection[]
+}
+
 export type FormDbConfig = {
   host: string
   name: string
@@ -52,6 +60,43 @@ export type FormWebhookConfig = {
   authHeader?: string
 }
 
+export type ButtonVariant =
+  | "default"
+  | "secondary"
+  | "outline"
+  | "ghost"
+  | "destructive"
+  | "link"
+
+export type FormUiConfig = {
+  layout?: "auto" | "single" | "paged"
+  pagePaddingClass?: string
+  pageSpacingClass?: string
+  sectionSpacingClass?: string
+  fieldSpacingClass?: string
+  sectionCardClassName?: string
+  sectionHeaderClassName?: string
+  pageHeaderClassName?: string
+  nav?: {
+    showProgress?: boolean
+    backLabel?: string
+    nextLabel?: string
+    submitLabel?: string
+    backVariant?: ButtonVariant
+    nextVariant?: ButtonVariant
+    submitVariant?: ButtonVariant
+    backClassName?: string
+    nextClassName?: string
+    submitClassName?: string
+  }
+}
+
+export type FormSchema = {
+  sections?: FormSection[]
+  pages?: FormPage[]
+  ui?: FormUiConfig
+}
+
 export type FormDefinition = {
   id: string
   name: string
@@ -61,9 +106,7 @@ export type FormDefinition = {
   status: FormStatus
   db: FormDbConfig
   webhook?: FormWebhookConfig
-  schema: {
-    sections: FormSection[]
-  }
+  schema: FormSchema
   createdAt?: string | null
   updatedAt?: string | null
 }

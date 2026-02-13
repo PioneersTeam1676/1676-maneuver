@@ -48,7 +48,7 @@ const roleColors: Record<string, string> = {
   lead: "bg-purple-500",
   form_maker: "bg-teal-500",
   admin: "bg-orange-500",
-  ultra_admin: "bg-yellow-500",
+  ultra_admin: "bg-amber-700",
 }
 
 const roleIcons: Record<string, LucideIcon> = {

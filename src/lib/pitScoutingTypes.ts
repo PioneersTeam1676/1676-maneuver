@@ -31,7 +31,7 @@ export interface PitScoutingEntry {
   [key: string]: unknown;
   
   // Basic Information
-  robotPhoto?: string; // Base64 encoded image
+  robotPhoto?: string; // data URL while editing, persisted as /images/* permalink
   weight?: number; // in pounds
   drivetrain?: string;
   programmingLanguage?: string;

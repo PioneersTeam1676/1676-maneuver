@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Camera, Calendar, User, Scale, Cog, Code, Info } from "lucide-react";
 import { loadPitScoutingEntriesByTeam } from "@/lib/pitScoutingUtils";
 import type { PitScoutingEntry } from "@/lib/pitScoutingTypes";
+import { resolveImageUrl } from "@/lib/imageUrl";
 
 interface PitScoutingDataProps {
   teamNumber: string;
@@ -182,7 +183,7 @@ export const PitScoutingData = ({ teamNumber, selectedEvent }: PitScoutingDataPr
               </CardHeader>
               <CardContent>
                 <img 
-                  src={selectedEntry.robotPhoto} 
+                  src={resolveImageUrl(selectedEntry.robotPhoto)} 
                   alt="Robot" 
                   className="w-full max-h-64 object-contain rounded-lg border"
                 />

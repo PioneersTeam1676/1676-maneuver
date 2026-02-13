@@ -7,6 +7,7 @@ dotenv.config()
 const express = require("express")
 const cors = require("cors")
 const morgan = require("morgan")
+const fs = require("fs/promises")
 
 const rolesRouter = require("./routes/roles")
 const scoutingRouter = require("./routes/scouting")
@@ -23,6 +24,7 @@ const { createApiAuthMiddleware } = require("./middleware/apiAuth")
 const { scheduleBackups } = require("./backupManager")
 const { databaseInfo } = require("./db")
 const { initWebhookSync } = require("./webhookSyncManager")
+const { imageStorageDir } = require("./utils/imagePermalinkStore")
 
 const app = express()
 const PORT = process.env.PORT || 4000
@@ -135,6 +137,42 @@ app.options("*", cors(corsOptions))
 
 app.use(express.json({ limit: "5mb" }))
 app.use(morgan("dev"))
+
+// Backward-compat alias:
+// old pit image links could include a field suffix (e.g. 3314-field.png).
+// Serve those files when the new canonical path (/images/pit/<event>/<team>.png) is requested.
+app.get("/images/pit/:eventCode/:filename", async (req, res, next) => {
+  try {
+    const eventCode = String(req.params.eventCode || "")
+    const filename = String(req.params.filename || "")
+
+    if (!eventCode || !filename.toLowerCase().endsWith(".png")) {
+      return next()
+    }
+
+    const ext = ".png"
+    const base = filename.slice(0, -ext.length)
+    const duplicateMatch = base.match(/^(.*)-(\d+)$/)
+    const legacyCandidates = duplicateMatch
+      ? [`${duplicateMatch[1]}-field-${duplicateMatch[2]}${ext}`, `${base}-field${ext}`]
+      : [`${base}-field${ext}`]
+
+    for (const legacyFilename of legacyCandidates) {
+      const legacyPath = path.join(imageStorageDir, "pit", eventCode, legacyFilename)
+      try {
+        await fs.access(legacyPath)
+        return res.sendFile(legacyPath)
+      } catch {
+        // keep trying fallback candidates
+      }
+    }
+
+    return next()
+  } catch {
+    return next()
+  }
+})
+app.use("/images", express.static(imageStorageDir))
 
 const apiAuthMiddleware = createApiAuthMiddleware()
 

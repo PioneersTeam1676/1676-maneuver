@@ -5,6 +5,8 @@ services:
     build: ./server
     ports:
       - "4000:4000"
+    volumes:
+      - ./server/data:/app/data
     environment:
       - PORT=4000
       - DB_HOST=${DB_HOST:-mysql}

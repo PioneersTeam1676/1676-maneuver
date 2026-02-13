@@ -93,6 +93,11 @@ const data = {
           minRole: "lead" as UserRole,
         },
         {
+          title: "Drive Team Scouting",
+          url: "/drive-scouting",
+          minRole: "lead" as UserRole,
+        },
+        {
           title: "Match Data QR",
           url: "/match-data-qr",
           minRole: "lead" as UserRole,

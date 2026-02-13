@@ -8,6 +8,7 @@ const ACTIVE_FORM_API_PATH = "/forms/active"
 export type ActiveFormConfig = {
   match?: string
   pit?: string
+  drive?: string
   updatedAt?: string
 }
 
@@ -41,6 +42,7 @@ const coerceUpdatedAt = (value: unknown): string | undefined => {
 const normalizeConfig = (config?: Partial<ActiveFormConfig> | null): ActiveFormConfig => ({
   match: sanitizeId(config?.match),
   pit: sanitizeId(config?.pit),
+  drive: sanitizeId(config?.drive),
   updatedAt: coerceUpdatedAt(config?.updatedAt),
 })
 
@@ -90,9 +92,10 @@ const writeActiveFormConfig = (config: ActiveFormConfig) => {
     const payload: ActiveFormConfig = {
       match: normalized.match,
       pit: normalized.pit,
+      drive: normalized.drive,
       updatedAt: normalized.updatedAt || new Date().toISOString(),
     }
-    if (!payload.match && !payload.pit) {
+    if (!payload.match && !payload.pit && !payload.drive) {
       localStorage.removeItem(ACTIVE_FORM_STORAGE_KEY)
     } else {
       localStorage.setItem(ACTIVE_FORM_STORAGE_KEY, JSON.stringify(payload))
@@ -112,6 +115,7 @@ const pushActiveFormConfig = async (config: ActiveFormConfig): Promise<ActiveFor
   const payload = {
     match: config.match ?? null,
     pit: config.pit ?? null,
+    drive: config.drive ?? null,
   }
   const resp = await apiPut<ActiveFormResponse | ActiveFormConfig>(ACTIVE_FORM_API_PATH, payload)
   return normalizeConfig(extractActiveConfig(resp))
@@ -123,11 +127,11 @@ export const syncActiveFormConfig = async (): Promise<ActiveFormConfig> => {
     const remote = await fetchActiveFormConfig()
     const remoteStamp = getConfigStamp(remote)
     const localStamp = getConfigStamp(local)
-    if (remoteStamp >= localStamp && (remoteStamp > 0 || remote.match || remote.pit)) {
+    if (remoteStamp >= localStamp && (remoteStamp > 0 || remote.match || remote.pit || remote.drive)) {
       writeActiveFormConfig(remote)
       return remote
     }
-    if (localStamp > remoteStamp && (local.match || local.pit)) {
+    if (localStamp > remoteStamp && (local.match || local.pit || local.drive)) {
       void pushActiveFormConfig(local).catch((error) => {
         if (!shouldFallback(error)) {
           console.warn("[activeForm] Failed to push local config", error)
@@ -143,14 +147,16 @@ export const syncActiveFormConfig = async (): Promise<ActiveFormConfig> => {
 
 export const getActiveFormId = (type: FormType): string => {
   const config = readActiveFormConfig()
-  return type === "pit" ? config.pit || "" : config.match || ""
+  if (type === "pit") return config.pit || ""
+  if (type === "drive") return config.drive || ""
+  return config.match || ""
 }
 
 export const setActiveFormId = (type: FormType, id: string | null) => {
   const config = readActiveFormConfig()
   const next: ActiveFormConfig = {
     ...config,
-    [type === "pit" ? "pit" : "match"]: id ? id.trim() : undefined,
+    [type === "pit" ? "pit" : type === "drive" ? "drive" : "match"]: id ? id.trim() : undefined,
     updatedAt: new Date().toISOString(),
   }
   writeActiveFormConfig(next)

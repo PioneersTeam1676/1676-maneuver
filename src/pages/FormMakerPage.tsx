@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { toast } from "sonner"
 
-import { createForm, deleteForm, getForm, listForms } from "@/lib/formBuilderApi"
+import { createForm, deleteForm, getForm, getSeasonDbConfig, listForms, updateForm, updateSeasonDbConfig } from "@/lib/formBuilderApi"
 import { getCurrentApiBaseUrl, pingApi } from "@/lib/apiClient"
-import type { FormDefinition, FormSummary, FormType } from "@/types/formBuilder"
+import type { FormDbConfig, FormDefinition, FormSummary, FormType } from "@/types/formBuilder"
+import { UI_PRESET_OPTIONS, getUiPreset, type UiPresetKey } from "@/lib/formSchema"
 import {
   ACTIVE_FORM_UPDATED_EVENT,
   getActiveFormId,
@@ -15,6 +16,8 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,7 +28,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Folder, UploadCloud } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Folder, UploadCloud, Import } from "lucide-react"
 
 const statusStyles: Record<string, string> = {
   draft: "bg-slate-500",
@@ -48,6 +59,20 @@ export default function FormMakerPage() {
   const [deleteTarget, setDeleteTarget] = useState<FormSummary | null>(null)
   const [pushingId, setPushingId] = useState<string | null>(null)
   const [activeForms, setActiveForms] = useState(readActiveFormConfig)
+  const [importing, setImporting] = useState(false)
+  const [presetKey, setPresetKey] = useState<UiPresetKey>("default")
+  const [applyingPreset, setApplyingPreset] = useState(false)
+  const [seasonDbDialog, setSeasonDbDialog] = useState<{ open: boolean; year: string }>({ open: false, year: "" })
+  const [seasonDbLoading, setSeasonDbLoading] = useState(false)
+  const [seasonDbSaving, setSeasonDbSaving] = useState(false)
+  const [seasonDbUpdatedAt, setSeasonDbUpdatedAt] = useState<string | null>(null)
+  const [seasonDbConfig, setSeasonDbConfig] = useState<FormDbConfig>({
+    host: "",
+    name: "",
+    user: "",
+    pass: "",
+    engine: "mysql",
+  })
 
   const fetchForms = async () => {
     setLoading(true)
@@ -102,16 +127,20 @@ export default function FormMakerPage() {
 
     const map = new Map<
       string,
-      { match?: FormSummary; pit?: FormSummary; matchCount: number; pitCount: number }
+      { match?: FormSummary; pit?: FormSummary; drive?: FormSummary; matchCount: number; pitCount: number; driveCount: number }
     >()
 
     forms.forEach((form) => {
       const year = form.year || "Unknown"
-      const entry = map.get(year) || { matchCount: 0, pitCount: 0 }
-      const formType: FormType = form.type === "pit" ? "pit" : "match"
+      const entry = map.get(year) || { matchCount: 0, pitCount: 0, driveCount: 0 }
+      const formType: FormType = form.type === "pit" ? "pit" : form.type === "drive" ? "drive" : "match"
+      
       if (formType === "pit") {
         entry.pitCount += 1
         entry.pit = pickLatest(entry.pit, form)
+      } else if (formType === "drive") {
+        entry.driveCount += 1
+        entry.drive = pickLatest(entry.drive, form)
       } else {
         entry.matchCount += 1
         entry.match = pickLatest(entry.match, form)
@@ -121,11 +150,16 @@ export default function FormMakerPage() {
 
     if (map.size === 0) {
       const fallbackYear = new Date().getFullYear().toString()
-      map.set(fallbackYear, { matchCount: 0, pitCount: 0 })
+      map.set(fallbackYear, { matchCount: 0, pitCount: 0, driveCount: 0 })
     }
 
     return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]))
   }, [forms])
+
+  const selectedPreset = useMemo(
+    () => UI_PRESET_OPTIONS.find((option) => option.key === presetKey),
+    [presetKey]
+  )
 
   const handleDelete = async () => {
     if (!deleteTarget) return
@@ -234,25 +268,202 @@ export default function FormMakerPage() {
     }
   }
 
+  const handleImport = (file?: File | null) => {
+    if (!file) return
+    setImporting(true)
+    const reader = new FileReader()
+    reader.onload = async (e) => {
+      const text = e.target?.result
+      if (typeof text !== "string") {
+        setImporting(false)
+        return
+      }
+      try {
+        const json = JSON.parse(text)
+        if (!json.name || !json.schema) {
+          throw new Error("Invalid form format")
+        }
+        // Force new ID and status
+        const payload: FormDefinition = {
+          ...json,
+          id: createId(),
+          name: `${json.name} (Imported)`,
+          status: "draft",
+          createdAt: null,
+          updatedAt: null,
+        }
+        const created = await createForm(payload)
+        setForms(prev => [...prev, toSummary(created)])
+        toast.success("Form imported successfully.")
+        navigate(`/form-maker/${created.id}`)
+      } catch (error) {
+        console.error("Import failed", error)
+        toast.error("Failed to import form. Invalid JSON?")
+      } finally {
+        setImporting(false)
+      }
+    }
+    reader.onerror = () => {
+      toast.error("Failed to read file")
+      setImporting(false)
+    }
+    reader.readAsText(file)
+  }
+
+  const handleApplyPresetAll = async () => {
+    if (forms.length === 0) {
+      toast.error("No forms available to update.")
+      return
+    }
+    setApplyingPreset(true)
+    const preset = getUiPreset(presetKey)
+    const updated: FormSummary[] = []
+    let failed = 0
+
+    for (const summary of forms) {
+      try {
+        const full = await getForm(summary.id)
+        const payload: FormDefinition = {
+          ...full,
+          schema: {
+            ...full.schema,
+            ui: preset,
+          },
+        }
+        const saved = await updateForm(payload)
+        updated.push(toSummary(saved))
+      } catch (error) {
+        failed += 1
+        console.error("Failed to update form preset", summary.id, error)
+      }
+    }
+
+    if (updated.length > 0) {
+      const updatedMap = new Map(updated.map((item) => [item.id, item]))
+      setForms((prev) => prev.map((form) => updatedMap.get(form.id) ?? form))
+    }
+
+    if (failed > 0) {
+      toast.error(`Updated ${updated.length} forms, ${failed} failed.`)
+    } else {
+      toast.success(`Applied "${selectedPreset?.label || presetKey}" to ${updated.length} forms.`)
+    }
+
+    setApplyingPreset(false)
+  }
+
+  const openSeasonDbModal = async (year: string) => {
+    const normalizedYear = (year.match(/(19|20)\d{2}/) || [])[0] || ""
+    if (!normalizedYear) return
+
+    setSeasonDbDialog({ open: true, year: normalizedYear })
+    setSeasonDbLoading(true)
+    setSeasonDbUpdatedAt(null)
+    try {
+      const response = await getSeasonDbConfig(normalizedYear)
+      setSeasonDbConfig({
+        host: response.db.host || "",
+        name: response.db.name || "",
+        user: response.db.user || "",
+        pass: "",
+        engine: response.db.engine || "mysql",
+      })
+      setSeasonDbUpdatedAt(response.updatedAt || null)
+    } catch (error) {
+      console.error("Failed to load season DB config", error)
+      toast.error("Could not load season DB config.")
+      setSeasonDbDialog({ open: false, year: "" })
+    } finally {
+      setSeasonDbLoading(false)
+    }
+  }
+
+  const handleSaveSeasonDbConfig = async () => {
+    if (!seasonDbDialog.year) return
+    setSeasonDbSaving(true)
+    try {
+      const response = await updateSeasonDbConfig(seasonDbDialog.year, seasonDbConfig)
+      setSeasonDbConfig({
+        host: response.db.host || "",
+        name: response.db.name || "",
+        user: response.db.user || "",
+        pass: "",
+        engine: response.db.engine || "mysql",
+      })
+      setSeasonDbUpdatedAt(response.updatedAt || null)
+      toast.success(`Saved shared DB config for Season ${seasonDbDialog.year}.`)
+      await fetchForms()
+    } catch (error) {
+      console.error("Failed to save season DB config", error)
+      toast.error("Could not save season DB config.")
+    } finally {
+      setSeasonDbSaving(false)
+    }
+  }
+
   return (
-    <div className="container mx-auto max-w-6xl space-y-6 py-8">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-bold">Form Maker</h1>
-          <p className="text-muted-foreground">
+    <div className="container mx-auto max-w-6xl space-y-4 pb-8 pt-0 animate-in fade-in-0 duration-300">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-card/50 px-3 py-2">
+        <div className="min-w-0">
+          <h1 className="text-xl font-semibold leading-tight">Form Maker</h1>
+          <p className="text-xs text-muted-foreground">
             Build scouting forms by season. Draft, publish, and iterate without touching code.
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={fetchForms} disabled={loading}>
+          <Button size="sm" variant="outline" onClick={fetchForms} disabled={loading}>
             Refresh
           </Button>
-          <Button variant="outline" onClick={handlePing} disabled={pinging}>
+          <Button size="sm" variant="outline" onClick={handlePing} disabled={pinging}>
             {pinging ? "Pinging…" : "Ping API"}
           </Button>
-          <Button onClick={() => navigate("/form-maker/new")}>New Form</Button>
+          <div className="relative">
+            <Button size="sm" variant="outline" disabled={importing}>
+              <Import className="mr-2 h-4 w-4" />
+              {importing ? "Importing…" : "Import"}
+              <input
+                type="file"
+                className="absolute inset-0 cursor-pointer opacity-0"
+                accept=".json"
+                onChange={(e) => {
+                  handleImport(e.target.files?.[0])
+                  e.target.value = ""
+                }}
+              />
+            </Button>
+          </div>
+          <Button size="sm" onClick={() => navigate("/form-maker/new")}>New Form</Button>
         </div>
       </div>
+
+      <Card className="border-muted/60 animate-in fade-in-0 slide-in-from-bottom-1 duration-300">
+        <CardHeader>
+          <CardTitle>Style Presets</CardTitle>
+          <CardDescription>Apply a consistent layout and button style across every form.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+          <div className="space-y-2">
+            <Select value={presetKey} onValueChange={(value) => setPresetKey(value as UiPresetKey)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {UI_PRESET_OPTIONS.map((option) => (
+                  <SelectItem key={option.key} value={option.key}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {selectedPreset?.description || "Choose a preset to apply."}
+            </p>
+          </div>
+          <Button variant="outline" onClick={handleApplyPresetAll} disabled={applyingPreset}>
+            {applyingPreset ? "Applying..." : "Apply to all forms"}
+          </Button>
+        </CardContent>
+      </Card>
 
       {loading ? (
         <Card>
@@ -263,7 +474,7 @@ export default function FormMakerPage() {
         </Card>
       ) : (
         seasonFolders.map(([year, entry]) => (
-          <Card key={year} className="border-muted/60">
+          <Card key={year} className="border-muted/60 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
             <CardHeader className="flex flex-row items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="rounded-lg border bg-muted p-2">
@@ -272,15 +483,24 @@ export default function FormMakerPage() {
                 <div>
                   <CardTitle className="text-xl">Season {year}</CardTitle>
                   <CardDescription>
-                    Normal scouting and pit scouting forms live in this season folder.
+                    Match, pit, and drive team scouting forms live in this season folder.
                   </CardDescription>
                 </div>
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openSeasonDbModal(year)}
+                disabled={!/(19|20)\d{2}/.test(year)}
+              >
+                Season DB Config
+              </Button>
             </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-2">
+            <CardContent className="grid gap-4 md:grid-cols-3">
               {[
                 { type: "match" as FormType, label: "Normal scouting", form: entry.match, count: entry.matchCount },
                 { type: "pit" as FormType, label: "Pit scouting", form: entry.pit, count: entry.pitCount },
+                { type: "drive" as FormType, label: "Drive Team scouting", form: entry.drive, count: entry.driveCount },
               ].map(({ type, label, form, count }) => (
                 <Card key={`${year}-${type}`} className="flex h-full flex-col">
                   <CardHeader className="space-y-2">
@@ -299,7 +519,7 @@ export default function FormMakerPage() {
                         <Badge variant="outline">Missing</Badge>
                       )}
                     </div>
-                    {form && (type === "match" ? activeForms.match === form.id : activeForms.pit === form.id) ? (
+                    {form && ((type === "match" && activeForms.match === form.id) || (type === "pit" && activeForms.pit === form.id) || (type === "drive" && activeForms.drive === form.id)) ? (
                       <Badge variant="secondary" className="w-fit">
                         Live in scout view
                       </Badge>
@@ -343,6 +563,103 @@ export default function FormMakerPage() {
           </Card>
         ))
       )}
+
+      <Dialog
+        open={seasonDbDialog.open}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSeasonDbDialog({ open: false, year: "" })
+            setSeasonDbUpdatedAt(null)
+          } else {
+            setSeasonDbDialog((prev) => ({ ...prev, open: true }))
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Season {seasonDbDialog.year} DB Config</DialogTitle>
+            <DialogDescription>
+              Shared database config for every form in this season folder.
+            </DialogDescription>
+          </DialogHeader>
+
+          {seasonDbLoading ? (
+            <p className="text-sm text-muted-foreground">Loading DB config…</p>
+          ) : (
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Host</label>
+                <Input
+                  value={seasonDbConfig.host}
+                  onChange={(e) =>
+                    setSeasonDbConfig((prev) => ({ ...prev, host: e.target.value }))
+                  }
+                  placeholder="db.example.com"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Database Name</label>
+                <Input
+                  value={seasonDbConfig.name}
+                  onChange={(e) =>
+                    setSeasonDbConfig((prev) => ({ ...prev, name: e.target.value }))
+                  }
+                  placeholder="team1676_maneuver_2026"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">User</label>
+                <Input
+                  value={seasonDbConfig.user}
+                  onChange={(e) =>
+                    setSeasonDbConfig((prev) => ({ ...prev, user: e.target.value }))
+                  }
+                  placeholder="db_user"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Password</label>
+                <Input
+                  type="password"
+                  value={seasonDbConfig.pass}
+                  onChange={(e) =>
+                    setSeasonDbConfig((prev) => ({ ...prev, pass: e.target.value }))
+                  }
+                  placeholder="Leave blank to keep existing password"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Engine</label>
+                <Input
+                  value={seasonDbConfig.engine}
+                  onChange={(e) =>
+                    setSeasonDbConfig((prev) => ({ ...prev, engine: e.target.value || "mysql" }))
+                  }
+                  placeholder="mysql"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {seasonDbUpdatedAt
+                  ? `Last updated ${formatDate(seasonDbUpdatedAt)}`
+                  : "No saved season DB config yet."}
+              </p>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setSeasonDbDialog({ open: false, year: "" })}
+              disabled={seasonDbSaving}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleSaveSeasonDbConfig} disabled={seasonDbLoading || seasonDbSaving}>
+              {seasonDbSaving ? "Saving…" : "Save Shared Config"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={Boolean(deleteTarget)} onOpenChange={() => setDeleteTarget(null)}>
         <AlertDialogContent>

@@ -11,8 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 import { getForm } from "@/lib/formBuilderApi";
 import { ACTIVE_FORM_UPDATED_EVENT, getActiveFormId, syncActiveFormConfig } from "@/lib/activeForm";
-import { EVENT_UPDATED_EVENT } from "@/lib/eventSettingsClient";
-import { savePitScoutingEntry } from "@/lib/pitScoutingUtils";
+import { saveDriveTeamEntry } from "@/lib/driveTeamUtils";
 import { cn } from "@/lib/utils";
 import { coercePages, flattenFields, getPageFields, normalizeUiConfig } from "@/lib/formSchema";
 import type { FormDefinition, FormField } from "@/types/formBuilder";
@@ -48,15 +47,12 @@ const buildInitialValues = (form: FormDefinition): Record<string, unknown> => {
 
 type BaseErrors = {
   teamNumber?: string;
+  matchNumber?: string;
+  scoutName?: string;
 };
 
-const readScoutName = () =>
-  localStorage.getItem("currentScout") || localStorage.getItem("scoutName") || "";
-
-const readEventName = () => localStorage.getItem("eventName") || "";
-
-const PitScoutingPage = () => {
-  const [activeFormId, setActiveFormIdState] = useState(() => getActiveFormId("pit"));
+const DriveTeamScoutingPage = () => {
+  const [activeFormId, setActiveFormIdState] = useState(() => getActiveFormId("drive"));
   const [form, setForm] = useState<FormDefinition | null>(null);
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -66,37 +62,12 @@ const PitScoutingPage = () => {
   const [pageIndex, setPageIndex] = useState(0);
 
   const [teamNumber, setTeamNumber] = useState("");
-  const [eventName, setEventName] = useState("");
+  const [matchNumber, setMatchNumber] = useState("");
   const [scoutName, setScoutName] = useState("");
 
   useEffect(() => {
-    const updateFromStorage = () => {
-      setScoutName(readScoutName());
-      setEventName(readEventName());
-    };
-
-    updateFromStorage();
-
-    const handleStorage = (event: StorageEvent) => {
-      if (
-        event.key === "currentScout" ||
-        event.key === "scoutName" ||
-        event.key === "eventName" ||
-        event.key === null
-      ) {
-        updateFromStorage();
-      }
-    };
-
-    window.addEventListener("storage", handleStorage);
-    window.addEventListener(EVENT_UPDATED_EVENT, updateFromStorage);
-    window.addEventListener("scoutChanged", updateFromStorage);
-
-    return () => {
-      window.removeEventListener("storage", handleStorage);
-      window.removeEventListener(EVENT_UPDATED_EVENT, updateFromStorage);
-      window.removeEventListener("scoutChanged", updateFromStorage);
-    };
+    const savedScoutName = localStorage.getItem("currentScout") || localStorage.getItem("scoutName") || "";
+    setScoutName(savedScoutName);
   }, []);
 
   useEffect(() => {
@@ -104,11 +75,11 @@ const PitScoutingPage = () => {
     syncActiveFormConfig()
       .then((config) => {
         if (!cancelled) {
-          setActiveFormIdState(config.pit || "");
+          setActiveFormIdState(config.drive || "");
         }
       })
       .catch((error) => {
-        console.warn("Failed to sync active pit form config", error);
+        console.warn("Failed to sync active drive form config", error);
       });
     return () => {
       cancelled = true;
@@ -117,7 +88,7 @@ const PitScoutingPage = () => {
 
   useEffect(() => {
     const handleActiveUpdate = () => {
-      setActiveFormIdState(getActiveFormId("pit"));
+      setActiveFormIdState(getActiveFormId("drive"));
     };
     window.addEventListener(ACTIVE_FORM_UPDATED_EVENT, handleActiveUpdate);
     return () => {
@@ -149,8 +120,8 @@ const PitScoutingPage = () => {
         setPageIndex(0);
       })
       .catch((error) => {
-        console.error("Failed to load pit scouting form", error);
-        toast.error("Could not load the active pit scouting form.");
+        console.error("Failed to load drive scouting form", error);
+        toast.error("Could not load the active drive scouting form.");
         setForm(null);
       })
       .finally(() => setLoading(false));
@@ -201,7 +172,7 @@ const PitScoutingPage = () => {
     });
   };
 
-  const buildSubmission = (currentForm: FormDefinition, eventKey: string, scout: string) => {
+  const buildSubmission = (currentForm: FormDefinition) => {
     const usedKeys = new Set<string>();
     const responseData: Record<string, unknown> = {};
 
@@ -228,8 +199,8 @@ const PitScoutingPage = () => {
 
     return {
       teamNumber: teamNumber.trim(),
-      eventName: eventKey,
-      scoutName: scout,
+      matchNumber: Number(matchNumber.trim()),
+      scoutName: scoutName.trim(),
       formId: currentForm.id,
       formName: currentForm.name,
       formYear: currentForm.year,
@@ -240,47 +211,21 @@ const PitScoutingPage = () => {
     };
   };
 
-  const handleImageUpload = async (fieldId: string, file?: File | null) => {
+  const handleImageUpload = (fieldId: string, file?: File | null) => {
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error("Image file is too large. Please choose a file under 10MB.");
-      return;
-    }
-
-    try {
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const img = new Image();
-        const objectUrl = URL.createObjectURL(file);
-        img.onload = () => {
-          const canvas = document.createElement("canvas");
-          const ctx = canvas.getContext("2d");
-          if (!ctx) {
-            URL.revokeObjectURL(objectUrl);
-            reject(new Error("Could not get canvas context"));
-            return;
-          }
-
-          const maxWidth = 1200;
-          const newWidth = Math.min(maxWidth, img.width);
-          const newHeight = (img.height * newWidth) / img.width;
-          canvas.width = newWidth;
-          canvas.height = newHeight;
-          ctx.drawImage(img, 0, 0, newWidth, newHeight);
-          URL.revokeObjectURL(objectUrl);
-          resolve(canvas.toDataURL("image/png"));
-        };
-        img.onerror = () => {
-          URL.revokeObjectURL(objectUrl);
-          reject(new Error("Failed to load image"));
-        };
-        img.src = objectUrl;
-      });
-
-      handleValueChange(fieldId, dataUrl);
-    } catch (error) {
-      console.error("Failed to process image upload", error);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      if (!result) {
+        toast.error("Failed to read image.");
+        return;
+      }
+      handleValueChange(fieldId, result);
+    };
+    reader.onerror = () => {
       toast.error("Failed to upload image.");
-    }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleNextPage = () => {
@@ -311,23 +256,12 @@ const PitScoutingPage = () => {
 
     const nextBaseErrors: BaseErrors = {};
     if (!teamNumber.trim()) nextBaseErrors.teamNumber = "Required";
+    if (!matchNumber.trim()) nextBaseErrors.matchNumber = "Required";
+    if (!scoutName.trim()) nextBaseErrors.scoutName = "Required";
 
     if (Object.keys(nextBaseErrors).length > 0) {
       setBaseErrors(nextBaseErrors);
-      toast.error("Please fill out the required pit scouting info.");
-      return;
-    }
-
-    const currentEvent = readEventName().trim();
-    const currentScout = readScoutName().trim();
-
-    if (!currentEvent) {
-      toast.error("Set the current event before submitting pit scouting.");
-      return;
-    }
-
-    if (!currentScout) {
-      toast.error("Set your scout name before submitting pit scouting.");
+      toast.error("Please fill out the required drive team info.");
       return;
     }
 
@@ -346,16 +280,19 @@ const PitScoutingPage = () => {
 
     setSaving(true);
     try {
-      const submission = buildSubmission(form, currentEvent, currentScout);
-      await savePitScoutingEntry(submission);
-      toast.success("Pit scouting entry saved.");
+      const submission = buildSubmission(form);
+      await saveDriveTeamEntry(submission);
+      toast.success("Drive team entry saved.");
       setValues(buildInitialValues(form));
       setErrors({});
       setBaseErrors({});
+      setPageIndex(0);
       setTeamNumber("");
+      // Don't clear match number or scout name as they might be sequential/same
+      setMatchNumber((prev) => String(Number(prev) + 1));
     } catch (error) {
-      console.error("Failed to save pit scouting entry", error);
-      toast.error("Failed to save pit scouting entry.");
+      console.error("Failed to save drive team entry", error);
+      toast.error("Failed to save drive team entry.");
     } finally {
       setSaving(false);
     }
@@ -366,8 +303,8 @@ const PitScoutingPage = () => {
       <div className="container mx-auto max-w-4xl py-10">
         <Card>
           <CardHeader>
-            <CardTitle>Loading pit scouting form…</CardTitle>
-            <CardDescription>Preparing the active pit scouting form.</CardDescription>
+            <CardTitle>Loading drive team form…</CardTitle>
+            <CardDescription>Preparing the active drive team scouting form.</CardDescription>
           </CardHeader>
         </Card>
       </div>
@@ -379,9 +316,9 @@ const PitScoutingPage = () => {
       <div className="container mx-auto max-w-4xl py-10">
         <Card>
           <CardHeader>
-            <CardTitle>No active pit scouting form</CardTitle>
+            <CardTitle>No active drive team form</CardTitle>
             <CardDescription>
-              Set an active pit scouting form in Form Maker, then refresh this page.
+              Set an active drive team form in Form Maker, then refresh this page.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -400,7 +337,7 @@ const PitScoutingPage = () => {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-3xl font-bold">{form.name}</h1>
-          <p className="text-muted-foreground">Pit scouting</p>
+          <p className="text-muted-foreground">Drive Team Scouting</p>
         </div>
       </div>
 
@@ -444,18 +381,30 @@ const PitScoutingPage = () => {
             )}
           >
             <CardHeader className={cn("space-y-2", uiConfig.sectionHeaderClassName)}>
-              <CardTitle className="text-xl">Pit Scouting Info</CardTitle>
-              <CardDescription>Enter the team info before filling out the form.</CardDescription>
-              <p className={cn("text-xs", eventName && scoutName ? "text-muted-foreground" : "text-destructive")}>
-                Auto-filled: Event {eventName || "not set"} • Scout {scoutName || "not set"}
-              </p>
+              <CardTitle className="text-xl">Match Info</CardTitle>
+              <CardDescription>Enter the match and team details.</CardDescription>
             </CardHeader>
             <CardContent className={cn(uiConfig.fieldSpacingClass)}>
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-3">
                 <div className="space-y-2">
-                  <Label>
-                    Team Number *
-                  </Label>
+                  <Label>Match Number *</Label>
+                  <Input
+                    type="number"
+                    value={matchNumber}
+                    onChange={(event) => {
+                      setMatchNumber(event.target.value);
+                      if (baseErrors.matchNumber) {
+                        setBaseErrors((prev) => ({ ...prev, matchNumber: undefined }));
+                      }
+                    }}
+                    placeholder="e.g. 1"
+                  />
+                  {baseErrors.matchNumber ? (
+                    <p className="text-xs text-destructive">{baseErrors.matchNumber}</p>
+                  ) : null}
+                </div>
+                <div className="space-y-2">
+                  <Label>Team Number *</Label>
                   <Input
                     value={teamNumber}
                     onChange={(event) => {
@@ -468,6 +417,22 @@ const PitScoutingPage = () => {
                   />
                   {baseErrors.teamNumber ? (
                     <p className="text-xs text-destructive">{baseErrors.teamNumber}</p>
+                  ) : null}
+                </div>
+                <div className="space-y-2">
+                  <Label>Scout Name *</Label>
+                  <Input
+                    value={scoutName}
+                    onChange={(event) => {
+                      setScoutName(event.target.value);
+                      if (baseErrors.scoutName) {
+                        setBaseErrors((prev) => ({ ...prev, scoutName: undefined }));
+                      }
+                    }}
+                    placeholder="Your name"
+                  />
+                  {baseErrors.scoutName ? (
+                    <p className="text-xs text-destructive">{baseErrors.scoutName}</p>
                   ) : null}
                 </div>
               </div>
@@ -495,216 +460,219 @@ const PitScoutingPage = () => {
                 const isRequired = Boolean(field.required);
                 const fieldError = errors[field.id];
 
-              if (field.type === "long_text") {
+                if (field.type === "long_text") {
+                  return (
+                    <div key={field.id} className="space-y-2">
+                      <Label>
+                        {field.label} {isRequired ? "*" : ""}
+                      </Label>
+                      <Textarea
+                        value={String(fieldValue ?? "")}
+                        onChange={(event) => handleValueChange(field.id, event.target.value)}
+                        placeholder={field.placeholder || ""}
+                      />
+                      {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
+                    </div>
+                  );
+                }
+
+                if (field.type === "select" || field.type === "radio") {
+                  return (
+                    <div key={field.id} className="space-y-2">
+                      <Label>
+                        {field.label} {isRequired ? "*" : ""}
+                      </Label>
+                      <Select
+                        value={String(fieldValue ?? "")}
+                        onValueChange={(value) => handleValueChange(field.id, value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={field.placeholder || "Select an option"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(field.options || []).map((option) => (
+                            <SelectItem key={option} value={option}>
+                              {option}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
+                    </div>
+                  );
+                }
+
+                if (field.type === "multi_select") {
+                  const selected = Array.isArray(fieldValue) ? (fieldValue as string[]) : [];
+                  return (
+                    <div key={field.id} className="space-y-2">
+                      <Label>
+                        {field.label} {isRequired ? "*" : ""}
+                      </Label>
+                      <div className="space-y-2">
+                        {(field.options || []).map((option) => (
+                          <label key={option} className="flex items-center gap-2 text-sm">
+                            <Checkbox
+                              checked={selected.includes(option)}
+                              onCheckedChange={() => handleToggleOption(field.id, option)}
+                            />
+                            <span>{option}</span>
+                          </label>
+                        ))}
+                      </div>
+                      {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
+                    </div>
+                  );
+                }
+
+                if (field.type === "checkbox") {
+                  return (
+                    <div key={field.id} className="space-y-2">
+                      <label className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={Boolean(fieldValue)}
+                          onCheckedChange={(value) => handleValueChange(field.id, Boolean(value))}
+                        />
+                        <span>
+                          {field.label} {isRequired ? "*" : ""}
+                        </span>
+                      </label>
+                      {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
+                    </div>
+                  );
+                }
+
+                if (field.type === "image") {
+                  return (
+                    <div key={field.id} className="space-y-2">
+                      <Label>
+                        {field.label} {isRequired ? "*" : ""}
+                      </Label>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <Button variant="outline" type="button" className="relative">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="absolute inset-0 cursor-pointer opacity-0"
+                            onChange={(event) => {
+                              const file = event.target.files?.[0];
+                              handleImageUpload(field.id, file);
+                              event.target.value = "";
+                            }}
+                          />
+                          Upload image
+                        </Button>
+                        {fieldValue ? (
+                          <Button
+                            variant="ghost"
+                            type="button"
+                            onClick={() => handleValueChange(field.id, "")}
+                          >
+                            Clear
+                          </Button>
+                        ) : null}
+                      </div>
+                      {typeof fieldValue === "string" && fieldValue ? (
+                        <div className="overflow-hidden rounded-lg border bg-muted">
+                          <img
+                            src={fieldValue}
+                            alt={field.label}
+                            className="h-48 w-full object-cover"
+                            loading="lazy"
+                          />
+                        </div>
+                      ) : null}
+                      {field.helpText ? (
+                        <p className="text-xs text-muted-foreground">{field.helpText}</p>
+                      ) : null}
+                      {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
+                    </div>
+                  );
+                }
+
+                if (field.type === "slider") {
+                  const min = field.min ?? 0;
+                  const max = field.max ?? 5;
+                  const step = field.step ?? 1;
+                  const numericValue = Number(fieldValue || min);
+                  return (
+                    <div key={field.id} className="space-y-2">
+                      <Label>
+                        {field.label} {isRequired ? "*" : ""}
+                      </Label>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min={min}
+                          max={max}
+                          step={step}
+                          value={numericValue}
+                          onChange={(event) => handleValueChange(field.id, event.target.value)}
+                          className="w-full"
+                        />
+                        <span className="text-sm font-medium w-10 text-right">{numericValue}</span>
+                      </div>
+                      {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
+                    </div>
+                  );
+                }
+
+                if (field.type === "rating") {
+                  const min = field.min ?? 1;
+                  const max = field.max ?? 5;
+                  const options = Array.from({ length: max - min + 1 }, (_, idx) => String(min + idx));
+                  return (
+                    <div key={field.id} className="space-y-2">
+                      <Label>
+                        {field.label} {isRequired ? "*" : ""}
+                      </Label>
+                      <Select
+                        value={String(fieldValue ?? "")}
+                        onValueChange={(value) => handleValueChange(field.id, value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={field.placeholder || "Select rating"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {options.map((option) => (
+                            <SelectItem key={option} value={option}>
+                              {option}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
+                    </div>
+                  );
+                }
+
+                const inputType =
+                  field.type === "number"
+                    ? "number"
+                    : field.type === "date"
+                      ? "date"
+                      : field.type === "time"
+                        ? "time"
+                        : "text";
+
                 return (
                   <div key={field.id} className="space-y-2">
                     <Label>
                       {field.label} {isRequired ? "*" : ""}
                     </Label>
-                    <Textarea
+                    <Input
+                      type={inputType}
                       value={String(fieldValue ?? "")}
                       onChange={(event) => handleValueChange(field.id, event.target.value)}
                       placeholder={field.placeholder || ""}
                     />
-                    {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
-                  </div>
-                );
-              }
-
-              if (field.type === "select" || field.type === "radio") {
-                return (
-                  <div key={field.id} className="space-y-2">
-                    <Label>
-                      {field.label} {isRequired ? "*" : ""}
-                    </Label>
-                    <Select
-                      value={String(fieldValue ?? "")}
-                      onValueChange={(value) => handleValueChange(field.id, value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={field.placeholder || "Select an option"} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(field.options || []).map((option) => (
-                          <SelectItem key={option} value={option}>
-                            {option}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
-                  </div>
-                );
-              }
-
-              if (field.type === "multi_select") {
-                const selected = Array.isArray(fieldValue) ? (fieldValue as string[]) : [];
-                return (
-                  <div key={field.id} className="space-y-2">
-                    <Label>
-                      {field.label} {isRequired ? "*" : ""}
-                    </Label>
-                    <div className="space-y-2">
-                      {(field.options || []).map((option) => (
-                        <label key={option} className="flex items-center gap-2 text-sm">
-                          <Checkbox
-                            checked={selected.includes(option)}
-                            onCheckedChange={() => handleToggleOption(field.id, option)}
-                          />
-                          <span>{option}</span>
-                        </label>
-                      ))}
-                    </div>
-                    {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
-                  </div>
-                );
-              }
-
-              if (field.type === "checkbox") {
-                return (
-                  <div key={field.id} className="space-y-2">
-                    <label className="flex items-center gap-2 text-sm">
-                      <Checkbox
-                        checked={Boolean(fieldValue)}
-                        onCheckedChange={(value) => handleValueChange(field.id, Boolean(value))}
-                      />
-                      <span>
-                        {field.label} {isRequired ? "*" : ""}
-                      </span>
-                    </label>
-                    {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
-                  </div>
-                );
-              }
-
-              if (field.type === "image") {
-                return (
-                  <div key={field.id} className="space-y-2">
-                    <Label>
-                      {field.label} {isRequired ? "*" : ""}
-                    </Label>
-                    <div className="flex flex-wrap items-center gap-3">
-                      <Button variant="outline" type="button" className="relative">
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="absolute inset-0 cursor-pointer opacity-0"
-                          onChange={(event) => {
-                            const file = event.target.files?.[0];
-                            handleImageUpload(field.id, file);
-                            event.target.value = "";
-                          }}
-                        />
-                        Upload image
-                      </Button>
-                      {fieldValue ? (
-                        <Button
-                          variant="ghost"
-                          type="button"
-                          onClick={() => handleValueChange(field.id, "")}
-                        >
-                          Clear
-                        </Button>
-                      ) : null}
-                    </div>
-                    {typeof fieldValue === "string" && fieldValue ? (
-                      <div className="overflow-hidden rounded-lg border bg-muted">
-                        <img
-                          src={fieldValue}
-                          alt={field.label}
-                          className="h-48 w-full object-cover"
-                          loading="lazy"
-                        />
-                      </div>
+                    {field.helpText ? (
+                      <p className="text-xs text-muted-foreground">{field.helpText}</p>
                     ) : null}
                     {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
                   </div>
                 );
-              }
-
-              if (field.type === "slider") {
-                const min = field.min ?? 0;
-                const max = field.max ?? 5;
-                const step = field.step ?? 1;
-                const numericValue = Number(fieldValue || min);
-                return (
-                  <div key={field.id} className="space-y-2">
-                    <Label>
-                      {field.label} {isRequired ? "*" : ""}
-                    </Label>
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="range"
-                        min={min}
-                        max={max}
-                        step={step}
-                        value={numericValue}
-                        onChange={(event) => handleValueChange(field.id, event.target.value)}
-                        className="w-full"
-                      />
-                      <span className="text-sm font-medium w-10 text-right">{numericValue}</span>
-                    </div>
-                    {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
-                  </div>
-                );
-              }
-
-              if (field.type === "rating") {
-                const min = field.min ?? 1;
-                const max = field.max ?? 5;
-                const options = Array.from({ length: max - min + 1 }, (_, idx) => String(min + idx));
-                return (
-                  <div key={field.id} className="space-y-2">
-                    <Label>
-                      {field.label} {isRequired ? "*" : ""}
-                    </Label>
-                    <Select
-                      value={String(fieldValue ?? "")}
-                      onValueChange={(value) => handleValueChange(field.id, value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={field.placeholder || "Select rating"} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {options.map((option) => (
-                          <SelectItem key={option} value={option}>
-                            {option}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
-                  </div>
-                );
-              }
-
-              const inputType =
-                field.type === "number"
-                  ? "number"
-                  : field.type === "date"
-                    ? "date"
-                    : field.type === "time"
-                      ? "time"
-                      : "text";
-
-              return (
-                <div key={field.id} className="space-y-2">
-                  <Label>
-                    {field.label} {isRequired ? "*" : ""}
-                  </Label>
-                  <Input
-                    type={inputType}
-                    value={String(fieldValue ?? "")}
-                    onChange={(event) => handleValueChange(field.id, event.target.value)}
-                    placeholder={field.placeholder || ""}
-                  />
-                  {field.helpText ? (
-                    <p className="text-xs text-muted-foreground">{field.helpText}</p>
-                  ) : null}
-                  {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
-                </div>
-              );
-            })}
+              })}
             </CardContent>
           </Card>
         ))}
@@ -746,4 +714,4 @@ const PitScoutingPage = () => {
   );
 };
 
-export default PitScoutingPage;
+export default DriveTeamScoutingPage;

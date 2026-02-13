@@ -10,7 +10,7 @@ const router = express.Router()
 
 const normalizeString = (value) => (typeof value === "string" ? value.trim() : "")
 const DEFAULT_DB_HOST = process.env.VITE_FORM_DB_HOST || process.env.FORM_DB_HOST || ""
-const normalizeFormType = (value) => (value === "pit" ? "pit" : "match")
+const normalizeFormType = (value) => (value === "pit" ? "pit" : value === "drive" ? "drive" : "match")
 const WEBHOOK_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"])
 const normalizeWebhookMethod = (value) => {
   const candidate = normalizeString(value).toUpperCase()
@@ -26,6 +26,7 @@ const normalizeWebhookConfig = (value) => {
 }
 
 let formDefinitionColumnsReady = false
+let seasonDbConfigTableReady = false
 
 const ensureFormDefinitionWebhookColumns = async (prismaClient) => {
   if (formDefinitionColumnsReady) return
@@ -72,9 +73,54 @@ const ensureFormDefinitionWebhookColumns = async (prismaClient) => {
   formDefinitionColumnsReady = true
 }
 
+const ensureSeasonDbConfigTable = async (prismaClient) => {
+  if (seasonDbConfigTableReady) return
+  await prismaClient.$executeRawUnsafe(
+    `CREATE TABLE IF NOT EXISTS season_db_configs (
+      year VARCHAR(16) PRIMARY KEY,
+      db_host VARCHAR(255) NOT NULL,
+      db_name VARCHAR(255) NOT NULL,
+      db_user VARCHAR(255) NOT NULL,
+      db_pass VARCHAR(255) NULL,
+      db_engine VARCHAR(64) NOT NULL DEFAULT 'mysql',
+      updated_at INT NOT NULL
+    )`
+  )
+  seasonDbConfigTableReady = true
+}
+
+const normalizeYear = (value) => {
+  const match = normalizeString(value).match(/(19|20)\d{2}/)
+  return match ? match[0] : ""
+}
+
+const loadSeasonDbConfigRow = async (prismaClient, year) => {
+  const normalizedYear = normalizeYear(year)
+  if (!normalizedYear) return null
+  await ensureSeasonDbConfigTable(prismaClient)
+  const rows = await prismaClient.$queryRawUnsafe(
+    "SELECT year, db_host as dbHost, db_name as dbName, db_user as dbUser, db_pass as dbPass, db_engine as dbEngine, updated_at as updatedAt FROM season_db_configs WHERE year = ? LIMIT 1",
+    normalizedYear,
+  )
+  return Array.isArray(rows) && rows.length ? rows[0] : null
+}
+
+const mapSeasonDbConfig = (row) => ({
+  year: normalizeYear(row?.year),
+  db: {
+    host: row?.dbHost || DEFAULT_DB_HOST,
+    name: row?.dbName || "",
+    user: row?.dbUser || "",
+    pass: "",
+    engine: row?.dbEngine || "mysql",
+  },
+  updatedAt: toIso(row?.updatedAt),
+})
+
 router.use(
   asyncHandler(async (_req, _res, next) => {
     await ensureFormDefinitionWebhookColumns(prisma)
+    await ensureSeasonDbConfigTable(prisma)
     next()
   })
 )
@@ -98,10 +144,12 @@ const toIso = (seconds) => {
 
 const normalizeSchema = (schema) => {
   if (!schema || typeof schema !== "object") {
-    return { sections: [] }
+    return { sections: [], pages: [], ui: {} }
   }
   const sections = Array.isArray(schema.sections) ? schema.sections : []
-  return { ...schema, sections }
+  const pages = Array.isArray(schema.pages) ? schema.pages : []
+  const ui = schema.ui && typeof schema.ui === "object" ? schema.ui : undefined
+  return { ...schema, sections, pages, ui }
 }
 
 const safeIdentifier = (value) => {
@@ -139,6 +187,8 @@ const fieldTypeToSql = (field) => {
       return "DATE"
     case "time":
       return "TIME"
+    case "image":
+      return "TEXT"
     case "short_text":
     default:
       return "VARCHAR(255)"
@@ -146,7 +196,15 @@ const fieldTypeToSql = (field) => {
 }
 
 const flattenFields = (schema) => {
-  if (!schema || !Array.isArray(schema.sections)) return []
+  if (!schema || typeof schema !== "object") return []
+  if (Array.isArray(schema.pages) && schema.pages.length > 0) {
+    return schema.pages.flatMap((page) =>
+      Array.isArray(page.sections)
+        ? page.sections.flatMap((section) => (Array.isArray(section.fields) ? section.fields : []))
+        : []
+    )
+  }
+  if (!Array.isArray(schema.sections)) return []
   return schema.sections.flatMap((section) => (Array.isArray(section.fields) ? section.fields : []))
 }
 
@@ -237,8 +295,12 @@ const ensureActiveFormTable = async (prismaClient) => {
       id INT PRIMARY KEY,
       match_form_id VARCHAR(255) NULL,
       pit_form_id VARCHAR(255) NULL,
+      drive_form_id VARCHAR(255) NULL,
       updated_at INT NOT NULL
     )`
+  )
+  await prismaClient.$executeRawUnsafe(
+    "ALTER TABLE active_form_settings ADD COLUMN IF NOT EXISTS drive_form_id VARCHAR(255) NULL"
   )
   activeFormTableReady = true
 }
@@ -249,6 +311,7 @@ const ensureActiveFormRow = async (prismaClient) => {
     SELECT id,
       match_form_id as matchFormId,
       pit_form_id as pitFormId,
+      drive_form_id as driveFormId,
       updated_at as updatedAt
     FROM active_form_settings
     WHERE id = 1
@@ -258,17 +321,133 @@ const ensureActiveFormRow = async (prismaClient) => {
   }
   const now = nowSeconds()
   await prismaClient.$executeRaw`
-    INSERT INTO active_form_settings (id, match_form_id, pit_form_id, updated_at)
-    VALUES (1, NULL, NULL, ${now})
+    INSERT INTO active_form_settings (id, match_form_id, pit_form_id, drive_form_id, updated_at)
+    VALUES (1, NULL, NULL, NULL, ${now})
   `
-  return { id: 1, matchFormId: null, pitFormId: null, updatedAt: now }
+  return { id: 1, matchFormId: null, pitFormId: null, driveFormId: null, updatedAt: now }
 }
 
 const formatActiveForm = (row) => ({
   match: normalizeString(row?.matchFormId || row?.match_form_id) || null,
   pit: normalizeString(row?.pitFormId || row?.pit_form_id) || null,
+  drive: normalizeString(row?.driveFormId || row?.drive_form_id) || null,
   updatedAt: toIso(row?.updatedAt),
 })
+
+router.get(
+  "/seasons/:year/db",
+  asyncHandler(async (req, res) => {
+    const year = normalizeYear(req.params.year)
+    if (!year) {
+      return res.status(400).json({ error: "Valid season year is required" })
+    }
+
+    const existing = await loadSeasonDbConfigRow(prisma, year)
+    if (existing) {
+      return res.json(mapSeasonDbConfig(existing))
+    }
+
+    const fallback = await prisma.formDefinition.findFirst({
+      where: { year },
+      orderBy: { updatedAt: "desc" },
+    })
+
+    if (!fallback) {
+      return res.json({
+        year,
+        db: {
+          host: DEFAULT_DB_HOST,
+          name: "",
+          user: "",
+          pass: "",
+          engine: "mysql",
+        },
+        updatedAt: null,
+      })
+    }
+
+    return res.json({
+      year,
+      db: {
+        host: normalizeString(fallback.dbHost) || DEFAULT_DB_HOST,
+        name: normalizeString(fallback.dbName),
+        user: normalizeString(fallback.dbUser),
+        pass: "",
+        engine: normalizeString(fallback.dbEngine) || "mysql",
+      },
+      updatedAt: toIso(fallback.updatedAt),
+    })
+  })
+)
+
+router.put(
+  "/seasons/:year/db",
+  asyncHandler(async (req, res) => {
+    const year = normalizeYear(req.params.year)
+    if (!year) {
+      return res.status(400).json({ error: "Valid season year is required" })
+    }
+
+    const dbConfig = req.body?.db || {}
+    const host = normalizeString(dbConfig.host) || DEFAULT_DB_HOST
+    const name = normalizeString(dbConfig.name)
+    const user = normalizeString(dbConfig.user)
+    const engine = normalizeString(dbConfig.engine) || "mysql"
+
+    if (!host || !name || !user) {
+      return res.status(400).json({ error: "DB host, name, and user are required" })
+    }
+
+    const existing = await loadSeasonDbConfigRow(prisma, year)
+    const passProvided = typeof dbConfig.pass === "string" && dbConfig.pass.trim().length > 0
+    let nextDbPass = existing?.dbPass || null
+    if (passProvided) {
+      try {
+        nextDbPass = encryptSecret(dbConfig.pass)
+      } catch (error) {
+        if (error?.message?.includes("FORM_DB_SECRET")) {
+          return res.status(400).json({ error: "FORM_DB_SECRET is not configured on the server." })
+        }
+        throw error
+      }
+    }
+
+    const updatedAt = nowSeconds()
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO season_db_configs (year, db_host, db_name, db_user, db_pass, db_engine, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         db_host = VALUES(db_host),
+         db_name = VALUES(db_name),
+         db_user = VALUES(db_user),
+         db_pass = VALUES(db_pass),
+         db_engine = VALUES(db_engine),
+         updated_at = VALUES(updated_at)`,
+      year,
+      host,
+      name,
+      user,
+      nextDbPass,
+      engine,
+      updatedAt,
+    )
+
+    await prisma.formDefinition.updateMany({
+      where: { year },
+      data: {
+        dbHost: host,
+        dbName: name,
+        dbUser: user,
+        dbPass: nextDbPass,
+        dbEngine: engine,
+        updatedAt,
+      },
+    })
+
+    const saved = await loadSeasonDbConfigRow(prisma, year)
+    return res.json(mapSeasonDbConfig(saved))
+  })
+)
 
 router.get(
   "/",
@@ -301,22 +480,26 @@ router.put(
     const existing = await ensureActiveFormRow(prisma)
     const hasMatch = Object.prototype.hasOwnProperty.call(payload, "match")
     const hasPit = Object.prototype.hasOwnProperty.call(payload, "pit")
+    const hasDrive = Object.prototype.hasOwnProperty.call(payload, "drive")
 
-    if (!hasMatch && !hasPit) {
+    if (!hasMatch && !hasPit && !hasDrive) {
       return res.json({ active: formatActiveForm(existing) })
     }
 
     const currentMatch = normalizeString(existing?.matchFormId || existing?.match_form_id) || null
     const currentPit = normalizeString(existing?.pitFormId || existing?.pit_form_id) || null
+    const currentDrive = normalizeString(existing?.driveFormId || existing?.drive_form_id) || null
 
     const nextMatch = hasMatch ? normalizeString(payload.match) || null : currentMatch
     const nextPit = hasPit ? normalizeString(payload.pit) || null : currentPit
+    const nextDrive = hasDrive ? normalizeString(payload.drive) || null : currentDrive
     const updatedAt = nowSeconds()
 
     await prisma.$executeRaw`
       UPDATE active_form_settings
       SET match_form_id = ${nextMatch},
           pit_form_id = ${nextPit},
+          drive_form_id = ${nextDrive},
           updated_at = ${updatedAt}
       WHERE id = 1
     `
@@ -354,16 +537,21 @@ router.post(
     const dbConfig = payload.db || {}
     const schema = normalizeSchema(payload.schema)
     const webhook = normalizeWebhookConfig(payload.webhook)
+    const seasonDbConfig = await loadSeasonDbConfigRow(prisma, year)
 
     const now = nowSeconds()
     let encryptedPass = null
-    try {
-      encryptedPass = dbConfig.pass ? encryptSecret(dbConfig.pass) : null
-    } catch (error) {
-      if (error?.message?.includes("FORM_DB_SECRET")) {
-        return res.status(400).json({ error: "FORM_DB_SECRET is not configured on the server." })
+    if (seasonDbConfig?.dbPass) {
+      encryptedPass = seasonDbConfig.dbPass
+    } else {
+      try {
+        encryptedPass = dbConfig.pass ? encryptSecret(dbConfig.pass) : null
+      } catch (error) {
+        if (error?.message?.includes("FORM_DB_SECRET")) {
+          return res.status(400).json({ error: "FORM_DB_SECRET is not configured on the server." })
+        }
+        throw error
       }
-      throw error
     }
     await prisma.formDefinition.create({
       data: {
@@ -373,11 +561,11 @@ router.post(
         description: description || null,
         formType,
         status,
-        dbHost: normalizeString(dbConfig.host) || DEFAULT_DB_HOST,
-        dbName: normalizeString(dbConfig.name),
-        dbUser: normalizeString(dbConfig.user),
+        dbHost: normalizeString(seasonDbConfig?.dbHost) || normalizeString(dbConfig.host) || DEFAULT_DB_HOST,
+        dbName: normalizeString(seasonDbConfig?.dbName) || normalizeString(dbConfig.name),
+        dbUser: normalizeString(seasonDbConfig?.dbUser) || normalizeString(dbConfig.user),
         dbPass: encryptedPass,
-        dbEngine: normalizeString(dbConfig.engine) || "mysql",
+        dbEngine: normalizeString(seasonDbConfig?.dbEngine) || normalizeString(dbConfig.engine) || "mysql",
         webhookUrl: webhook.url || null,
         webhookMethod: webhook.method,
         webhookAuthHeader: webhook.authHeader || null,
@@ -407,6 +595,7 @@ router.put(
     const formType = normalizeFormType(payload.type)
     const dbConfig = payload.db || {}
     const schema = normalizeSchema(payload.schema)
+    const seasonDbConfig = await loadSeasonDbConfigRow(prisma, year)
     const now = nowSeconds()
     try {
       const existing = await prisma.formDefinition.findUnique({ where: { id: req.params.id } })
@@ -422,8 +611,8 @@ router.put(
             authHeader: existing.webhookAuthHeader || "",
           }
       const passProvided = typeof dbConfig.pass === "string" && dbConfig.pass.trim().length > 0
-      let nextDbPass = existing.dbPass
-      if (passProvided) {
+      let nextDbPass = seasonDbConfig?.dbPass || existing.dbPass
+      if (!seasonDbConfig && passProvided) {
         try {
           nextDbPass = encryptSecret(dbConfig.pass)
         } catch (error) {
@@ -441,11 +630,11 @@ router.put(
           description: description || null,
           formType,
           status,
-          dbHost: normalizeString(dbConfig.host) || DEFAULT_DB_HOST,
-          dbName: normalizeString(dbConfig.name),
-          dbUser: normalizeString(dbConfig.user),
+          dbHost: normalizeString(seasonDbConfig?.dbHost) || normalizeString(dbConfig.host) || DEFAULT_DB_HOST,
+          dbName: normalizeString(seasonDbConfig?.dbName) || normalizeString(dbConfig.name),
+          dbUser: normalizeString(seasonDbConfig?.dbUser) || normalizeString(dbConfig.user),
           dbPass: nextDbPass,
-          dbEngine: normalizeString(dbConfig.engine) || "mysql",
+          dbEngine: normalizeString(seasonDbConfig?.dbEngine) || normalizeString(dbConfig.engine) || "mysql",
           webhookUrl: webhook.url || null,
           webhookMethod: webhook.method,
           webhookAuthHeader: webhook.authHeader || null,

@@ -1,44 +1,50 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- `src/` is the React + TypeScript frontend. Key folders: `src/components/`, `src/pages/`, `src/layouts/`, `src/hooks/`, `src/contexts/`, `src/lib/`, and `src/types/`.
-- `server/` is the Express + SQLite backend (`server/src/`).
-- `public/` holds static assets served by Vite; `src/assets/` holds bundled assets.
-- `data/` and `server/data/` are local data directories; `dist/` and `dev-dist/` are build outputs.
-- Utility scripts live in `scripts/` (e.g., `scripts/testCompression.js`).
+- `src/`: React + TypeScript frontend (UI, pages, hooks, contexts, shared libs/types).
+- `server/src/`: Express API and backend logic.
+- `public/`: static files served as-is; `src/assets/`: bundled frontend assets.
+- `data/` and `server/data/`: local runtime data.
+- Build outputs: `dist/` and `dev-dist/`.
+- Utility scripts: `scripts/` (for example, `scripts/testCompression.js`).
 
 ## Build, Test, and Development Commands
-Frontend (repo root):
-```bash
-npm run dev      # start Vite dev server
-npm run host     # dev server exposed on LAN
-npm run build    # type-check + Vite build + PM2 restart (prod)
-npm run preview  # serve built assets locally
-npm run lint     # ESLint over the repo
-```
-Backend (in `server/`):
-```bash
-npm start        # run API
-npm run dev      # nodemon watch mode
-```
-Docker API (optional): `docker-compose up --build` (exposes port 4000).
+Run frontend commands from the repository root:
+- `npm run dev`: start Vite dev server.
+- `npm run host`: start dev server on LAN (`--host`).
+- `npm run build`: type-check and build frontend, then restart PM2 process.
+- `npm run preview`: serve the production build locally.
+- `npm run lint`: run ESLint across the repo.
+
+Run backend commands from `server/`:
+- `npm start`: run API with Node.
+- `npm run dev`: run API with `nodemon` for live reload.
+
+Optional containerized API: `docker-compose up --build` (port `4000`).
 
 ## Coding Style & Naming Conventions
-- Language: TypeScript + React (Vite). Follow existing file style; 2-space indentation is common.
-- Components use PascalCase (`MatchDataQRPage.tsx`); hooks use `useX` naming in `src/hooks/`.
-- Prefer path aliases with `@/` (see `tsconfig.json`) for imports inside `src/`.
-- Linting: ESLint (`eslint.config.js`). Run `npm run lint` before submitting.
+- Language stack: TypeScript + React (frontend), Node/Express (backend).
+- Use existing style with 2-space indentation.
+- Components: PascalCase (example: `MatchDataQRPage.tsx`).
+- Hooks: `useX` naming in `src/hooks/`.
+- Prefer `@/` imports for frontend internal modules (configured in `tsconfig.json`).
+- Lint before opening a PR: `npm run lint`.
 
 ## Testing Guidelines
-- No dedicated test runner is configured. Use manual QA and linting.
-- Helpful utilities include `scripts/testCompression.js` and `src/lib/testDataGenerator.ts` for local checks.
+- No dedicated automated test runner is configured.
+- Required checks: manual QA for changed flows plus linting.
+- Useful local checks: `scripts/testCompression.js` and `src/lib/testDataGenerator.ts`.
 
 ## Commit & Pull Request Guidelines
-- This checkout is not a Git repository, so no commit history is available to infer conventions.
-- Use concise, imperative commit messages (e.g., “Add match export UI”) and keep PRs focused.
-- PRs should include a clear description, testing notes, and screenshots for UI changes.
+- Recent history uses concise, imperative commit subjects (for example, `Secure API and enable dynamic pit scouting`).
+- Keep commits focused on one concern.
+- PRs should include:
+  - clear summary of what changed and why,
+  - testing notes (commands run, manual checks),
+  - screenshots or short recordings for UI changes,
+  - linked issue/task when applicable.
 
-## Configuration & Security Notes
-- Frontend env vars live in a root `.env` (see `README.md` for `VITE_` keys).
-- Backend env vars are read via `dotenv` or Docker (`server/package.json`, `docker-compose.yml`).
-- Never commit secrets; prefer `.env` and deployment-specific configs.
+## Security & Configuration Notes
+- Keep secrets out of Git; use `.env` files.
+- Frontend config uses `VITE_` environment variables.
+- Backend config is loaded via `dotenv` or Docker environment settings.

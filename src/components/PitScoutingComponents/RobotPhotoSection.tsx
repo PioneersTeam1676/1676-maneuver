@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Camera, Upload, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { resolveImageUrl } from "@/lib/imageUrl";
 
 interface RobotPhotoSectionProps {
   robotPhoto: string | null;
@@ -26,8 +27,16 @@ const formatBytes = (bytes: number): string => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 };
 
+const isImageDataUrl = (value: string): boolean => value.startsWith('data:image/');
+
 export const RobotPhotoSection = ({ robotPhoto, setRobotPhoto }: RobotPhotoSectionProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const resolvedPhotoUrl = resolveImageUrl(robotPhoto);
+  const showDevInfo = Boolean(
+    robotPhoto &&
+    process.env.NODE_ENV === 'development' &&
+    isImageDataUrl(robotPhoto)
+  );
 
   const handlePhotoCapture = () => {
     if (fileInputRef.current) {
@@ -59,16 +68,8 @@ export const RobotPhotoSection = ({ robotPhoto, setRobotPhoto }: RobotPhotoSecti
         // Draw the resized image
         ctx.drawImage(img, 0, 0, newWidth, newHeight);
 
-        // Try to export as WebP first, fallback to JPEG with more aggressive compression
-        let dataUrl = canvas.toDataURL('image/webp', 0.6);
-        
-        // Check if WebP is supported (some browsers return PNG if not supported)
-        if (!dataUrl.startsWith('data:image/webp')) {
-          // Fallback to JPEG with more aggressive compression
-          dataUrl = canvas.toDataURL('image/jpeg', 0.5);
-        }
-
-        resolve(dataUrl);
+        // Persist as PNG so backend can store deterministic team-based .png permalinks.
+        resolve(canvas.toDataURL('image/png'));
       };
       
       img.onerror = () => reject(new Error('Failed to load image'));
@@ -116,7 +117,7 @@ export const RobotPhotoSection = ({ robotPhoto, setRobotPhoto }: RobotPhotoSecti
           {robotPhoto ? (
             <div className="relative">
               <img 
-                src={robotPhoto} 
+                src={resolvedPhotoUrl} 
                 alt="Robot" 
                 className="max-w-full max-h-64 rounded-lg border"
               />
@@ -129,21 +130,22 @@ export const RobotPhotoSection = ({ robotPhoto, setRobotPhoto }: RobotPhotoSecti
                 <Trash2 className="h-4 w-4" />
               </Button>
               {/* Development-only size display */}
-              {process.env.NODE_ENV === 'development' && (
+              {showDevInfo && (
                 <div className="mt-2 p-2 bg-gray-100 rounded text-xs space-y-1">
                   <div className="font-medium text-gray-700">📊 Dev Info:</div>
                   <div className="text-gray-600">
-                    Compressed Size: <span className="font-mono">{formatBytes(calculateBase64Size(robotPhoto))}</span>
+                    Compressed Size: <span className="font-mono">{formatBytes(calculateBase64Size(robotPhoto as string))}</span>
                   </div>
                   <div className="text-gray-600">
                     Est. QR Codes Needed: <span className="font-mono text-red-600">
-                      {Math.ceil(calculateBase64Size(robotPhoto) / 2048)}
+                      {Math.ceil(calculateBase64Size(robotPhoto as string) / 2048)}
                     </span> / 30 limit
                   </div>
                   <div className="text-gray-600">
                     Format: <span className="font-mono">
-                      {robotPhoto.startsWith('data:image/webp') ? 'WebP' : 
-                       robotPhoto.startsWith('data:image/jpeg') ? 'JPEG' : 'Other'}
+                      {(robotPhoto as string).startsWith('data:image/webp') ? 'WebP' : 
+                       (robotPhoto as string).startsWith('data:image/jpeg') ? 'JPEG' :
+                       (robotPhoto as string).startsWith('data:image/png') ? 'PNG' : 'Other'}
                     </span>
                   </div>
                 </div>

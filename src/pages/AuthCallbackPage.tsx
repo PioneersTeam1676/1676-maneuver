@@ -85,13 +85,11 @@ const AuthCallbackPage = () => {
         setMessage(
           data.message || (hasOpener ? "You’re signed in! This tab will close automatically." : "You’re signed in! Redirecting you back to the app."),
         )
-        setTimeout(() => {
-          if (hasOpener) {
-            window.close()
-          } else {
-            navigate("/", { replace: true })
-          }
-        }, 2000)
+        if (hasOpener) {
+          window.close()
+        } else {
+          navigate("/", { replace: true })
+        }
       } else {
         setStatus("error")
         setMessage(data.message || "We couldn’t finish signing you in. Please retry from the app.")

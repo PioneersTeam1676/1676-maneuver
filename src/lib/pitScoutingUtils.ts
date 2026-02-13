@@ -10,8 +10,15 @@ import {
   getPitScoutingStats as dbGetPitScoutingStats 
 } from './dexieDB';
 
+type PitScoutingEntryInput = {
+  teamNumber: string;
+  eventName: string;
+  scoutName: string;
+  [key: string]: unknown;
+};
+
 // Generate unique ID for pit scouting entries
-export const generatePitScoutingId = (entry: Omit<PitScoutingEntry, 'id' | 'timestamp'>): string => {
+export const generatePitScoutingId = (entry: PitScoutingEntryInput): string => {
   const baseString = `${entry.teamNumber}-${entry.eventName}-${entry.scoutName}`;
   const timestamp = Date.now();
   const random = Math.random().toString(36).substring(2, 8);
@@ -19,19 +26,18 @@ export const generatePitScoutingId = (entry: Omit<PitScoutingEntry, 'id' | 'time
 };
 
 // Save pit scouting entry
-export const savePitScoutingEntry = async (entry: Omit<PitScoutingEntry, 'id' | 'timestamp'>): Promise<PitScoutingEntry> => {
+export const savePitScoutingEntry = async (entry: PitScoutingEntryInput): Promise<PitScoutingEntry> => {
   try {
     // Check if an entry for this team and event already exists
     const existing = await loadPitScoutingByTeamAndEvent(entry.teamNumber, entry.eventName);
     
     const completeEntry: PitScoutingEntry = {
-      ...entry,
       id: existing?.id || generatePitScoutingId(entry),
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      ...entry,
     };
 
-    await dbSavePitScoutingEntry(completeEntry);
-    return completeEntry;
+    return await dbSavePitScoutingEntry(completeEntry);
   } catch (error) {
     console.error('Error saving pit scouting entry:', error);
     throw error;

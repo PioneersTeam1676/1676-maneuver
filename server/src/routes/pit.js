@@ -2,6 +2,7 @@ const express = require("express")
 const { getSeasonPrisma, resolveSeasonSelector } = require("../seasonDb")
 const asyncHandler = require("../utils/asyncHandler")
 const { parseJsonValue, stringifyJsonValue, toMsBigInt, fromBigInt } = require("../utils/dbUtils")
+const { replaceImageDataUrls } = require("../utils/imagePermalinkStore")
 
 const router = express.Router()
 
@@ -13,6 +14,24 @@ const rowToEntry = (row) => ({
   data: parseJsonValue(row.data, {}),
   timestamp: fromBigInt(row.timestamp, 0)
 })
+
+const payloadToEntry = (payload, data) => ({
+  id: payload.id,
+  teamNumber: payload.teamNumber || undefined,
+  eventName: payload.eventName || undefined,
+  scoutName: payload.scoutName || undefined,
+  data,
+  timestamp: fromBigInt(payload.timestamp, 0),
+})
+
+const buildEntryData = (entry) => {
+  const parsed = parseJsonValue(entry?.data, null)
+  if (parsed && typeof parsed === "object") {
+    return parsed
+  }
+  const { data: _ignored, ...fallback } = entry || {}
+  return fallback
+}
 
 router.get(
   "/",
@@ -81,13 +100,19 @@ router.post(
       eventName: entry.eventName,
     })
     const { prisma } = await getSeasonPrisma(selector)
+    const data = await replaceImageDataUrls(buildEntryData(entry), {
+      year: selector.year,
+      eventCode: entry.eventName,
+      teamNumber: entry.teamNumber,
+      entryId: entry.id,
+    })
 
     const payload = {
       id: entry.id,
       teamNumber: entry.teamNumber || null,
       eventName: entry.eventName || null,
       scoutName: entry.scoutName || null,
-      data: stringifyJsonValue(entry.data, {}),
+      data: stringifyJsonValue(data, {}),
       timestamp: toMsBigInt(entry.timestamp || Date.now())
     }
 
@@ -97,7 +122,7 @@ router.post(
       update: payload,
     })
 
-    res.status(201).json({ success: true })
+    res.status(201).json({ success: true, entry: payloadToEntry(payload, data) })
   })
 )
 
@@ -108,6 +133,9 @@ router.post(
     if (!Array.isArray(entries)) {
       return res.status(400).json({ error: "entries array required" })
     }
+    if (entries.some((item) => !item || !item.id)) {
+      return res.status(400).json({ error: "Each entry must include an id" })
+    }
     const firstEvent = entries.find((item) => item?.eventName)?.eventName
     const selector = resolveSeasonSelector({
       year: req.body?.year,
@@ -116,16 +144,27 @@ router.post(
     })
     const { prisma } = await getSeasonPrisma(selector)
 
-    const operations = entries.map((entry) => {
-      const payload = {
-        id: entry.id,
-        teamNumber: entry.teamNumber || null,
-        eventName: entry.eventName || null,
-        scoutName: entry.scoutName || null,
-        data: stringifyJsonValue(entry.data, {}),
-        timestamp: toMsBigInt(entry.timestamp || Date.now())
-      }
+    const preparedEntries = await Promise.all(
+      entries.map(async (entry) => {
+        const data = await replaceImageDataUrls(buildEntryData(entry), {
+          year: selector.year,
+          eventCode: entry?.eventName,
+          teamNumber: entry?.teamNumber,
+          entryId: entry?.id,
+        })
+        const payload = {
+          id: entry.id,
+          teamNumber: entry.teamNumber || null,
+          eventName: entry.eventName || null,
+          scoutName: entry.scoutName || null,
+          data: stringifyJsonValue(data, {}),
+          timestamp: toMsBigInt(entry.timestamp || Date.now())
+        }
+        return { payload, data }
+      })
+    )
 
+    const operations = preparedEntries.map(({ payload }) => {
       return prisma.pitEntry.upsert({
         where: { id: payload.id },
         create: payload,
@@ -137,7 +176,11 @@ router.post(
       await prisma.$transaction(operations)
     }
 
-    res.status(201).json({ success: true, count: entries.length })
+    res.status(201).json({
+      success: true,
+      count: entries.length,
+      entries: preparedEntries.map(({ payload, data }) => payloadToEntry(payload, data))
+    })
   })
 )
 

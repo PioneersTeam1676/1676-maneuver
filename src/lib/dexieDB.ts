@@ -186,6 +186,8 @@ const normalizeScoutingEntry = (entry: ScoutingEntryDB): ScoutingEntryDB => {
 };
 
 type PitEntryWithData = PitScoutingEntry & { data?: Record<string, unknown> };
+type PitSaveResponse = { success?: boolean; entry?: PitEntryWithData };
+type PitBulkResponse = { success?: boolean; count?: number; entries?: PitEntryWithData[] };
 
 const pitEntryPayload = (entry: PitScoutingEntry): PitEntryWithData => ({
 	...entry,
@@ -381,9 +383,12 @@ export const syncCachedPitScoutingEntries = async (): Promise<void> => {
 		try {
 			const localEntries = await pitDB.pitScoutingData.toArray();
 			if (!localEntries.length) return;
-			await apiPost('/pit/bulk', withScoutingSeasonBody({
+			const response = await apiPost<PitBulkResponse>('/pit/bulk', withScoutingSeasonBody({
 				entries: localEntries.map(pitEntryPayload),
 			}));
+			if (Array.isArray(response.entries) && response.entries.length) {
+				await pitDB.pitScoutingData.bulkPut(response.entries.map(mergePitEntry));
+			}
 		} catch (error) {
 			handleApiError('failed to sync cached pit entries', error);
 		} finally {
@@ -873,21 +878,34 @@ export const getFilterOptions = async (): Promise<{
 	}
 };
 
-export const savePitScoutingEntry = async (entry: PitScoutingEntry): Promise<void> => {
+export const savePitScoutingEntry = async (entry: PitScoutingEntry): Promise<PitScoutingEntry> => {
 	await pitDB.pitScoutingData.put(entry);
+	let persistedEntry = entry;
 
 	try {
-		await apiPost('/pit', withScoutingSeasonBody({ entry: pitEntryPayload(entry) }));
+		const response = await apiPost<PitSaveResponse>('/pit', withScoutingSeasonBody({ entry: pitEntryPayload(entry) }));
+		if (response.entry) {
+			persistedEntry = mergePitEntry(response.entry);
+			await pitDB.pitScoutingData.put(persistedEntry);
+		}
 	} catch (error) {
 		handleApiError('failed to persist pit scouting entry remotely', error);
 	}
+
+	return persistedEntry;
 };
 
 export const loadAllPitScoutingEntries = async (): Promise<PitScoutingEntry[]> => {
 	try {
 		const localEntries = await pitDB.pitScoutingData.toArray();
 		if (localEntries.length && !readScoutingSeason()) {
-			await apiPost('/pit/bulk', withScoutingSeasonBody({ entries: localEntries.map(pitEntryPayload) }));
+			const response = await apiPost<PitBulkResponse>(
+				'/pit/bulk',
+				withScoutingSeasonBody({ entries: localEntries.map(pitEntryPayload) }),
+			);
+			if (Array.isArray(response.entries) && response.entries.length) {
+				await pitDB.pitScoutingData.bulkPut(response.entries.map(mergePitEntry));
+			}
 		}
 	} catch (error) {
 		handleApiError('failed to push cached pit entries to API', error);

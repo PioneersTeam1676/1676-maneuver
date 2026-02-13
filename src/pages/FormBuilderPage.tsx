@@ -1,17 +1,48 @@
 import { useEffect, useMemo, useState } from "react"
 import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { toast } from "sonner"
+import { motion } from "motion/react"
+import {
+  ChevronDown,
+  ChevronUp,
+  Image as ImageIcon,
+  Type,
+  Hash,
+  List,
+  CheckSquare,
+  Calendar,
+  Clock,
+  GripVertical,
+  Plus,
+  Trash2,
+  Save,
+  ArrowUp,
+  ArrowDown,
+  Copy
+} from "lucide-react"
 
 import { createForm, deleteForm, getForm, runFormAction, updateForm, type FormAction } from "@/lib/formBuilderApi"
 import type {
   FormDefinition,
   FormField,
   FormFieldType,
+  FormPage,
   FormSection,
   FormType,
+  FormUiConfig,
   FormWebhookConfig,
   FormWebhookMethod,
 } from "@/types/formBuilder"
+import {
+  BUTTON_VARIANTS,
+  DEFAULT_UI_CONFIG,
+  UI_PRESET_OPTIONS,
+  coercePages,
+  getUiPreset,
+  normalizeUiConfig,
+  type UiPresetKey,
+} from "@/lib/formSchema"
+import { DRIVE_FORM_TEMPLATES } from "@/lib/formTemplates"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -20,6 +51,16 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Separator } from "@/components/ui/separator"
+import { Badge } from "@/components/ui/badge"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Dialog,
   DialogContent,
@@ -37,6 +78,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { cn } from "@/lib/utils"
 
 const createId = () => {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -45,27 +87,31 @@ const createId = () => {
   return `id_${Math.random().toString(36).slice(2, 10)}`
 }
 
+const layoutTransition = { bounce: 0.2, duration: 0.4 }
+
 const isDataUrl = (value?: string | null) => typeof value === "string" && value.startsWith("data:")
 
-const fieldTypeLabels: Record<FormFieldType, string> = {
-  short_text: "Short text",
-  long_text: "Long text",
-  number: "Number",
-  select: "Dropdown",
-  multi_select: "Multi-select",
-  radio: "Multiple choice",
-  checkbox: "Checkbox",
-  rating: "Rating",
-  slider: "Slider",
-  date: "Date",
-  time: "Time",
+const fieldTypeConfig: Record<FormFieldType, { label: string; icon: React.ElementType; group: string }> = {
+  short_text: { label: "Short text", icon: Type, group: "Text" },
+  long_text: { label: "Long text", icon: Type, group: "Text" },
+  number: { label: "Number", icon: Hash, group: "Numeric" },
+  rating: { label: "Rating", icon: Hash, group: "Numeric" },
+  slider: { label: "Slider", icon: Hash, group: "Numeric" },
+  select: { label: "Dropdown", icon: List, group: "Selection" },
+  multi_select: { label: "Multi-select", icon: List, group: "Selection" },
+  radio: { label: "Multiple choice", icon: CheckSquare, group: "Selection" },
+  checkbox: { label: "Checkbox", icon: CheckSquare, group: "Selection" },
+  date: { label: "Date", icon: Calendar, group: "Date/Time" },
+  time: { label: "Time", icon: Clock, group: "Date/Time" },
+  image: { label: "Image / Camera", icon: ImageIcon, group: "Media" },
 }
 
 const optionFieldTypes = new Set<FormFieldType>(["select", "multi_select", "radio"])
 const numericFieldTypes = new Set<FormFieldType>(["number", "rating", "slider"])
 const webhookMethods: FormWebhookMethod[] = ["GET", "POST", "PUT", "PATCH", "DELETE"]
 
-const normalizeFormType = (value?: string | null): FormType => (value === "pit" ? "pit" : "match")
+const normalizeFormType = (value?: string | null): FormType =>
+  value === "pit" ? "pit" : value === "drive" ? "drive" : "match"
 const normalizeWebhookMethod = (value?: string | null): FormWebhookMethod => {
   const candidate = typeof value === "string" ? value.trim().toUpperCase() : ""
   return webhookMethods.includes(candidate as FormWebhookMethod) ? (candidate as FormWebhookMethod) : "GET"
@@ -92,7 +138,15 @@ const buildEmptyForm = (): FormDefinition => ({
   },
   webhook: normalizeWebhook(),
   schema: {
-    sections: [],
+    pages: [
+      {
+        id: createId(),
+        title: "Page 1",
+        description: "",
+        sections: [],
+      },
+    ],
+    ui: DEFAULT_UI_CONFIG,
   },
 })
 
@@ -113,6 +167,14 @@ export default function FormBuilderPage() {
   const [saving, setSaving] = useState(false)
   const [actionLoading, setActionLoading] = useState<FormAction | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({})
+  const [dbOpen, setDbOpen] = useState(false)
+  const [presetKey, setPresetKey] = useState<UiPresetKey>("default")
+  const [templateId, setTemplateId] = useState(DRIVE_FORM_TEMPLATES[0]?.id ?? "")
+  const [templateConfirm, setTemplateConfirm] = useState<{ open: boolean; templateId: string }>({
+    open: false,
+    templateId: "",
+  })
   const [sqlDialog, setSqlDialog] = useState<{
     open: boolean
     title: string
@@ -130,11 +192,21 @@ export default function FormBuilderPage() {
         if (!data) {
           throw new Error("Form not found")
         }
+        const pages = coercePages(data.schema)
         setForm({
           ...data,
           type: data.type || "match",
           webhook: normalizeWebhook(data.webhook),
+          schema: {
+            ...data.schema,
+            pages,
+            ui: normalizeUiConfig(data.schema?.ui),
+          },
         })
+        // Open first section by default
+        if (pages[0]?.sections?.length) {
+          setOpenSections({ [pages[0].sections[0].id]: true })
+        }
       })
       .catch((error) => {
         console.error("Failed to load form", error)
@@ -150,7 +222,8 @@ export default function FormBuilderPage() {
     const typeParam = searchParams.get("type")
     if (!yearParam && !typeParam) return
     setForm((prev) => {
-      if (prev.name || prev.schema.sections.length > 0) {
+      const existingPages = coercePages(prev.schema)
+      if (prev.name || existingPages.some((page) => page.sections.length > 0)) {
         return prev
       }
       return {
@@ -161,104 +234,170 @@ export default function FormBuilderPage() {
     })
   }, [formId, searchParams])
 
-  const sectionCount = form.schema.sections.length
-  const fieldCount = form.schema.sections.reduce((sum, section) => sum + section.fields.length, 0)
+  useEffect(() => {
+    if (form.type !== "drive") return
+    if (!templateId && DRIVE_FORM_TEMPLATES.length > 0) {
+      setTemplateId(DRIVE_FORM_TEMPLATES[0].id)
+    }
+  }, [form.type, templateId])
 
-  const updateSection = (sectionId: string, updater: (section: FormSection) => FormSection) => {
-    setForm((prev) => ({
-      ...prev,
-      schema: {
-        ...prev.schema,
-        sections: prev.schema.sections.map((section) =>
-          section.id === sectionId ? updater(section) : section
-        ),
+  const pages = useMemo(() => coercePages(form.schema), [form.schema])
+  const pageCount = pages.length
+  const sectionCount = useMemo(
+    () => pages.reduce((sum, page) => sum + page.sections.length, 0),
+    [pages]
+  )
+  const fieldCount = useMemo(
+    () =>
+      pages.reduce(
+        (sum, page) => sum + page.sections.reduce((inner, section) => inner + section.fields.length, 0),
+        0
+      ),
+    [pages]
+  )
+  const uiConfig = useMemo(() => normalizeUiConfig(form.schema.ui), [form.schema.ui])
+  const selectedTemplate = useMemo(
+    () => DRIVE_FORM_TEMPLATES.find((template) => template.id === templateId),
+    [templateId]
+  )
+  const selectedPreset = useMemo(
+    () => UI_PRESET_OPTIONS.find((option) => option.key === presetKey),
+    [presetKey]
+  )
+
+  const setPages = (updater: (pages: FormPage[]) => FormPage[]) => {
+    setForm((prev) => {
+      const nextPages = updater(coercePages(prev.schema))
+      return {
+        ...prev,
+        schema: {
+          ...prev.schema,
+          pages: nextPages,
+          sections: undefined,
+        },
+      }
+    })
+  }
+
+  const updatePage = (pageId: string, updater: (page: FormPage) => FormPage) => {
+    setPages((current) => current.map((page) => (page.id === pageId ? updater(page) : page)))
+  }
+
+  const handleAddPage = () => {
+    const id = createId()
+    setPages((current) => [
+      ...current,
+      {
+        id,
+        title: `Page ${current.length + 1}`,
+        description: "",
+        sections: [],
       },
+    ])
+  }
+
+  const handleRemovePage = (pageId: string) => {
+    setPages((current) => current.filter((page) => page.id !== pageId))
+  }
+
+  const handleMovePage = (index: number, delta: number) => {
+    setPages((current) => moveItem(current, index, index + delta))
+  }
+
+  const updateSection = (
+    pageId: string,
+    sectionId: string,
+    updater: (section: FormSection) => FormSection
+  ) => {
+    updatePage(pageId, (page) => ({
+      ...page,
+      sections: page.sections.map((section) =>
+        section.id === sectionId ? updater(section) : section
+      ),
     }))
   }
 
   const updateField = (
+    pageId: string,
     sectionId: string,
     fieldId: string,
     updater: (field: FormField) => FormField
   ) => {
-    updateSection(sectionId, (section) => ({
+    updateSection(pageId, sectionId, (section) => ({
       ...section,
       fields: section.fields.map((field) => (field.id === fieldId ? updater(field) : field)),
     }))
   }
 
-  const handleAddSection = () => {
+  const handleAddSection = (pageId: string) => {
+    const id = createId()
     const nextSection: FormSection = {
-      id: createId(),
-      title: `Section ${sectionCount + 1}`,
+      id,
+      title: "New section",
       description: "",
       imageUrl: "",
       fields: [],
     }
-    setForm((prev) => ({
-      ...prev,
-      schema: {
-        ...prev.schema,
-        sections: [...prev.schema.sections, nextSection],
-      },
+    updatePage(pageId, (page) => ({
+      ...page,
+      sections: [...page.sections, nextSection],
+    }))
+    setOpenSections((prev) => ({ ...prev, [id]: true }))
+  }
+
+  const handleRemoveSection = (pageId: string, sectionId: string) => {
+    updatePage(pageId, (page) => ({
+      ...page,
+      sections: page.sections.filter((section) => section.id !== sectionId),
     }))
   }
 
-  const handleRemoveSection = (sectionId: string) => {
-    setForm((prev) => ({
-      ...prev,
-      schema: {
-        ...prev.schema,
-        sections: prev.schema.sections.filter((section) => section.id !== sectionId),
-      },
+  const handleMoveSection = (pageId: string, index: number, delta: number) => {
+    updatePage(pageId, (page) => ({
+      ...page,
+      sections: moveItem(page.sections, index, index + delta),
     }))
   }
 
-  const handleMoveSection = (index: number, delta: number) => {
-    setForm((prev) => ({
-      ...prev,
-      schema: {
-        ...prev.schema,
-        sections: moveItem(prev.schema.sections, index, index + delta),
-      },
-    }))
-  }
-
-  const handleAddField = (sectionId: string) => {
+  const handleAddField = (
+    pageId: string,
+    sectionId: string,
+    type: FormFieldType = "short_text"
+  ) => {
     const nextField: FormField = {
       id: createId(),
-      type: "short_text",
-      label: "New field",
+      type,
+      label: type === "image" ? "Robot Photo" : "New question",
       key: "",
       helpText: "",
       required: false,
       placeholder: "",
-      options: [],
+      options: type === "select" || type === "radio" || type === "multi_select" ? ["Option 1"] : [],
       min: 1,
       max: 5,
       step: 1,
     }
-    updateSection(sectionId, (section) => ({
+    updateSection(pageId, sectionId, (section) => ({
       ...section,
       fields: [...section.fields, nextField],
     }))
   }
 
-  const handleRemoveField = (sectionId: string, fieldId: string) => {
-    updateSection(sectionId, (section) => ({
+  const handleRemoveField = (pageId: string, sectionId: string, fieldId: string) => {
+    updateSection(pageId, sectionId, (section) => ({
       ...section,
       fields: section.fields.filter((field) => field.id !== fieldId),
     }))
   }
 
-  const handleMoveField = (sectionId: string, index: number, delta: number) => {
-    updateSection(sectionId, (section) => ({
+  const handleMoveField = (pageId: string, sectionId: string, index: number, delta: number) => {
+    updateSection(pageId, sectionId, (section) => ({
       ...section,
       fields: moveItem(section.fields, index, index + delta),
     }))
   }
 
-  const handleSectionImageUpload = (sectionId: string, file?: File | null) => {
+  const handleSectionImageUpload = (pageId: string, sectionId: string, file?: File | null) => {
     if (!file) return
     const reader = new FileReader()
     reader.onload = () => {
@@ -267,7 +406,7 @@ export default function FormBuilderPage() {
         toast.error("Failed to read image.")
         return
       }
-      updateSection(sectionId, (current) => ({ ...current, imageUrl: result }))
+      updateSection(pageId, sectionId, (current) => ({ ...current, imageUrl: result }))
     }
     reader.onerror = () => {
       toast.error("Failed to upload image.")
@@ -275,8 +414,13 @@ export default function FormBuilderPage() {
     reader.readAsDataURL(file)
   }
 
-  const handleFieldTypeChange = (sectionId: string, fieldId: string, nextType: FormFieldType) => {
-    updateField(sectionId, fieldId, (field) => {
+  const handleFieldTypeChange = (
+    pageId: string,
+    sectionId: string,
+    fieldId: string,
+    nextType: FormFieldType
+  ) => {
+    updateField(pageId, sectionId, fieldId, (field) => {
       const needsOptions = optionFieldTypes.has(nextType)
       const needsNumeric = numericFieldTypes.has(nextType)
       return {
@@ -288,6 +432,59 @@ export default function FormBuilderPage() {
         step: needsNumeric ? field.step ?? 1 : undefined,
       }
     })
+  }
+
+  const updateUiConfig = (updater: (config: FormUiConfig) => FormUiConfig) => {
+    setForm((prev) => ({
+      ...prev,
+      schema: {
+        ...prev.schema,
+        ui: updater(normalizeUiConfig(prev.schema.ui)),
+      },
+    }))
+  }
+
+  const applyTemplate = (nextTemplateId: string) => {
+    const template = DRIVE_FORM_TEMPLATES.find((entry) => entry.id === nextTemplateId)
+    if (!template) {
+      toast.error("Template not found.")
+      return
+    }
+    const built = template.build(createId)
+    const nextPages = built.pages
+    const firstSectionId = nextPages[0]?.sections?.[0]?.id
+    setForm((prev) => ({
+      ...prev,
+      type: template.type,
+      name: prev.name.trim() ? prev.name : built.name || prev.name,
+      description: prev.description?.trim() ? prev.description : built.description || prev.description || "",
+      schema: {
+        ...prev.schema,
+        pages: nextPages,
+        sections: undefined,
+        ui: normalizeUiConfig(prev.schema.ui),
+      },
+    }))
+    setOpenSections(firstSectionId ? { [firstSectionId]: true } : {})
+    toast.success(`Applied "${template.label}".`)
+  }
+
+  const handleApplyTemplate = () => {
+    if (!templateId) return
+    const hasContent = pages.some((page) => page.sections.length > 0)
+    if (hasContent) {
+      setTemplateConfirm({ open: true, templateId })
+      return
+    }
+    applyTemplate(templateId)
+  }
+
+  const handleConfirmTemplate = () => {
+    const nextId = templateConfirm.templateId
+    if (nextId) {
+      applyTemplate(nextId)
+    }
+    setTemplateConfirm({ open: false, templateId: "" })
   }
 
   const isSaveDisabled = useMemo(() => {
@@ -309,16 +506,10 @@ export default function FormBuilderPage() {
           migrate: "Migration SQL",
           update_backend: "Backend Update",
         }
-        const descriptionMap: Record<FormAction, string> = {
-          generate_sql: "Review or copy this SQL before running it against your database.",
-          push: "Run this SQL to create or update the database table for this form.",
-          migrate: "Run these statements to safely migrate your table without dropping data.",
-          update_backend: "Backend update completed.",
-        }
         setSqlDialog({
           open: true,
           title: titleMap[action],
-          description: response.message || descriptionMap[action],
+          description: response.message || "Review the generated SQL.",
           sql: response.sql,
         })
       } else {
@@ -326,7 +517,7 @@ export default function FormBuilderPage() {
       }
     } catch (error) {
       console.error("Database action failed", error)
-      toast.error("Database action failed. Check the API logs.")
+      toast.error("Database action failed. Check logs.")
     } finally {
       setActionLoading(null)
     }
@@ -338,7 +529,7 @@ export default function FormBuilderPage() {
       toast.success("SQL copied to clipboard.")
     } catch (error) {
       console.error("Failed to copy SQL", error)
-      toast.error("Could not copy SQL to clipboard.")
+      toast.error("Could not copy SQL.")
     }
   }
 
@@ -359,7 +550,15 @@ export default function FormBuilderPage() {
         },
       }
       const saved = isNew ? await createForm(payload) : await updateForm(payload)
-      setForm(saved)
+      const savedPages = coercePages(saved.schema)
+      setForm({
+        ...saved,
+        schema: {
+          ...saved.schema,
+          pages: savedPages,
+          ui: normalizeUiConfig(saved.schema?.ui),
+        },
+      })
       toast.success(isNew ? "Form created." : "Form updated.")
       if (isNew) {
         navigate(`/form-maker/${saved.id}`, { replace: true })
@@ -386,9 +585,13 @@ export default function FormBuilderPage() {
     }
   }
 
+  const toggleSection = (id: string) => {
+    setOpenSections(prev => ({ ...prev, [id]: !prev[id] }))
+  }
+
   if (loading) {
     return (
-      <div className="container mx-auto max-w-5xl py-10">
+      <div className="container mx-auto max-w-5xl pb-10 pt-0">
         <Card>
           <CardHeader>
             <CardTitle>Loading form…</CardTitle>
@@ -400,720 +603,992 @@ export default function FormBuilderPage() {
   }
 
   return (
-    <div className="container mx-auto max-w-6xl space-y-6 py-8">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-bold">{isNew ? "Create Form" : `Edit: ${form.name}`}</h1>
-          <p className="text-muted-foreground">
-            {sectionCount} sections • {fieldCount} fields
+    <div className="container mx-auto max-w-6xl space-y-3 pb-24 pt-0 animate-in fade-in-0 duration-300">
+      {/* Header */}
+      <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-2 border-b bg-background/95 px-3 py-2 backdrop-blur animate-in fade-in-0 slide-in-from-bottom-1 duration-300 sm:rounded-b-lg sm:border sm:border-t-0">
+        <div className="min-w-0">
+          <h1 className="truncate text-xl font-bold leading-tight">{isNew ? "Create Form" : form.name}</h1>
+          <p className="truncate text-sm text-muted-foreground">
+            {pageCount} pages • {sectionCount} sections • {fieldCount} fields •{" "}
+            {form.type === "pit"
+              ? "Pit Scouting"
+              : form.type === "drive"
+                ? "Drive Team Scouting"
+                : "Match Scouting"}
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => navigate("/form-maker")}>
-            Back to list
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" className="h-8 min-w-20" onClick={() => navigate("/form-maker")}>
+            Exit
           </Button>
-          {!isNew ? (
-            <Button variant="outline" onClick={() => setDeleteOpen(true)}>
-              Delete
+          {!isNew && (
+            <Button variant="outline" size="sm" className="h-8 min-w-20" onClick={() => setDeleteOpen(true)}>
+              <Trash2 className="mr-2 h-4 w-4" /> Delete
             </Button>
-          ) : null}
-          <Button onClick={handleSave} disabled={isSaveDisabled}>
-            {saving ? "Saving…" : "Save form"}
+          )}
+          <Button size="sm" className="h-8 min-w-20" onClick={handleSave} disabled={isSaveDisabled}>
+            <Save className="mr-2 h-4 w-4" />
+            {saving ? "Saving…" : "Save Form"}
           </Button>
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Form details</CardTitle>
-          <CardDescription>Name, year, and publishing status.</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="form-name">Form name</Label>
-            <Input
-              id="form-name"
-              value={form.name}
-              onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-              placeholder="2026 Match Scouting"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="form-year">Year</Label>
-            <Input
-              id="form-year"
-              value={form.year}
-              onChange={(event) => setForm((prev) => ({ ...prev, year: event.target.value }))}
-              placeholder="2026"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Form type</Label>
-            <Select
-              value={form.type}
-              onValueChange={(value) =>
-                setForm((prev) => ({ ...prev, type: normalizeFormType(value) }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Pick form type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="match">Normal scouting</SelectItem>
-                <SelectItem value="pit">Pit scouting</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2 md:col-span-2">
-            <Label htmlFor="form-description">Description</Label>
-            <Textarea
-              id="form-description"
-              value={form.description || ""}
-              onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
-              placeholder="What this form is used for and when."
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Status</Label>
-            <Select
-              value={form.status}
-              onValueChange={(value) =>
-                setForm((prev) => ({ ...prev, status: value as FormDefinition["status"] }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Pick status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="draft">Draft</SelectItem>
-                <SelectItem value="published">Published</SelectItem>
-                <SelectItem value="archived">Archived</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this form?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This permanently removes the form and its schema. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Database configuration (MySQL default)</CardTitle>
-          <CardDescription>Stored with the form for downstream integrations.</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="db-host">DB_HOST</Label>
-            <Input
-              id="db-host"
-              value={form.db.host}
-              onChange={(event) =>
-                setForm((prev) => ({ ...prev, db: { ...prev.db, host: event.target.value } }))
-              }
-              placeholder="localhost"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="db-name">DB_NAME</Label>
-            <Input
-              id="db-name"
-              value={form.db.name}
-              onChange={(event) =>
-                setForm((prev) => ({ ...prev, db: { ...prev.db, name: event.target.value } }))
-              }
-              placeholder="maneuver_scouting"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="db-user">DB_USER</Label>
-            <Input
-              id="db-user"
-              value={form.db.user}
-              onChange={(event) =>
-                setForm((prev) => ({ ...prev, db: { ...prev.db, user: event.target.value } }))
-              }
-              placeholder="scouting_admin"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="db-pass">DB_PASS</Label>
-            <Input
-              id="db-pass"
-              type="password"
-              value={form.db.pass}
-              onChange={(event) =>
-                setForm((prev) => ({ ...prev, db: { ...prev.db, pass: event.target.value } }))
-              }
-              placeholder="••••••••"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="db-engine">DB Engine</Label>
-            <Input id="db-engine" value={form.db.engine} disabled />
-          </div>
-        </CardContent>
-        <CardContent className="border-t pt-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="text-sm text-muted-foreground">
-              Save after updating credentials or schema settings.
+      <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">Pages</h2>
+              <p className="text-sm text-muted-foreground">
+                Organize sections across multiple pages and control navigation.
+              </p>
             </div>
-            <Button onClick={handleSave} disabled={isSaveDisabled}>
-              {saving ? "Saving…" : "Save form"}
+            <Button variant="outline" size="sm" onClick={handleAddPage}>
+              <Plus className="mr-2 h-4 w-4" /> Add Page
             </Button>
           </div>
-        </CardContent>
-        <CardContent className="space-y-4 border-t pt-6">
-          <div>
-            <h3 className="text-lg font-semibold">Database actions</h3>
-            <p className="text-sm text-muted-foreground">
-              Use these to synchronize the current form schema with your database or backend services.
-            </p>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2 rounded-lg border p-4">
-              <div className="font-medium">Push schema to DB</div>
-              <p className="text-sm text-muted-foreground">
-                Creates or updates tables and columns in your database to match this form.
-              </p>
-              <Button
-                variant="secondary"
-                onClick={() => handleDbAction("push")}
-                disabled={actionLoading === "push"}
-              >
-                {actionLoading === "push" ? "Pushing…" : "Push to DB"}
-              </Button>
-            </div>
-            <div className="space-y-2 rounded-lg border p-4">
-              <div className="font-medium">Generate SQL</div>
-              <p className="text-sm text-muted-foreground">
-                Produces a SQL script you can review and run manually on your database.
-              </p>
-              <Button
-                variant="secondary"
-                onClick={() => handleDbAction("generate_sql")}
-                disabled={actionLoading === "generate_sql"}
-              >
-                {actionLoading === "generate_sql" ? "Generating…" : "Generate SQL"}
-              </Button>
-            </div>
-            <div className="space-y-2 rounded-lg border p-4">
-              <div className="font-medium">Run migrations</div>
-              <p className="text-sm text-muted-foreground">
-                Applies safe, incremental updates without dropping existing data.
-              </p>
-              <Button
-                variant="secondary"
-                onClick={() => handleDbAction("migrate")}
-                disabled={actionLoading === "migrate"}
-              >
-                {actionLoading === "migrate" ? "Migrating…" : "Migrate DB"}
-              </Button>
-            </div>
-            <div className="space-y-2 rounded-lg border p-4">
-              <div className="font-medium">Update backend</div>
-              <p className="text-sm text-muted-foreground">
-                Syncs the API and backend services to recognize the latest form schema.
-              </p>
-              <Button
-                variant="secondary"
-                onClick={() => handleDbAction("update_backend")}
-                disabled={actionLoading === "update_backend"}
-              >
-                {actionLoading === "update_backend" ? "Updating…" : "Update backend"}
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Webhook integration</CardTitle>
-          <CardDescription>
-            Configure the webhook used by Scouting Ops sync actions.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2 md:col-span-2">
-            <Label htmlFor="webhook-url">Webhook URL</Label>
-            <Input
-              id="webhook-url"
-              value={form.webhook?.url || ""}
-              onChange={(event) =>
-                setForm((prev) => ({
-                  ...prev,
-                  webhook: normalizeWebhook({ ...prev.webhook, url: event.target.value }),
-                }))
-              }
-              placeholder="https://example.com/webhook"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Method</Label>
-            <Select
-              value={form.webhook?.method || "GET"}
-              onValueChange={(value) =>
-                setForm((prev) => ({
-                  ...prev,
-                  webhook: normalizeWebhook({ ...prev.webhook, method: value as FormWebhookMethod }),
-                }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Pick a method" />
-              </SelectTrigger>
-              <SelectContent>
-                {webhookMethods.map((method) => (
-                  <SelectItem key={method} value={method}>
-                    {method}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="webhook-auth">Authorization header value</Label>
-            <Input
-              id="webhook-auth"
-              type="password"
-              value={form.webhook?.authHeader || ""}
-              onChange={(event) =>
-                setForm((prev) => ({
-                  ...prev,
-                  webhook: normalizeWebhook({ ...prev.webhook, authHeader: event.target.value }),
-                }))
-              }
-              placeholder="Bearer YOUR_TOKEN"
-              autoComplete="off"
-            />
-            <p className="text-xs text-muted-foreground">
-              Optional. Sent as the `Authorization` header when the webhook runs.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+          <div className="space-y-8">
+            {pages.map((page, pageIndex) => (
+              <motion.div
+                key={page.id}
+                layout="position"
+                transition={layoutTransition}
+                className="space-y-4"
+              >
+                <div className="rounded-lg border bg-muted/30 p-4 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="flex-1 space-y-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="secondary">Page {pageIndex + 1}</Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {page.sections.length} sections
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs text-muted-foreground">Page title</Label>
+                        <Input
+                          value={page.title}
+                          onChange={(e) =>
+                            updatePage(page.id, (current) => ({ ...current, title: e.target.value }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs text-muted-foreground">Page description</Label>
+                        <Textarea
+                          value={page.description || ""}
+                          onChange={(e) =>
+                            updatePage(page.id, (current) => ({
+                              ...current,
+                              description: e.target.value,
+                            }))
+                          }
+                          placeholder="Optional helper copy for this page."
+                          rows={2}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleMovePage(pageIndex, -1)}
+                        disabled={pageIndex === 0}
+                      >
+                        <ArrowUp className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleMovePage(pageIndex, 1)}
+                        disabled={pageIndex === pageCount - 1}
+                      >
+                        <ArrowDown className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive"
+                        onClick={() => handleRemovePage(page.id)}
+                        disabled={pageCount <= 1}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
 
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold">Sections</h2>
-          <p className="text-muted-foreground">Organize the form into logical blocks.</p>
+                <div className="space-y-4">
+                  {page.sections.map((section, sectionIndex) => (
+                    <motion.div
+                      key={section.id}
+                      layout="position"
+                      transition={layoutTransition}
+                    >
+                      <Collapsible
+                        open={openSections[section.id]}
+                        onOpenChange={() => toggleSection(section.id)}
+                        className="rounded-lg border bg-card text-card-foreground shadow-sm animate-in fade-in-0 slide-in-from-bottom-2 duration-300"
+                      >
+                      <div className="flex items-center gap-2 border-b p-4">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-sm font-medium text-muted-foreground">
+                          {sectionIndex + 1}
+                        </div>
+                        <div className="flex-1">
+                          <Input
+                            value={section.title}
+                            onChange={(e) =>
+                              updateSection(page.id, section.id, (s) => ({
+                                ...s,
+                                title: e.target.value,
+                              }))
+                            }
+                            className="border-none bg-transparent px-2 text-lg font-semibold hover:bg-muted/50 focus-visible:ring-0"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleMoveSection(page.id, sectionIndex, -1)}
+                            disabled={sectionIndex === 0}
+                          >
+                            <ArrowUp className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleMoveSection(page.id, sectionIndex, 1)}
+                            disabled={sectionIndex === page.sections.length - 1}
+                          >
+                            <ArrowDown className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-destructive"
+                            onClick={() => handleRemoveSection(page.id, section.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                          <CollapsibleTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              {openSections[section.id] ? (
+                                <ChevronUp className="h-4 w-4" />
+                              ) : (
+                                <ChevronDown className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </CollapsibleTrigger>
+                        </div>
+                      </div>
+
+                      <CollapsibleContent>
+                        <div className="space-y-6 p-4 pt-6">
+                          {/* Section Metadata */}
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <div className="space-y-2">
+                              <Label>Description</Label>
+                              <Textarea
+                                value={section.description || ""}
+                                onChange={(e) =>
+                                  updateSection(page.id, section.id, (s) => ({
+                                    ...s,
+                                    description: e.target.value,
+                                  }))
+                                }
+                                placeholder="Instructions for the scout..."
+                                rows={2}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Reference Image</Label>
+                              <div className="flex gap-2">
+                                <Input
+                                  value={isDataUrl(section.imageUrl) ? "(Image Data)" : section.imageUrl || ""}
+                                  onChange={(e) =>
+                                    updateSection(page.id, section.id, (s) => ({
+                                      ...s,
+                                      imageUrl: e.target.value,
+                                    }))
+                                  }
+                                  placeholder="URL..."
+                                  className="flex-1"
+                                />
+                                <Button variant="outline" size="icon" className="relative">
+                                  <input
+                                    type="file"
+                                    className="absolute inset-0 cursor-pointer opacity-0"
+                                    accept="image/*"
+                                    onChange={(e) =>
+                                      handleSectionImageUpload(page.id, section.id, e.target.files?.[0])
+                                    }
+                                  />
+                                  <ImageIcon className="h-4 w-4" />
+                                </Button>
+                              </div>
+                              {section.imageUrl && (
+                                <div className="relative mt-2 h-20 w-full overflow-hidden rounded bg-muted">
+                                  <img src={section.imageUrl} alt="Ref" className="h-full w-full object-contain" />
+                                  <Button
+                                    variant="destructive"
+                                    size="icon"
+                                    className="absolute right-1 top-1 h-6 w-6"
+                                    onClick={() =>
+                                      updateSection(page.id, section.id, (s) => ({ ...s, imageUrl: "" }))
+                                    }
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <Separator />
+
+                          {/* Fields List */}
+                          <div className="space-y-4">
+                            {section.fields.map((field, fieldIndex) => {
+                              const Icon = fieldTypeConfig[field.type]?.icon || Type
+                              const showsOptions = optionFieldTypes.has(field.type)
+                              const showsNumeric = numericFieldTypes.has(field.type)
+
+                              return (
+                                <motion.div
+                                  key={field.id}
+                                  layout="position"
+                                  transition={layoutTransition}
+                                  className="group relative rounded-lg border bg-card p-4 transition-all hover:shadow-md"
+                                >
+                                  <div className="absolute -left-3 top-4 hidden cursor-grab rounded-md border bg-background p-1 text-muted-foreground shadow-sm group-hover:block">
+                                    <GripVertical className="h-4 w-4" />
+                                  </div>
+
+                                  <div className="mb-4 flex items-start gap-4">
+                                    <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded bg-primary/10 text-primary">
+                                      <Icon className="h-4 w-4" />
+                                    </div>
+                                    <div className="flex-1 space-y-4">
+                                      <div className="grid gap-4 md:grid-cols-[1fr_auto]">
+                                        <div className="space-y-2">
+                                          <Label className="text-xs text-muted-foreground">Question Label</Label>
+                                          <Input
+                                            value={field.label}
+                                            onChange={(e) =>
+                                              updateField(page.id, section.id, field.id, (f) => ({
+                                                ...f,
+                                                label: e.target.value,
+                                              }))
+                                            }
+                                            className="font-medium"
+                                          />
+                                        </div>
+                                        <div className="space-y-2">
+                                          <Label className="text-xs text-muted-foreground">Type</Label>
+                                          <Select
+                                            value={field.type}
+                                            onValueChange={(v) =>
+                                              handleFieldTypeChange(page.id, section.id, field.id, v as FormFieldType)
+                                            }
+                                          >
+                                            <SelectTrigger className="w-[140px]">
+                                              <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              {Object.entries(fieldTypeConfig).map(([key, conf]) => (
+                                                <SelectItem key={key} value={key}>
+                                                  {conf.label}
+                                                </SelectItem>
+                                              ))}
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                      </div>
+
+                                      {/* Options for Select/Radio */}
+                                      {showsOptions && (
+                                        <div className="rounded-md border border-dashed p-3">
+                                          <Label className="mb-2 block text-xs font-medium">Options</Label>
+                                          <div className="space-y-2">
+                                            {field.options?.map((opt, idx) => (
+                                              <div key={idx} className="flex gap-2">
+                                                <Input
+                                                  value={opt}
+                                                  onChange={(e) =>
+                                                    updateField(page.id, section.id, field.id, (f) => {
+                                                      const next = [...(f.options || [])]
+                                                      next[idx] = e.target.value
+                                                      return { ...f, options: next }
+                                                    })
+                                                  }
+                                                  className="h-8 text-sm"
+                                                />
+                                                <Button
+                                                  variant="ghost"
+                                                  size="icon"
+                                                  className="h-8 w-8"
+                                                  onClick={() =>
+                                                    updateField(page.id, section.id, field.id, (f) => ({
+                                                      ...f,
+                                                      options: (f.options || []).filter((_, i) => i !== idx),
+                                                    }))
+                                                  }
+                                                >
+                                                  <Trash2 className="h-3 w-3" />
+                                                </Button>
+                                              </div>
+                                            ))}
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="h-8 w-full border-dashed"
+                                              onClick={() =>
+                                                updateField(page.id, section.id, field.id, (f) => ({
+                                                  ...f,
+                                                  options: [...(f.options || []), 'Option ' + ((f.options || []).length + 1)],
+                                                }))
+                                              }
+                                            >
+                                              <Plus className="mr-2 h-3 w-3" /> Add Option
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* Numeric Config */}
+                                      {showsNumeric && (
+                                        <div className="flex gap-4 rounded-md border border-dashed p-3">
+                                          <div className="flex-1">
+                                            <Label className="text-xs">Min</Label>
+                                            <Input
+                                              type="number"
+                                              className="h-8"
+                                              value={field.min ?? ""}
+                                              onChange={(e) =>
+                                                updateField(page.id, section.id, field.id, (f) => ({
+                                                  ...f,
+                                                  min: Number(e.target.value),
+                                                }))
+                                              }
+                                            />
+                                          </div>
+                                          <div className="flex-1">
+                                            <Label className="text-xs">Max</Label>
+                                            <Input
+                                              type="number"
+                                              className="h-8"
+                                              value={field.max ?? ""}
+                                              onChange={(e) =>
+                                                updateField(page.id, section.id, field.id, (f) => ({
+                                                  ...f,
+                                                  max: Number(e.target.value),
+                                                }))
+                                              }
+                                            />
+                                          </div>
+                                          <div className="flex-1">
+                                            <Label className="text-xs">Step</Label>
+                                            <Input
+                                              type="number"
+                                              className="h-8"
+                                              value={field.step ?? ""}
+                                              onChange={(e) =>
+                                                updateField(page.id, section.id, field.id, (f) => ({
+                                                  ...f,
+                                                  step: Number(e.target.value),
+                                                }))
+                                              }
+                                            />
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      <div className="flex flex-wrap items-center gap-4 text-xs">
+                                        <label className="flex items-center gap-1.5 text-muted-foreground">
+                                          <Checkbox
+                                            checked={field.required}
+                                            onCheckedChange={(c) =>
+                                              updateField(page.id, section.id, field.id, (f) => ({
+                                                ...f,
+                                                required: !!c,
+                                              }))
+                                            }
+                                          />
+                                          Required
+                                        </label>
+                                        <div className="flex items-center gap-2 text-muted-foreground">
+                                          <span>Key:</span>
+                                          <Input
+                                            value={field.key || ""}
+                                            onChange={(e) =>
+                                              updateField(page.id, section.id, field.id, (f) => ({
+                                                ...f,
+                                                key: e.target.value,
+                                              }))
+                                            }
+                                            placeholder="Auto-generated"
+                                            className="h-6 w-24 px-1 text-xs"
+                                          />
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex flex-col gap-1">
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8"
+                                        onClick={() => handleMoveField(page.id, section.id, fieldIndex, -1)}
+                                        disabled={fieldIndex === 0}
+                                      >
+                                        <ArrowUp className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8"
+                                        onClick={() => handleMoveField(page.id, section.id, fieldIndex, 1)}
+                                        disabled={fieldIndex === section.fields.length - 1}
+                                      >
+                                        <ArrowDown className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 text-destructive"
+                                        onClick={() => handleRemoveField(page.id, section.id, field.id)}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </motion.div>
+                              )
+                            })}
+
+                            {/* Add Field Button */}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  className="w-full border-dashed py-6 text-muted-foreground hover:bg-muted/50"
+                                >
+                                  <Plus className="mr-2 h-4 w-4" /> Add Field
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="center" className="w-[300px]">
+                                {["Text", "Numeric", "Selection", "Date/Time", "Media"].map((group) => (
+                                  <div key={group}>
+                                    <DropdownMenuLabel className="text-xs text-muted-foreground">
+                                      {group}
+                                    </DropdownMenuLabel>
+                                    {Object.entries(fieldTypeConfig)
+                                      .filter(([, conf]) => conf.group === group)
+                                      .map(([type, conf]) => (
+                                        <DropdownMenuItem
+                                          key={type}
+                                          onClick={() => handleAddField(page.id, section.id, type as FormFieldType)}
+                                        >
+                                          <conf.icon className="mr-2 h-4 w-4" />
+                                          {conf.label}
+                                        </DropdownMenuItem>
+                                      ))}
+                                    <DropdownMenuSeparator />
+                                  </div>
+                                ))}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </div>
+                      </CollapsibleContent>
+                      </Collapsible>
+                    </motion.div>
+                  ))}
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="w-full border-dashed"
+                  onClick={() => handleAddSection(page.id)}
+                >
+                  <Plus className="mr-2 h-4 w-4" /> Add Section
+                </Button>
+              </motion.div>
+            ))}
+          </div>
         </div>
-        <Button onClick={handleAddSection}>Add section</Button>
-      </div>
 
-      {form.schema.sections.length === 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>No sections yet</CardTitle>
-            <CardDescription>Add sections to start building the form.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={handleAddSection}>Create first section</Button>
-          </CardContent>
-        </Card>
-      ) : (
-        form.schema.sections.map((section, sectionIndex) => (
-          <Card key={section.id} className="border-muted/60">
-            <CardHeader className="space-y-3">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <CardTitle>Section {sectionIndex + 1}</CardTitle>
-                  <CardDescription>Configure layout, copy, and imagery.</CardDescription>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleMoveSection(sectionIndex, -1)}
-                    disabled={sectionIndex === 0}
-                  >
-                    Move up
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleMoveSection(sectionIndex, 1)}
-                    disabled={sectionIndex === form.schema.sections.length - 1}
-                  >
-                    Move down
-                  </Button>
-                  <Button variant="destructive" size="sm" onClick={() => handleRemoveSection(section.id)}>
-                    Delete
-                  </Button>
-                </div>
-              </div>
+        {/* Sidebar / Settings Area */}
+        <div className="space-y-6">
+          <Card className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
+            <CardHeader>
+              <CardTitle>Settings</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Section title</Label>
-                  <Input
-                    value={section.title}
-                    onChange={(event) =>
-                      updateSection(section.id, (current) => ({ ...current, title: event.target.value }))
-                    }
-                    placeholder="Auto phase"
-                  />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <Label>Section image</Label>
-                    {section.imageUrl ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => updateSection(section.id, (current) => ({ ...current, imageUrl: "" }))}
-                      >
-                        Clear image
-                      </Button>
-                    ) : null}
-                  </div>
-                  <div className="grid gap-2 md:grid-cols-[1fr_auto]">
-                    <Input
-                      value={isDataUrl(section.imageUrl) ? "" : section.imageUrl || ""}
-                      onChange={(event) =>
-                        updateSection(section.id, (current) => ({ ...current, imageUrl: event.target.value }))
-                      }
-                      placeholder="https://example.com/auto.png"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        const input = document.getElementById(`section-image-${section.id}`) as HTMLInputElement | null
-                        input?.click()
-                      }}
-                    >
-                      Upload image
-                    </Button>
-                  </div>
-                  {isDataUrl(section.imageUrl) ? (
-                    <p className="text-xs text-muted-foreground">
-                      Uploaded image stored in this form.
-                    </p>
-                  ) : null}
-                  <input
-                    id={`section-image-${section.id}`}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0]
-                      handleSectionImageUpload(section.id, file)
-                      event.target.value = ""
-                    }}
-                  />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label>Description</Label>
-                  <Textarea
-                    value={section.description || ""}
-                    onChange={(event) =>
-                      updateSection(section.id, (current) => ({ ...current, description: event.target.value }))
-                    }
-                    placeholder="Instructions for scouts."
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label>Form Name</Label>
+                <Input value={form.name} onChange={(e) => setForm(f => ({...f, name: e.target.value}))} placeholder="Event Scouting" />
               </div>
+              <div className="space-y-2">
+                <Label>Year</Label>
+                <Input value={form.year} onChange={(e) => setForm(f => ({...f, year: e.target.value}))} placeholder="2026" />
+              </div>
+              <div className="space-y-2">
+                <Label>Type</Label>
+                 <Select value={form.type} onValueChange={(v) => setForm(f => ({...f, type: normalizeFormType(v)}))}>
+                   <SelectTrigger>
+                     <SelectValue />
+                   </SelectTrigger>
+                   <SelectContent>
+                     <SelectItem value="match">Match Scouting</SelectItem>
+                     <SelectItem value="pit">Pit Scouting</SelectItem>
+                     <SelectItem value="drive">Drive Team Scouting</SelectItem>
+                   </SelectContent>
+                 </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Status</Label>
+                 <Select value={form.status} onValueChange={(v) => setForm(f => ({...f, status: v as FormDefinition['status']}))}>
+                   <SelectTrigger>
+                     <SelectValue />
+                   </SelectTrigger>
+                   <SelectContent>
+                     <SelectItem value="draft">Draft</SelectItem>
+                     <SelectItem value="published">Published</SelectItem>
+                     <SelectItem value="archived">Archived</SelectItem>
+                   </SelectContent>
+                 </Select>
+              </div>
+            </CardContent>
+          </Card>
 
-              {section.imageUrl ? (
-                <div className="overflow-hidden rounded-lg border bg-muted">
-                  <img
-                    src={section.imageUrl}
-                    alt={section.title}
-                    className="h-48 w-full object-cover"
-                    loading="lazy"
-                  />
+          {form.type === "drive" ? (
+            <Card className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
+              <CardHeader>
+                <CardTitle>Drive Templates</CardTitle>
+                <CardDescription>Start from a curated drive team layout.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Template</Label>
+                  <Select value={templateId} onValueChange={setTemplateId}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DRIVE_FORM_TEMPLATES.map((template) => (
+                        <SelectItem key={template.id} value={template.id}>
+                          {template.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {selectedTemplate?.description || "Choose a template to apply."}
+                  </p>
                 </div>
-              ) : null}
+                <Button variant="outline" className="w-full" onClick={handleApplyTemplate}>
+                  Apply template
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Applying a template replaces all pages and sections in this form.
+                </p>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          <Card className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
+            <CardHeader>
+              <CardTitle>Layout & UI</CardTitle>
+              <CardDescription>Customize spacing, pages, and navigation buttons.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Layout mode</Label>
+                <Select
+                  value={uiConfig.layout || "auto"}
+                  onValueChange={(value) =>
+                    updateUiConfig((config) => ({ ...config, layout: value as FormUiConfig["layout"] }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">Auto (page when 2+)</SelectItem>
+                    <SelectItem value="single">Single page</SelectItem>
+                    <SelectItem value="paged">Paged</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Auto shows page navigation only when multiple pages exist.
+                </p>
+              </div>
 
               <Separator />
 
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold">Fields</h3>
-                <Button variant="secondary" size="sm" onClick={() => handleAddField(section.id)}>
-                  Add field
+              <div className="space-y-2">
+                <Label>Quick preset</Label>
+                <Select
+                  value={presetKey}
+                  onValueChange={(value) => setPresetKey(value as UiPresetKey)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {UI_PRESET_OPTIONS.map((option) => (
+                      <SelectItem key={option.key} value={option.key}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {selectedPreset?.description || "Pick a preset to restyle this form."}
+                </p>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => updateUiConfig(() => getUiPreset(presetKey))}
+                >
+                  Apply preset to this form
                 </Button>
               </div>
 
-              {section.fields.length === 0 ? (
-                <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                  No fields yet. Add your first question to this section.
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {section.fields.map((field, fieldIndex) => {
-                    const showsOptions = optionFieldTypes.has(field.type)
-                    const showsNumeric = numericFieldTypes.has(field.type)
-                    const isTextType = field.type === "short_text" || field.type === "long_text"
-                    return (
-                      <Card key={field.id} className="border-muted/60">
-                        <CardHeader className="space-y-3">
-                          <div className="flex flex-wrap items-start justify-between gap-2">
-                            <div>
-                              <CardTitle className="text-base">
-                                Field {fieldIndex + 1}
-                              </CardTitle>
-                              <CardDescription>{fieldTypeLabels[field.type]}</CardDescription>
-                            </div>
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleMoveField(section.id, fieldIndex, -1)}
-                                disabled={fieldIndex === 0}
-                              >
-                                Move up
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleMoveField(section.id, fieldIndex, 1)}
-                                disabled={fieldIndex === section.fields.length - 1}
-                              >
-                                Move down
-                              </Button>
-                              <Button
-                                variant="destructive"
-                                size="sm"
-                                onClick={() => handleRemoveField(section.id, field.id)}
-                              >
-                                Remove
-                              </Button>
-                            </div>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          <div className="grid gap-4 md:grid-cols-2">
-                            <div className="space-y-2">
-                              <Label>Label</Label>
-                              <Input
-                                value={field.label}
-                                onChange={(event) =>
-                                  updateField(section.id, field.id, (current) => ({
-                                    ...current,
-                                    label: event.target.value,
-                                  }))
-                                }
-                                placeholder="Question prompt"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label>Field type</Label>
-                              <Select
-                                value={field.type}
-                                onValueChange={(value) =>
-                                  handleFieldTypeChange(section.id, field.id, value as FormFieldType)
-                                }
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Pick a type" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {Object.entries(fieldTypeLabels).map(([value, label]) => (
-                                    <SelectItem key={value} value={value}>
-                                      {label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="space-y-2 md:col-span-2">
-                              <Label>Field name (data key)</Label>
-                              <Input
-                                value={field.key || ""}
-                                onChange={(event) =>
-                                  updateField(section.id, field.id, (current) => ({
-                                    ...current,
-                                    key: event.target.value,
-                                  }))
-                                }
-                                placeholder="auto_start_position"
-                              />
-                              <p className="text-xs text-muted-foreground">
-                                Used for exports and database columns. Leave blank to auto-generate.
-                              </p>
-                            </div>
-                            <div className="space-y-2 md:col-span-2">
-                              <Label>Help text</Label>
-                              <Input
-                                value={field.helpText || ""}
-                                onChange={(event) =>
-                                  updateField(section.id, field.id, (current) => ({
-                                    ...current,
-                                    helpText: event.target.value,
-                                  }))
-                                }
-                                placeholder="Optional guidance"
-                              />
-                            </div>
-                            {isTextType ? (
-                              <div className="space-y-2 md:col-span-2">
-                                <Label>Placeholder</Label>
-                                <Input
-                                  value={field.placeholder || ""}
-                                  onChange={(event) =>
-                                    updateField(section.id, field.id, (current) => ({
-                                      ...current,
-                                      placeholder: event.target.value,
-                                    }))
-                                  }
-                                  placeholder="Type here…"
-                                />
-                              </div>
-                            ) : null}
-                            <div className="flex items-center gap-2">
-                              <Checkbox
-                                checked={Boolean(field.required)}
-                                onCheckedChange={(value) =>
-                                  updateField(section.id, field.id, (current) => ({
-                                    ...current,
-                                    required: Boolean(value),
-                                  }))
-                                }
-                              />
-                              <Label>Required</Label>
-                            </div>
-                          </div>
+              <Separator />
 
-                          {showsNumeric ? (
-                            <div className="grid gap-4 md:grid-cols-3">
-                              <div className="space-y-2">
-                                <Label>Min</Label>
-                                <Input
-                                  type="number"
-                                  value={field.min ?? ""}
-                                  onChange={(event) =>
-                                    updateField(section.id, field.id, (current) => ({
-                                      ...current,
-                                      min: event.target.value === "" ? undefined : Number(event.target.value),
-                                    }))
-                                  }
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label>Max</Label>
-                                <Input
-                                  type="number"
-                                  value={field.max ?? ""}
-                                  onChange={(event) =>
-                                    updateField(section.id, field.id, (current) => ({
-                                      ...current,
-                                      max: event.target.value === "" ? undefined : Number(event.target.value),
-                                    }))
-                                  }
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label>Step</Label>
-                                <Input
-                                  type="number"
-                                  value={field.step ?? ""}
-                                  onChange={(event) =>
-                                    updateField(section.id, field.id, (current) => ({
-                                      ...current,
-                                      step: event.target.value === "" ? undefined : Number(event.target.value),
-                                    }))
-                                  }
-                                />
-                              </div>
-                            </div>
-                          ) : null}
+              <div className="space-y-2">
+                <Label>Page padding class</Label>
+                <Input
+                  value={uiConfig.pagePaddingClass || ""}
+                  onChange={(e) =>
+                    updateUiConfig((config) => ({ ...config, pagePaddingClass: e.target.value }))
+                  }
+                  placeholder={DEFAULT_UI_CONFIG.pagePaddingClass}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Page spacing class</Label>
+                <Input
+                  value={uiConfig.pageSpacingClass || ""}
+                  onChange={(e) =>
+                    updateUiConfig((config) => ({ ...config, pageSpacingClass: e.target.value }))
+                  }
+                  placeholder={DEFAULT_UI_CONFIG.pageSpacingClass}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Section spacing class</Label>
+                <Input
+                  value={uiConfig.sectionSpacingClass || ""}
+                  onChange={(e) =>
+                    updateUiConfig((config) => ({ ...config, sectionSpacingClass: e.target.value }))
+                  }
+                  placeholder={DEFAULT_UI_CONFIG.sectionSpacingClass}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Field spacing class</Label>
+                <Input
+                  value={uiConfig.fieldSpacingClass || ""}
+                  onChange={(e) =>
+                    updateUiConfig((config) => ({ ...config, fieldSpacingClass: e.target.value }))
+                  }
+                  placeholder={DEFAULT_UI_CONFIG.fieldSpacingClass}
+                />
+              </div>
 
-                          {showsOptions ? (
-                            <div className="space-y-3">
-                              <Label>Options</Label>
-                              <div className="space-y-2">
-                                {(field.options || []).map((option, optionIndex) => (
-                                  <div key={`${field.id}-option-${optionIndex}`} className="flex gap-2">
-                                    <Input
-                                      value={option}
-                                      onChange={(event) => {
-                                        const value = event.target.value
-                                        updateField(section.id, field.id, (current) => {
-                                          const next = [...(current.options || [])]
-                                          next[optionIndex] = value
-                                          return { ...current, options: next }
-                                        })
-                                      }}
-                                      placeholder={`Option ${optionIndex + 1}`}
-                                    />
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() =>
-                                        updateField(section.id, field.id, (current) => {
-                                          const next = (current.options || []).filter((_, idx) => idx !== optionIndex)
-                                          return { ...current, options: next }
-                                        })
-                                      }
-                                    >
-                                      Remove
-                                    </Button>
-                                  </div>
-                                ))}
-                              </div>
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() =>
-                                  updateField(section.id, field.id, (current) => ({
-                                    ...current,
-                                    options: [...(current.options || []), `Option ${(current.options || []).length + 1}`],
-                                  }))
-                                }
-                              >
-                                Add option
-                              </Button>
-                            </div>
-                          ) : null}
-                        </CardContent>
-                      </Card>
-                    )
-                  })}
+              <div className="space-y-2">
+                <Label>Section card class</Label>
+                <Input
+                  value={uiConfig.sectionCardClassName || ""}
+                  onChange={(e) =>
+                    updateUiConfig((config) => ({ ...config, sectionCardClassName: e.target.value }))
+                  }
+                  placeholder={DEFAULT_UI_CONFIG.sectionCardClassName}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Section header class</Label>
+                <Input
+                  value={uiConfig.sectionHeaderClassName || ""}
+                  onChange={(e) =>
+                    updateUiConfig((config) => ({ ...config, sectionHeaderClassName: e.target.value }))
+                  }
+                  placeholder={DEFAULT_UI_CONFIG.sectionHeaderClassName}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Page header class</Label>
+                <Input
+                  value={uiConfig.pageHeaderClassName || ""}
+                  onChange={(e) =>
+                    updateUiConfig((config) => ({ ...config, pageHeaderClassName: e.target.value }))
+                  }
+                  placeholder={DEFAULT_UI_CONFIG.pageHeaderClassName}
+                />
+              </div>
+
+              <Separator />
+
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  checked={Boolean(uiConfig.nav?.showProgress)}
+                  onCheckedChange={(value) =>
+                    updateUiConfig((config) => ({
+                      ...config,
+                      nav: { ...config.nav, showProgress: Boolean(value) },
+                    }))
+                  }
+                />
+                <Label>Show page progress</Label>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Back label</Label>
+                  <Input
+                    value={uiConfig.nav?.backLabel || ""}
+                    onChange={(e) =>
+                      updateUiConfig((config) => ({
+                        ...config,
+                        nav: { ...config.nav, backLabel: e.target.value },
+                      }))
+                    }
+                  />
                 </div>
-              )}
+                <div className="space-y-2">
+                  <Label>Next label</Label>
+                  <Input
+                    value={uiConfig.nav?.nextLabel || ""}
+                    onChange={(e) =>
+                      updateUiConfig((config) => ({
+                        ...config,
+                        nav: { ...config.nav, nextLabel: e.target.value },
+                      }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Submit label</Label>
+                  <Input
+                    value={uiConfig.nav?.submitLabel || ""}
+                    onChange={(e) =>
+                      updateUiConfig((config) => ({
+                        ...config,
+                        nav: { ...config.nav, submitLabel: e.target.value },
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Back variant</Label>
+                  <Select
+                    value={uiConfig.nav?.backVariant || "outline"}
+                    onValueChange={(value) =>
+                      updateUiConfig((config) => ({
+                        ...config,
+                        nav: { ...config.nav, backVariant: value as (typeof BUTTON_VARIANTS)[number] },
+                      }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {BUTTON_VARIANTS.map((variant) => (
+                        <SelectItem key={variant} value={variant}>
+                          {variant}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Next variant</Label>
+                  <Select
+                    value={uiConfig.nav?.nextVariant || "default"}
+                    onValueChange={(value) =>
+                      updateUiConfig((config) => ({
+                        ...config,
+                        nav: { ...config.nav, nextVariant: value as (typeof BUTTON_VARIANTS)[number] },
+                      }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {BUTTON_VARIANTS.map((variant) => (
+                        <SelectItem key={variant} value={variant}>
+                          {variant}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Submit variant</Label>
+                  <Select
+                    value={uiConfig.nav?.submitVariant || "default"}
+                    onValueChange={(value) =>
+                      updateUiConfig((config) => ({
+                        ...config,
+                        nav: { ...config.nav, submitVariant: value as (typeof BUTTON_VARIANTS)[number] },
+                      }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {BUTTON_VARIANTS.map((variant) => (
+                        <SelectItem key={variant} value={variant}>
+                          {variant}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Back button class</Label>
+                  <Input
+                    value={uiConfig.nav?.backClassName || ""}
+                    onChange={(e) =>
+                      updateUiConfig((config) => ({
+                        ...config,
+                        nav: { ...config.nav, backClassName: e.target.value },
+                      }))
+                    }
+                    placeholder="Optional Tailwind classes"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Next button class</Label>
+                  <Input
+                    value={uiConfig.nav?.nextClassName || ""}
+                    onChange={(e) =>
+                      updateUiConfig((config) => ({
+                        ...config,
+                        nav: { ...config.nav, nextClassName: e.target.value },
+                      }))
+                    }
+                    placeholder="Optional Tailwind classes"
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Submit button class</Label>
+                  <Input
+                    value={uiConfig.nav?.submitClassName || ""}
+                    onChange={(e) =>
+                      updateUiConfig((config) => ({
+                        ...config,
+                        nav: { ...config.nav, submitClassName: e.target.value },
+                      }))
+                    }
+                    placeholder="Optional Tailwind classes"
+                  />
+                </div>
+              </div>
             </CardContent>
           </Card>
-        ))
-      )}
 
-      <Dialog
-        open={sqlDialog.open}
-        onOpenChange={(open) => setSqlDialog((prev) => ({ ...prev, open }))}
-      >
+          <Collapsible open={dbOpen} onOpenChange={setDbOpen}>
+            <CollapsibleTrigger asChild>
+              <Button variant="outline" className="w-full justify-between">
+                Database & SQL
+                <ChevronDown className={cn("h-4 w-4 transition-transform", dbOpen && "rotate-180")} />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-3">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Database</CardTitle>
+                  <CardDescription>Actions to sync schema with DB.</CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => handleDbAction('generate_sql')}
+                    disabled={actionLoading === 'generate_sql'}
+                  >
+                    {actionLoading === 'generate_sql' ? "Generating..." : "View SQL"}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => handleDbAction('push')}
+                    disabled={actionLoading === 'push'}
+                  >
+                    {actionLoading === 'push' ? "Pushing..." : "Push to DB"}
+                  </Button>
+                </CardContent>
+              </Card>
+            </CollapsibleContent>
+          </Collapsible>
+        </div>
+      </div>
+
+      <Dialog open={sqlDialog.open} onOpenChange={(open) => setSqlDialog(prev => ({...prev, open}))}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>{sqlDialog.title}</DialogTitle>
             <DialogDescription>{sqlDialog.description}</DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
-            <Textarea value={sqlDialog.sql} readOnly className="min-h-[240px] font-mono text-xs" />
-            <div className="flex justify-end gap-2">
-              <Button variant="secondary" onClick={handleCopySql}>
-                Copy SQL
-              </Button>
-              <Button onClick={() => setSqlDialog((prev) => ({ ...prev, open: false }))}>
-                Close
-              </Button>
-            </div>
+          <div className="relative">
+             <Textarea value={sqlDialog.sql} readOnly className="h-[300px] w-full font-mono text-xs" />
+             <Button size="icon" variant="secondary" className="absolute right-2 top-2" onClick={handleCopySql}>
+               <Copy className="h-4 w-4" />
+             </Button>
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={templateConfirm.open}
+        onOpenChange={(open) =>
+          setTemplateConfirm((prev) => ({ ...prev, open, templateId: open ? prev.templateId : "" }))
+        }
+      >
+        <AlertDialogContent>
+           <AlertDialogHeader>
+             <AlertDialogTitle>Replace the current form?</AlertDialogTitle>
+             <AlertDialogDescription>
+               Applying a template will replace all existing pages, sections, and fields.
+             </AlertDialogDescription>
+           </AlertDialogHeader>
+           <AlertDialogFooter>
+             <AlertDialogCancel>Cancel</AlertDialogCancel>
+             <AlertDialogAction onClick={handleConfirmTemplate}>
+               Apply template
+             </AlertDialogAction>
+           </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+           <AlertDialogHeader>
+             <AlertDialogTitle>Delete form?</AlertDialogTitle>
+             <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
+           </AlertDialogHeader>
+           <AlertDialogFooter>
+             <AlertDialogCancel>Cancel</AlertDialogCancel>
+             <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
+           </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

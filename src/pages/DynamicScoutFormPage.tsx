@@ -14,6 +14,8 @@ import { getForm } from "@/lib/formBuilderApi"
 import { ACTIVE_FORM_UPDATED_EVENT, getActiveFormId, syncActiveFormConfig } from "@/lib/activeForm"
 import { addIdsToScoutingData } from "@/lib/scoutingDataUtils"
 import { saveScoutingEntry } from "@/lib/dexieDB"
+import { cn } from "@/lib/utils"
+import { coercePages, flattenFields, getPageFields, normalizeUiConfig } from "@/lib/formSchema"
 import type { FormDefinition, FormField } from "@/types/formBuilder"
 
 type ScoutInputs = {
@@ -45,6 +47,7 @@ const isEmptyValue = (value: unknown, field: FormField) => {
 const getInitialValue = (field: FormField) => {
   if (field.type === "checkbox") return false
   if (field.type === "multi_select") return [] as string[]
+  if (field.type === "image") return ""
   return ""
 }
 
@@ -60,6 +63,7 @@ export default function DynamicScoutFormPage() {
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [pageIndex, setPageIndex] = useState(0)
 
   useEffect(() => {
     if (!inputs) {
@@ -104,14 +108,24 @@ export default function DynamicScoutFormPage() {
     setLoading(true)
     getForm(activeFormId)
       .then((data) => {
-        setForm(data)
+        const pages = coercePages(data.schema)
+        setForm({
+          ...data,
+          schema: {
+            ...data.schema,
+            pages,
+          },
+        })
         const nextValues: Record<string, unknown> = {}
-        data.schema.sections.forEach((section) => {
-          section.fields.forEach((field) => {
-            nextValues[field.id] = getInitialValue(field)
+        pages.forEach((page) => {
+          page.sections.forEach((section) => {
+            section.fields.forEach((field) => {
+              nextValues[field.id] = getInitialValue(field)
+            })
           })
         })
         setValues(nextValues)
+        setPageIndex(0)
       })
       .catch((error) => {
         console.error("Failed to load scout form", error)
@@ -121,10 +135,30 @@ export default function DynamicScoutFormPage() {
       .finally(() => setLoading(false))
   }, [activeFormId, navigate])
 
-  const flattenedFields = useMemo(() => {
-    if (!form) return []
-    return form.schema.sections.flatMap((section) => section.fields)
-  }, [form])
+  const pages = useMemo(() => coercePages(form?.schema), [form])
+  const uiConfig = useMemo(() => normalizeUiConfig(form?.schema?.ui), [form])
+  const layoutMode = uiConfig.layout || "auto"
+  const isPaged = layoutMode === "paged" || (layoutMode === "auto" && pages.length > 1)
+  const displayPages = useMemo(() => {
+    if (isPaged) return pages
+    const allSections = pages.flatMap((page) => page.sections)
+    return [
+      {
+        id: "page_all",
+        title: "",
+        description: "",
+        sections: allSections,
+      },
+    ]
+  }, [isPaged, pages])
+  const displayPageCount = displayPages.length
+  const currentPage = displayPages[Math.min(pageIndex, displayPageCount - 1)] || displayPages[0]
+  const currentPageFields = useMemo(() => getPageFields(currentPage), [currentPage])
+  const allFields = useMemo(() => flattenFields(form?.schema), [form])
+
+  useEffect(() => {
+    setPageIndex((prev) => Math.min(prev, displayPageCount - 1))
+  }, [displayPageCount])
 
   const handleValueChange = (fieldId: string, value: unknown) => {
     setValues((prev) => ({ ...prev, [fieldId]: value }))
@@ -149,27 +183,25 @@ export default function DynamicScoutFormPage() {
     const usedKeys = new Set<string>()
     const responseData: Record<string, unknown> = {}
 
-    currentForm.schema.sections.forEach((section) => {
-      section.fields.forEach((field) => {
-        const baseLabel = field.label || field.id
-        const customKey = typeof field.key === "string" ? normalizeKey(field.key) : ""
-        const baseKey = customKey || `field_${normalizeKey(baseLabel)}`
-        let key = baseKey
-        if (usedKeys.has(key)) {
-          const fallbackBase = customKey || `field_${normalizeKey(baseLabel)}`
-          key = `${fallbackBase}_${field.id.slice(0, 6)}`
-        }
-        usedKeys.add(key)
+    flattenFields(currentForm.schema).forEach((field) => {
+      const baseLabel = field.label || field.id
+      const customKey = typeof field.key === "string" ? normalizeKey(field.key) : ""
+      const baseKey = customKey || `field_${normalizeKey(baseLabel)}`
+      let key = baseKey
+      if (usedKeys.has(key)) {
+        const fallbackBase = customKey || `field_${normalizeKey(baseLabel)}`
+        key = `${fallbackBase}_${field.id.slice(0, 6)}`
+      }
+      usedKeys.add(key)
 
-        let value = values[field.id]
-        if (field.type === "number" || field.type === "rating" || field.type === "slider") {
-          if (value !== "" && value !== undefined && value !== null) {
-            const num = Number(value)
-            value = Number.isNaN(num) ? value : num
-          }
+      let value = values[field.id]
+      if (field.type === "number" || field.type === "rating" || field.type === "slider") {
+        if (value !== "" && value !== undefined && value !== null) {
+          const num = Number(value)
+          value = Number.isNaN(num) ? value : num
         }
-        responseData[key] = value
-      })
+      }
+      responseData[key] = value
     })
 
     return {
@@ -184,11 +216,51 @@ export default function DynamicScoutFormPage() {
     }
   }
 
+  const handleImageUpload = (fieldId: string, file?: File | null) => {
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : ""
+      if (!result) {
+        toast.error("Failed to read image.")
+        return
+      }
+      handleValueChange(fieldId, result)
+    }
+    reader.onerror = () => {
+      toast.error("Failed to upload image.")
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleNextPage = () => {
+    if (!isPaged) return
+    const nextErrors: Record<string, string> = {}
+    currentPageFields.forEach((field) => {
+      if (field.required && isEmptyValue(values[field.id], field)) {
+        nextErrors[field.id] = "Required"
+      }
+    })
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors)
+      toast.error("Please fill out all required fields.")
+      return
+    }
+    setPageIndex((prev) => Math.min(prev + 1, displayPageCount - 1))
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+
+  const handleBackPage = () => {
+    if (!isPaged) return
+    setPageIndex((prev) => Math.max(prev - 1, 0))
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+
   const handleSubmit = async () => {
     if (!form || !inputs) return
     const nextErrors: Record<string, string> = {}
 
-    flattenedFields.forEach((field) => {
+    allFields.forEach((field) => {
       if (field.required && isEmptyValue(values[field.id], field)) {
         nextErrors[field.id] = "Required"
       }
@@ -240,7 +312,13 @@ export default function DynamicScoutFormPage() {
   }
 
   return (
-    <div className="container mx-auto max-w-5xl space-y-6 py-8">
+    <div
+      className={cn(
+        "container mx-auto max-w-5xl animate-in fade-in-0 duration-300",
+        uiConfig.pagePaddingClass,
+        uiConfig.pageSpacingClass
+      )}
+    >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-3xl font-bold">{form.name}</h1>
@@ -253,19 +331,57 @@ export default function DynamicScoutFormPage() {
         </Button>
       </div>
 
-      {form.schema.sections.map((section) => (
-        <Card key={section.id} className="border-muted/60">
-          <CardHeader className="space-y-2">
-            <CardTitle className="text-xl">{section.title}</CardTitle>
-            {section.description ? (
-              <CardDescription>{section.description}</CardDescription>
+      {(currentPage?.title || currentPage?.description || (uiConfig.nav?.showProgress && isPaged)) && (
+        <div
+          className={cn(
+            "rounded-lg border bg-muted/30 p-4 animate-in fade-in-0 slide-in-from-bottom-1 duration-300",
+            uiConfig.pageHeaderClassName
+          )}
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              {currentPage?.title ? (
+                <h2 className="text-xl font-semibold">{currentPage.title}</h2>
+              ) : null}
+              {currentPage?.description ? (
+                <p className="text-sm text-muted-foreground">{currentPage.description}</p>
+              ) : null}
+            </div>
+            {uiConfig.nav?.showProgress && isPaged ? (
+              <span className="text-xs text-muted-foreground">
+                Page {pageIndex + 1} of {displayPageCount}
+              </span>
             ) : null}
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {section.fields.map((field) => {
-              const fieldValue = values[field.id]
-              const isRequired = Boolean(field.required)
-              const fieldError = errors[field.id]
+          </div>
+        </div>
+      )}
+
+      <div
+        key={currentPage.id}
+        className={cn(
+          "animate-in fade-in-0 slide-in-from-bottom-2 duration-300",
+          uiConfig.sectionSpacingClass
+        )}
+      >
+        {currentPage.sections.map((section) => (
+          <Card
+            key={section.id}
+            className={cn(
+              "border-muted/60 animate-in fade-in-0 slide-in-from-bottom-2 duration-300",
+              uiConfig.sectionCardClassName
+            )}
+          >
+            <CardHeader className={cn("space-y-2", uiConfig.sectionHeaderClassName)}>
+              <CardTitle className="text-xl">{section.title}</CardTitle>
+              {section.description ? (
+                <CardDescription>{section.description}</CardDescription>
+              ) : null}
+            </CardHeader>
+            <CardContent className={cn(uiConfig.fieldSpacingClass)}>
+              {section.fields.map((field) => {
+                const fieldValue = values[field.id]
+                const isRequired = Boolean(field.required)
+                const fieldError = errors[field.id]
 
               if (field.type === "long_text") {
                 return (
@@ -344,6 +460,51 @@ export default function DynamicScoutFormPage() {
                         {field.label} {isRequired ? "*" : ""}
                       </span>
                     </label>
+                    {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
+                  </div>
+                )
+              }
+
+              if (field.type === "image") {
+                return (
+                  <div key={field.id} className="space-y-2">
+                    <Label>
+                      {field.label} {isRequired ? "*" : ""}
+                    </Label>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Button variant="outline" type="button" className="relative">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="absolute inset-0 cursor-pointer opacity-0"
+                          onChange={(event) => {
+                            const file = event.target.files?.[0]
+                            handleImageUpload(field.id, file)
+                            event.target.value = ""
+                          }}
+                        />
+                        Upload image
+                      </Button>
+                      {fieldValue ? (
+                        <Button
+                          variant="ghost"
+                          type="button"
+                          onClick={() => handleValueChange(field.id, "")}
+                        >
+                          Clear
+                        </Button>
+                      ) : null}
+                    </div>
+                    {typeof fieldValue === "string" && fieldValue ? (
+                      <div className="overflow-hidden rounded-lg border bg-muted">
+                        <img
+                          src={fieldValue}
+                          alt={field.label}
+                          className="h-48 w-full object-cover"
+                          loading="lazy"
+                        />
+                      </div>
+                    ) : null}
                     {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
                   </div>
                 )
@@ -432,17 +593,42 @@ export default function DynamicScoutFormPage() {
                 </div>
               )
             })}
-          </CardContent>
-        </Card>
-      ))}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
-      <div className="flex justify-end gap-3">
-        <Button variant="outline" onClick={() => navigate("/game-start", { state })}>
-          Back
-        </Button>
-        <Button onClick={handleSubmit} disabled={saving}>
-          {saving ? "Saving…" : "Submit"}
-        </Button>
+      <div className={cn("flex flex-wrap items-center gap-3", isPaged ? "justify-between" : "justify-end")}>
+        {isPaged ? (
+          <Button
+            variant={uiConfig.nav?.backVariant}
+            className={cn("transition-transform hover:-translate-y-0.5", uiConfig.nav?.backClassName)}
+            onClick={handleBackPage}
+            disabled={pageIndex === 0}
+          >
+            {uiConfig.nav?.backLabel}
+          </Button>
+        ) : null}
+        <div className="flex items-center gap-3">
+          {isPaged && pageIndex < displayPageCount - 1 ? (
+            <Button
+              variant={uiConfig.nav?.nextVariant}
+              className={cn("transition-transform hover:-translate-y-0.5", uiConfig.nav?.nextClassName)}
+              onClick={handleNextPage}
+            >
+              {uiConfig.nav?.nextLabel}
+            </Button>
+          ) : (
+            <Button
+              variant={uiConfig.nav?.submitVariant}
+              className={cn("transition-transform hover:-translate-y-0.5", uiConfig.nav?.submitClassName)}
+              onClick={handleSubmit}
+              disabled={saving}
+            >
+              {saving ? "Saving…" : uiConfig.nav?.submitLabel}
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   )

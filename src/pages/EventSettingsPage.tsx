@@ -77,7 +77,7 @@ const readSessionTbaApiKey = (): string => {
 const isAuthorizedRole = (role: string) => role === "lead" || role === "admin" || role === "ultra_admin"
 
 const EventSettingsPage = () => {
-  const { role } = useAuth()
+  const { role, user, authorizationReady } = useAuth()
   const navigate = useNavigate()
   const [events, setEvents] = useState<string[]>(readStoredEvents)
   const [currentEvent, setCurrentEvent] = useState(readStoredCurrentEvent)
@@ -231,12 +231,13 @@ const EventSettingsPage = () => {
   }, [applyWebhookStatus])
 
   useEffect(() => {
-    if (!canManageEvents) {
+    if (!authorizationReady) return
+    if (!user || !canManageEvents) {
       navigate("/", { replace: true })
       return
     }
     refreshMatchSummary()
-  }, [canManageEvents, navigate, refreshMatchSummary])
+  }, [authorizationReady, user, canManageEvents, navigate, refreshMatchSummary])
 
   useEffect(() => {
     if (!canManageEvents) return

@@ -1,0 +1,171 @@
+{
+  "name": "Drive Team Scouting",
+  "year": "2026",
+  "description": "Evaluate drive team performance, skill, cooperation, and gracious professionalism.",
+  "type": "drive",
+  "status": "published",
+  "db": {
+    "host": "",
+    "name": "",
+    "user": "",
+    "pass": "",
+    "engine": "mysql"
+  },
+  "webhook": {
+    "url": "",
+    "method": "GET",
+    "authHeader": ""
+  },
+  "schema": {
+    "sections": [
+      {
+        "id": "sec_match_info",
+        "title": "Match Information",
+        "description": "Basic details about the match.",
+        "imageUrl": "",
+        "fields": [
+          {
+            "id": "field_match_num",
+            "type": "number",
+            "label": "Match Number",
+            "key": "match_number",
+            "required": true,
+            "min": 1,
+            "max": 150,
+            "step": 1
+          },
+          {
+            "id": "field_team_num",
+            "type": "number",
+            "label": "Team Number",
+            "key": "team_number",
+            "required": true,
+            "min": 1,
+            "max": 9999,
+            "step": 1
+          }
+        ]
+      },
+      {
+        "id": "sec_skill",
+        "title": "Driver Skill & Execution",
+        "description": "Rate the technical ability of the drive team.",
+        "imageUrl": "",
+        "fields": [
+          {
+            "id": "field_driver_skill",
+            "type": "rating",
+            "label": "Driver Control",
+            "helpText": "Smoothness, defense evasion, and cycle efficiency.",
+            "key": "driver_skill",
+            "min": 1,
+            "max": 5,
+            "step": 1,
+            "required": true
+          },
+          {
+            "id": "field_operator_skill",
+            "type": "rating",
+            "label": "Operator Efficiency",
+            "helpText": "Speed and accuracy of mechanism control (scoring, intake).",
+            "key": "operator_skill",
+            "min": 1,
+            "max": 5,
+            "step": 1
+          },
+          {
+            "id": "field_awareness",
+            "type": "rating",
+            "label": "Field Awareness",
+            "helpText": "Reaction to game flow, defense, and avoiding fouls.",
+            "key": "field_awareness",
+            "min": 1,
+            "max": 5,
+            "step": 1
+          }
+        ]
+      },
+      {
+        "id": "sec_coop",
+        "title": "Teamwork & Strategy",
+        "description": "How they work within their alliance.",
+        "imageUrl": "",
+        "fields": [
+          {
+            "id": "field_cooperation",
+            "type": "rating",
+            "label": "Alliance Cooperation",
+            "helpText": "Willingness to coordinate and adapt strategy with partners.",
+            "key": "alliance_cooperation",
+            "min": 1,
+            "max": 5,
+            "step": 1
+          },
+          {
+            "id": "field_human_player",
+            "type": "rating",
+            "label": "Human Player Performance",
+            "helpText": "Speed of feeding pieces or spotlighting.",
+            "key": "human_player_rating",
+            "min": 1,
+            "max": 5,
+            "step": 1
+          },
+          {
+            "id": "field_strategy",
+            "type": "multi_select",
+            "label": "Observed Strategy",
+            "key": "strategy_tags",
+            "options": [
+              "Offensive Cycling",
+              "Defense",
+              "Feeding",
+              "Interference/Blocking",
+              "Endgame Focus"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sec_attitude",
+        "title": "Attitude & Conduct",
+        "description": "Professionalism and behavior.",
+        "imageUrl": "",
+        "fields": [
+          {
+            "id": "field_gp",
+            "type": "rating",
+            "label": "Gracious Professionalism",
+            "helpText": "Respect towards refs, volunteers, and other teams.",
+            "key": "gracious_professionalism",
+            "min": 1,
+            "max": 5,
+            "step": 1,
+            "required": true
+          },
+          {
+            "id": "field_reaction",
+            "type": "select",
+            "label": "Reaction to Adversity",
+            "helpText": "How they handled mistakes or losses.",
+            "key": "adversity_reaction",
+            "options": [
+              "Calm / Focused",
+              "Encouraging",
+              "Frustrated",
+              "Aggressive / Blaming",
+              "Gave Up"
+            ]
+          },
+          {
+            "id": "field_notes",
+            "type": "long_text",
+            "label": "General Notes",
+            "placeholder": "Any specific interactions or impressive moments...",
+            "key": "notes"
+          }
+        ]
+      }
+    ]
+  }
+}

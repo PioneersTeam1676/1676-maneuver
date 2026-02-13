@@ -68,46 +68,53 @@ export function NavUser() {
         {/* Google Auth section */}
         <div className="px-2 py-2 flex items-center gap-2">
           {user ? (
-            <div className="flex items-center gap-2 w-full">
-              {user.picture && (
-                <img src={user.picture} alt={user.name} className="h-6 w-6 rounded-full" />
-              )}
-              <div className="text-xs flex-1">
-                <div className="flex items-center gap-1 font-semibold leading-none">
-                  <span>{user.name}</span>
-                  {(role === 'lead' || role === 'admin' || role === 'ultra_admin') && (
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-6 w-6 p-0"
-                      onClick={() => navigate('/achievements')}
-                      title="Achievements"
-                    >
-                      <Trophy className="h-4 w-4 text-yellow-500" />
-                    </Button>
-                  )}
-                </div>
-                <div className="text-muted-foreground truncate max-w-[160px]">{user.email}</div>
-                <Badge variant={role === 'pending' ? 'outline' : 'secondary'} className="mt-1">
-                  {roleLabel}
-                </Badge>
-                {role === 'pending' && (
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    An admin needs to grant additional access.
-                  </p>
+            <div className="flex w-full flex-wrap items-start gap-2">
+              <div className="flex min-w-0 flex-1 items-start gap-2">
+                {user.picture && (
+                  <img src={user.picture} alt={user.name} className="h-6 w-6 rounded-full" />
                 )}
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    disabled={syncingSchedule}
-                    onClick={handleSyncSchedule}
-                  >
-                    {syncingSchedule ? 'Syncing...' : 'Sync Match Schedule'}
-                  </Button>
+                <div className="text-xs min-w-0 flex-1">
+                  <div className="flex items-center gap-1 font-semibold leading-none">
+                    <span>{user.name}</span>
+                    {(role === 'lead' || role === 'admin' || role === 'ultra_admin') && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6 p-0"
+                        onClick={() => navigate('/achievements')}
+                        title="Achievements"
+                      >
+                        <Trophy className="h-4 w-4 text-yellow-500" />
+                      </Button>
+                    )}
+                  </div>
+                  <div className="text-muted-foreground truncate max-w-[160px]">{user.email}</div>
+                  <Badge variant={role === 'pending' ? 'outline' : 'secondary'} className="mt-1">
+                    {roleLabel}
+                  </Badge>
+                  {role === 'pending' && (
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      An admin needs to grant additional access.
+                    </p>
+                  )}
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={syncingSchedule}
+                      onClick={handleSyncSchedule}
+                    >
+                      {syncingSchedule ? 'Syncing...' : 'Sync Match Schedule'}
+                    </Button>
+                  </div>
                 </div>
               </div>
-              <Button size="sm" variant="outline" className="ml-auto" onClick={logout}>
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full sm:w-auto sm:ml-auto"
+                onClick={logout}
+              >
                 Sign out
               </Button>
             </div>
