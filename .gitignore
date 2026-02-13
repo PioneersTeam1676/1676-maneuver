@@ -19,6 +19,9 @@ dev-dist
 .env.production
 .env.development
 
+# Images (server/data/images/pit/2026test)
+server/data/images/pit/
+
 # Database files
 *.sqlite
 *.db
