@@ -26,6 +26,7 @@ import type {
   FormDefinition,
   FormField,
   FormFieldType,
+  FormFloatingImage,
   FormPage,
   FormSection,
   FormType,
@@ -90,6 +91,34 @@ const createId = () => {
 const layoutTransition = { bounce: 0.2, duration: 0.4 }
 
 const isDataUrl = (value?: string | null) => typeof value === "string" && value.startsWith("data:")
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
+const toFiniteNumber = (value: unknown, fallback: number) => {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? numeric : fallback
+}
+const createFloatingImage = (): FormFloatingImage => ({
+  id: createId(),
+  src: "",
+  alt: "",
+  x: 50,
+  y: 50,
+  width: 200,
+  opacity: 100,
+  rotation: 0,
+  zIndex: 0,
+  showOnMobile: true,
+})
+const normalizeFloatingImage = (image: FormFloatingImage): FormFloatingImage => ({
+  ...image,
+  alt: image.alt || "",
+  x: clamp(toFiniteNumber(image.x, 50), 0, 100),
+  y: clamp(toFiniteNumber(image.y, 50), 0, 100),
+  width: clamp(toFiniteNumber(image.width, 200), 40, 1200),
+  opacity: clamp(toFiniteNumber(image.opacity, 100), 0, 100),
+  rotation: clamp(toFiniteNumber(image.rotation, 0), -180, 180),
+  zIndex: clamp(toFiniteNumber(image.zIndex, 0), -10, 50),
+  showOnMobile: image.showOnMobile !== false,
+})
 
 const fieldTypeConfig: Record<FormFieldType, { label: string; icon: React.ElementType; group: string }> = {
   short_text: { label: "Short text", icon: Type, group: "Text" },
@@ -143,6 +172,7 @@ const buildEmptyForm = (): FormDefinition => ({
         id: createId(),
         title: "Page 1",
         description: "",
+        floatingImages: [],
         sections: [],
       },
     ],
@@ -181,6 +211,11 @@ export default function FormBuilderPage() {
     description: string
     sql: string
   }>({ open: false, title: "", description: "", sql: "" })
+  const [floatingDrag, setFloatingDrag] = useState<{
+    pageId: string
+    imageId: string
+    rect: DOMRect
+  } | null>(null)
 
   const isNew = !formId
 
@@ -241,6 +276,47 @@ export default function FormBuilderPage() {
     }
   }, [form.type, templateId])
 
+  useEffect(() => {
+    if (!floatingDrag) return
+
+    const handleMove = (event: PointerEvent) => {
+      setForm((prev) => {
+        const nextPages = coercePages(prev.schema).map((page) => {
+          if (page.id !== floatingDrag.pageId) return page
+          return {
+            ...page,
+            floatingImages: (page.floatingImages || []).map((image) =>
+              image.id === floatingDrag.imageId
+                ? normalizeFloatingImage({
+                    ...image,
+                    x: ((event.clientX - floatingDrag.rect.left) / Math.max(floatingDrag.rect.width, 1)) * 100,
+                    y: ((event.clientY - floatingDrag.rect.top) / Math.max(floatingDrag.rect.height, 1)) * 100,
+                  })
+                : image
+            ),
+          }
+        })
+        return {
+          ...prev,
+          schema: {
+            ...prev.schema,
+            pages: nextPages,
+            sections: undefined,
+          },
+        }
+      })
+    }
+
+    const handleUp = () => setFloatingDrag(null)
+
+    window.addEventListener("pointermove", handleMove)
+    window.addEventListener("pointerup", handleUp)
+    return () => {
+      window.removeEventListener("pointermove", handleMove)
+      window.removeEventListener("pointerup", handleUp)
+    }
+  }, [floatingDrag])
+
   const pages = useMemo(() => coercePages(form.schema), [form.schema])
   const pageCount = pages.length
   const sectionCount = useMemo(
@@ -291,6 +367,7 @@ export default function FormBuilderPage() {
         id,
         title: `Page ${current.length + 1}`,
         description: "",
+        floatingImages: [],
         sections: [],
       },
     ])
@@ -327,6 +404,64 @@ export default function FormBuilderPage() {
       ...section,
       fields: section.fields.map((field) => (field.id === fieldId ? updater(field) : field)),
     }))
+  }
+
+  const updateFloatingImage = (
+    pageId: string,
+    imageId: string,
+    updater: (image: FormFloatingImage) => FormFloatingImage
+  ) => {
+    updatePage(pageId, (page) => ({
+      ...page,
+      floatingImages: (page.floatingImages || []).map((image) =>
+        image.id === imageId ? normalizeFloatingImage(updater(image)) : image
+      ),
+    }))
+  }
+
+  const handleAddFloatingImage = (pageId: string) => {
+    updatePage(pageId, (page) => ({
+      ...page,
+      floatingImages: [...(page.floatingImages || []), createFloatingImage()],
+    }))
+  }
+
+  const handleRemoveFloatingImage = (pageId: string, imageId: string) => {
+    updatePage(pageId, (page) => ({
+      ...page,
+      floatingImages: (page.floatingImages || []).filter((image) => image.id !== imageId),
+    }))
+  }
+
+  const handleFloatingImageUpload = (pageId: string, imageId: string, file?: File | null) => {
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : ""
+      if (!result) {
+        toast.error("Failed to read image.")
+        return
+      }
+      updateFloatingImage(pageId, imageId, (image) => ({ ...image, src: result }))
+    }
+    reader.onerror = () => {
+      toast.error("Failed to upload image.")
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleStartFloatingImageDrag = (
+    event: React.PointerEvent<HTMLButtonElement>,
+    pageId: string,
+    imageId: string
+  ) => {
+    const canvas = event.currentTarget.closest("[data-floating-canvas='true']") as HTMLElement | null
+    if (!canvas) return
+    setFloatingDrag({
+      pageId,
+      imageId,
+      rect: canvas.getBoundingClientRect(),
+    })
   }
 
   const handleAddSection = (pageId: string) => {
@@ -370,6 +505,7 @@ export default function FormBuilderPage() {
       label: type === "image" ? "Robot Photo" : "New question",
       key: "",
       helpText: "",
+      exclusiveGroup: "",
       required: false,
       placeholder: "",
       options: type === "select" || type === "radio" || type === "multi_select" ? ["Option 1"] : [],
@@ -686,6 +822,210 @@ export default function FormBuilderPage() {
                           placeholder="Optional helper copy for this page."
                           rows={2}
                         />
+                      </div>
+
+                      <div className="space-y-3 rounded-md border border-dashed bg-background/80 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <Label className="text-xs text-muted-foreground">Floating Screen Images</Label>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7"
+                            onClick={() => handleAddFloatingImage(page.id)}
+                          >
+                            <Plus className="mr-1 h-3 w-3" /> Add Image
+                          </Button>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                          Drag images in the preview to position them. Scouts will see these in the live form.
+                        </p>
+
+                        <div
+                          data-floating-canvas="true"
+                          className="relative h-44 overflow-hidden rounded-md border bg-muted/40"
+                        >
+                          {(page.floatingImages || []).length === 0 ? (
+                            <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+                              No floating images yet.
+                            </div>
+                          ) : (
+                            (page.floatingImages || []).map((image, imageIndex) =>
+                              image.src ? (
+                                <button
+                                  key={image.id}
+                                  type="button"
+                                  className={cn(
+                                    "absolute cursor-grab select-none touch-none rounded-md border border-primary/30 shadow-sm transition hover:border-primary/80",
+                                    floatingDrag?.imageId === image.id && "ring-2 ring-primary"
+                                  )}
+                                  style={{
+                                    left: `${image.x}%`,
+                                    top: `${image.y}%`,
+                                    width: `${image.width}px`,
+                                    transform: `translate(-50%, -50%) rotate(${image.rotation ?? 0}deg)`,
+                                    opacity: (image.opacity ?? 100) / 100,
+                                    zIndex: image.zIndex ?? 0,
+                                  }}
+                                  onPointerDown={(event) =>
+                                    handleStartFloatingImageDrag(event, page.id, image.id)
+                                  }
+                                >
+                                  <img
+                                    src={image.src}
+                                    alt={image.alt || `Floating image ${imageIndex + 1}`}
+                                    draggable={false}
+                                    className="pointer-events-none max-h-24 w-full rounded-md object-contain select-none"
+                                  />
+                                </button>
+                              ) : null
+                            )
+                          )}
+                        </div>
+
+                        {(page.floatingImages || []).map((image, imageIndex) => (
+                          <div key={image.id} className="space-y-3 rounded-md border bg-card p-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs font-medium">Image {imageIndex + 1}</span>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-destructive"
+                                onClick={() => handleRemoveFloatingImage(page.id, image.id)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+
+                            <div className="grid gap-2 md:grid-cols-[1fr_auto]">
+                              <Input
+                                value={isDataUrl(image.src) ? "(Image Data)" : image.src}
+                                onChange={(event) =>
+                                  updateFloatingImage(page.id, image.id, (current) => ({
+                                    ...current,
+                                    src: event.target.value,
+                                  }))
+                                }
+                                placeholder="Image URL or upload file"
+                              />
+                              <Button variant="outline" size="icon" className="relative">
+                                <input
+                                  type="file"
+                                  className="absolute inset-0 cursor-pointer opacity-0"
+                                  accept="image/*"
+                                  onChange={(event) =>
+                                    handleFloatingImageUpload(page.id, image.id, event.target.files?.[0])
+                                  }
+                                />
+                                <ImageIcon className="h-4 w-4" />
+                              </Button>
+                            </div>
+
+                            <Input
+                              value={image.alt || ""}
+                              onChange={(event) =>
+                                updateFloatingImage(page.id, image.id, (current) => ({
+                                  ...current,
+                                  alt: event.target.value,
+                                }))
+                              }
+                              placeholder="Alt text (optional)"
+                            />
+
+                            <div className="grid gap-3 md:grid-cols-3">
+                              <div className="space-y-1">
+                                <Label className="text-[11px] text-muted-foreground">X (%)</Label>
+                                <Input
+                                  type="number"
+                                  value={image.x}
+                                  onChange={(event) =>
+                                    updateFloatingImage(page.id, image.id, (current) => ({
+                                      ...current,
+                                      x: Number(event.target.value),
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-[11px] text-muted-foreground">Y (%)</Label>
+                                <Input
+                                  type="number"
+                                  value={image.y}
+                                  onChange={(event) =>
+                                    updateFloatingImage(page.id, image.id, (current) => ({
+                                      ...current,
+                                      y: Number(event.target.value),
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-[11px] text-muted-foreground">Width (px)</Label>
+                                <Input
+                                  type="number"
+                                  value={image.width}
+                                  onChange={(event) =>
+                                    updateFloatingImage(page.id, image.id, (current) => ({
+                                      ...current,
+                                      width: Number(event.target.value),
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-[11px] text-muted-foreground">Opacity (%)</Label>
+                                <Input
+                                  type="number"
+                                  value={image.opacity ?? 100}
+                                  onChange={(event) =>
+                                    updateFloatingImage(page.id, image.id, (current) => ({
+                                      ...current,
+                                      opacity: Number(event.target.value),
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-[11px] text-muted-foreground">Rotation (deg)</Label>
+                                <Input
+                                  type="number"
+                                  value={image.rotation ?? 0}
+                                  onChange={(event) =>
+                                    updateFloatingImage(page.id, image.id, (current) => ({
+                                      ...current,
+                                      rotation: Number(event.target.value),
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-[11px] text-muted-foreground">Layer</Label>
+                                <Input
+                                  type="number"
+                                  value={image.zIndex ?? 0}
+                                  onChange={(event) =>
+                                    updateFloatingImage(page.id, image.id, (current) => ({
+                                      ...current,
+                                      zIndex: Number(event.target.value),
+                                    }))
+                                  }
+                                />
+                              </div>
+                            </div>
+
+                            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <Checkbox
+                                checked={image.showOnMobile !== false}
+                                onCheckedChange={(value) =>
+                                  updateFloatingImage(page.id, image.id, (current) => ({
+                                    ...current,
+                                    showOnMobile: Boolean(value),
+                                  }))
+                                }
+                              />
+                              Show on mobile
+                            </label>
+                          </div>
+                        ))}
                       </div>
                     </div>
                     <div className="flex items-center gap-1">
@@ -1004,6 +1344,39 @@ export default function FormBuilderPage() {
                                           </div>
                                         </div>
                                       )}
+
+                                      <div className="grid gap-3 rounded-md border border-dashed p-3 md:grid-cols-2">
+                                        <div className="space-y-2">
+                                          <Label className="text-xs">Scout Description</Label>
+                                          <Textarea
+                                            value={field.helpText || ""}
+                                            onChange={(e) =>
+                                              updateField(page.id, section.id, field.id, (f) => ({
+                                                ...f,
+                                                helpText: e.target.value,
+                                              }))
+                                            }
+                                            placeholder="Shows as a ? tooltip for scouts."
+                                            rows={2}
+                                          />
+                                        </div>
+                                        <div className="space-y-2">
+                                          <Label className="text-xs">Mutual Exclusion Group</Label>
+                                          <Input
+                                            value={field.exclusiveGroup || ""}
+                                            onChange={(e) =>
+                                              updateField(page.id, section.id, field.id, (f) => ({
+                                                ...f,
+                                                exclusiveGroup: e.target.value,
+                                              }))
+                                            }
+                                            placeholder="e.g. endgame_result"
+                                          />
+                                          <p className="text-[11px] text-muted-foreground">
+                                            Fields with the same group allow only one answered value.
+                                          </p>
+                                        </div>
+                                      </div>
 
                                       <div className="flex flex-wrap items-center gap-4 text-xs">
                                         <label className="flex items-center gap-1.5 text-muted-foreground">

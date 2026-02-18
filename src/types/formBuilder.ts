@@ -21,6 +21,7 @@ export type FormField = {
   label: string
   key?: string
   helpText?: string
+  exclusiveGroup?: string
   required?: boolean
   placeholder?: string
   options?: string[]
@@ -37,10 +38,24 @@ export type FormSection = {
   fields: FormField[]
 }
 
+export type FormFloatingImage = {
+  id: string
+  src: string
+  alt?: string
+  x: number
+  y: number
+  width: number
+  opacity?: number
+  rotation?: number
+  zIndex?: number
+  showOnMobile?: boolean
+}
+
 export type FormPage = {
   id: string
   title: string
   description?: string
+  floatingImages?: FormFloatingImage[]
   sections: FormSection[]
 }
 

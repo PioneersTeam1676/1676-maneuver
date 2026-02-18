@@ -1,6 +1,7 @@
 import type {
   ButtonVariant,
   FormField,
+  FormFloatingImage,
   FormPage,
   FormSchema,
   FormSection,
@@ -129,6 +130,28 @@ export const getUiPreset = (key: UiPresetKey): FormUiConfig =>
 const normalizeSections = (sections?: FormSection[] | null): FormSection[] =>
   Array.isArray(sections) ? sections : []
 
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
+const toFiniteNumber = (value: unknown, fallback: number) => {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? numeric : fallback
+}
+
+const normalizeFloatingImages = (images?: FormFloatingImage[] | null): FormFloatingImage[] => {
+  if (!Array.isArray(images)) return []
+  return images.map((image, index) => ({
+    id: image.id || `floating_image_${index + 1}`,
+    src: typeof image.src === "string" ? image.src : "",
+    alt: typeof image.alt === "string" ? image.alt : "",
+    x: clamp(toFiniteNumber(image.x, 50), 0, 100),
+    y: clamp(toFiniteNumber(image.y, 50), 0, 100),
+    width: clamp(toFiniteNumber(image.width, 180), 40, 1200),
+    opacity: clamp(toFiniteNumber(image.opacity, 100), 0, 100),
+    rotation: clamp(toFiniteNumber(image.rotation, 0), -180, 180),
+    zIndex: clamp(toFiniteNumber(image.zIndex, 0), -10, 50),
+    showOnMobile: image.showOnMobile !== false,
+  }))
+}
+
 export const coercePages = (schema?: FormSchema | null): FormPage[] => {
   const rawPages = Array.isArray(schema?.pages) ? schema?.pages : []
   if (rawPages.length > 0) {
@@ -136,6 +159,7 @@ export const coercePages = (schema?: FormSchema | null): FormPage[] => {
       id: page.id || `page_${index + 1}`,
       title: page.title || `Page ${index + 1}`,
       description: page.description || "",
+      floatingImages: normalizeFloatingImages(page.floatingImages),
       sections: normalizeSections(page.sections),
     }))
   }
@@ -146,6 +170,7 @@ export const coercePages = (schema?: FormSchema | null): FormPage[] => {
       id: "page_1",
       title: "Page 1",
       description: "",
+      floatingImages: [],
       sections: legacySections,
     },
   ]

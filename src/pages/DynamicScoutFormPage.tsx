@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
 import { toast } from "sonner"
+import { CircleHelp } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -9,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 import { getForm } from "@/lib/formBuilderApi"
 import { ACTIVE_FORM_UPDATED_EVENT, getActiveFormId, syncActiveFormConfig } from "@/lib/activeForm"
@@ -16,7 +18,7 @@ import { addIdsToScoutingData } from "@/lib/scoutingDataUtils"
 import { saveScoutingEntry } from "@/lib/dexieDB"
 import { cn } from "@/lib/utils"
 import { coercePages, flattenFields, getPageFields, normalizeUiConfig } from "@/lib/formSchema"
-import type { FormDefinition, FormField } from "@/types/formBuilder"
+import type { FormDefinition, FormField, FormFloatingImage } from "@/types/formBuilder"
 
 type ScoutInputs = {
   matchNumber: string
@@ -50,6 +52,52 @@ const getInitialValue = (field: FormField) => {
   if (field.type === "image") return ""
   return ""
 }
+
+const normalizeExclusiveGroup = (value?: string) =>
+  typeof value === "string" ? value.trim().toLowerCase() : ""
+
+const FieldLabel = ({ field, isRequired }: { field: FormField; isRequired: boolean }) => {
+  const description = typeof field.helpText === "string" ? field.helpText.trim() : ""
+  return (
+    <div className="flex items-center gap-1.5">
+      <Label className="flex-1">
+        {field.label} {isRequired ? "*" : ""}
+      </Label>
+      {description ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+              aria-label={`${field.label} description`}
+            >
+              <CircleHelp className="h-4 w-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-xs">
+            {description}
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
+    </div>
+  )
+}
+
+const toFiniteNumber = (value: unknown, fallback: number) => {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? numeric : fallback
+}
+
+const normalizeFloatingImage = (image: FormFloatingImage): FormFloatingImage => ({
+  ...image,
+  x: toFiniteNumber(image.x, 50),
+  y: toFiniteNumber(image.y, 50),
+  width: toFiniteNumber(image.width, 200),
+  opacity: toFiniteNumber(image.opacity, 100),
+  rotation: toFiniteNumber(image.rotation, 0),
+  zIndex: toFiniteNumber(image.zIndex, 0),
+  showOnMobile: image.showOnMobile !== false,
+})
 
 export default function DynamicScoutFormPage() {
   const navigate = useNavigate()
@@ -142,11 +190,13 @@ export default function DynamicScoutFormPage() {
   const displayPages = useMemo(() => {
     if (isPaged) return pages
     const allSections = pages.flatMap((page) => page.sections)
+    const allFloatingImages = pages.flatMap((page) => page.floatingImages || [])
     return [
       {
         id: "page_all",
         title: "",
         description: "",
+        floatingImages: allFloatingImages,
         sections: allSections,
       },
     ]
@@ -155,13 +205,48 @@ export default function DynamicScoutFormPage() {
   const currentPage = displayPages[Math.min(pageIndex, displayPageCount - 1)] || displayPages[0]
   const currentPageFields = useMemo(() => getPageFields(currentPage), [currentPage])
   const allFields = useMemo(() => flattenFields(form?.schema), [form])
+  const fieldMap = useMemo(
+    () => Object.fromEntries(allFields.map((field) => [field.id, field])),
+    [allFields]
+  )
+  const activeExclusiveByGroup = useMemo(() => {
+    const next: Record<string, string> = {}
+    allFields.forEach((field) => {
+      const group = normalizeExclusiveGroup(field.exclusiveGroup)
+      if (!group || next[group]) return
+      if (!isEmptyValue(values[field.id], field)) {
+        next[group] = field.id
+      }
+    })
+    return next
+  }, [allFields, values])
+  const floatingImages = useMemo(
+    () =>
+      (currentPage?.floatingImages || [])
+        .filter((image) => typeof image.src === "string" && image.src.trim().length > 0)
+        .map(normalizeFloatingImage),
+    [currentPage]
+  )
 
   useEffect(() => {
     setPageIndex((prev) => Math.min(prev, displayPageCount - 1))
   }, [displayPageCount])
 
   const handleValueChange = (fieldId: string, value: unknown) => {
-    setValues((prev) => ({ ...prev, [fieldId]: value }))
+    setValues((prev) => {
+      const next = { ...prev, [fieldId]: value }
+      const changedField = allFields.find((field) => field.id === fieldId)
+      const group = normalizeExclusiveGroup(changedField?.exclusiveGroup)
+      if (!changedField || !group || isEmptyValue(value, changedField)) {
+        return next
+      }
+      allFields.forEach((field) => {
+        if (field.id === fieldId) return
+        if (normalizeExclusiveGroup(field.exclusiveGroup) !== group) return
+        next[field.id] = getInitialValue(field)
+      })
+      return next
+    })
     setErrors((prev) => {
       if (!prev[fieldId]) return prev
       const next = { ...prev }
@@ -175,7 +260,24 @@ export default function DynamicScoutFormPage() {
       const current = Array.isArray(prev[fieldId]) ? (prev[fieldId] as string[]) : []
       const exists = current.includes(option)
       const next = exists ? current.filter((item) => item !== option) : [...current, option]
-      return { ...prev, [fieldId]: next }
+      const nextValues: Record<string, unknown> = { ...prev, [fieldId]: next }
+      const changedField = allFields.find((field) => field.id === fieldId)
+      const group = normalizeExclusiveGroup(changedField?.exclusiveGroup)
+      if (!changedField || !group || isEmptyValue(next, changedField)) {
+        return nextValues
+      }
+      allFields.forEach((field) => {
+        if (field.id === fieldId) return
+        if (normalizeExclusiveGroup(field.exclusiveGroup) !== group) return
+        nextValues[field.id] = getInitialValue(field)
+      })
+      return nextValues
+    })
+    setErrors((prev) => {
+      if (!prev[fieldId]) return prev
+      const next = { ...prev }
+      delete next[fieldId]
+      return next
     })
   }
 
@@ -314,11 +416,36 @@ export default function DynamicScoutFormPage() {
   return (
     <div
       className={cn(
-        "container mx-auto max-w-5xl animate-in fade-in-0 duration-300",
-        uiConfig.pagePaddingClass,
-        uiConfig.pageSpacingClass
+        "container mx-auto max-w-5xl animate-in fade-in-0 duration-300 relative overflow-hidden",
+        uiConfig.pagePaddingClass
       )}
     >
+      {floatingImages.length > 0 ? (
+        <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+          {floatingImages.map((image) => (
+            <img
+              key={image.id}
+              src={image.src}
+              alt={image.alt || ""}
+              loading="lazy"
+              className={cn(
+                "absolute select-none rounded-md object-contain",
+                image.showOnMobile === false && "hidden md:block"
+              )}
+              style={{
+                left: `${image.x}%`,
+                top: `${image.y}%`,
+                width: `${image.width}px`,
+                opacity: Math.max(0, Math.min(100, image.opacity ?? 100)) / 100,
+                transform: `translate(-50%, -50%) rotate(${image.rotation ?? 0}deg)`,
+                zIndex: image.zIndex ?? 0,
+              }}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      <div className={cn("relative z-10", uiConfig.pageSpacingClass)}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-3xl font-bold">{form.name}</h1>
@@ -382,18 +509,23 @@ export default function DynamicScoutFormPage() {
                 const fieldValue = values[field.id]
                 const isRequired = Boolean(field.required)
                 const fieldError = errors[field.id]
+                const group = normalizeExclusiveGroup(field.exclusiveGroup)
+                const activeFieldId = group ? activeExclusiveByGroup[group] : ""
+                const isGrayedOut = Boolean(group && activeFieldId && activeFieldId !== field.id)
+                const activeFieldLabel = activeFieldId ? fieldMap[activeFieldId]?.label || "another field" : ""
 
               if (field.type === "long_text") {
                 return (
-                  <div key={field.id} className="space-y-2">
-                    <Label>
-                      {field.label} {isRequired ? "*" : ""}
-                    </Label>
+                  <div key={field.id} className={cn("space-y-2", isGrayedOut && "opacity-50")}>
+                    <FieldLabel field={field} isRequired={isRequired} />
                     <Textarea
                       value={String(fieldValue ?? "")}
                       onChange={(event) => handleValueChange(field.id, event.target.value)}
                       placeholder={field.placeholder || ""}
                     />
+                    {isGrayedOut ? (
+                      <p className="text-xs text-muted-foreground">Mutual exclusion active: {activeFieldLabel}</p>
+                    ) : null}
                     {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
                   </div>
                 )
@@ -401,10 +533,8 @@ export default function DynamicScoutFormPage() {
 
               if (field.type === "select" || field.type === "radio") {
                 return (
-                  <div key={field.id} className="space-y-2">
-                    <Label>
-                      {field.label} {isRequired ? "*" : ""}
-                    </Label>
+                  <div key={field.id} className={cn("space-y-2", isGrayedOut && "opacity-50")}>
+                    <FieldLabel field={field} isRequired={isRequired} />
                     <Select
                       value={String(fieldValue ?? "")}
                       onValueChange={(value) => handleValueChange(field.id, value)}
@@ -420,6 +550,9 @@ export default function DynamicScoutFormPage() {
                         ))}
                       </SelectContent>
                     </Select>
+                    {isGrayedOut ? (
+                      <p className="text-xs text-muted-foreground">Mutual exclusion active: {activeFieldLabel}</p>
+                    ) : null}
                     {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
                   </div>
                 )
@@ -428,10 +561,8 @@ export default function DynamicScoutFormPage() {
               if (field.type === "multi_select") {
                 const selected = Array.isArray(fieldValue) ? (fieldValue as string[]) : []
                 return (
-                  <div key={field.id} className="space-y-2">
-                    <Label>
-                      {field.label} {isRequired ? "*" : ""}
-                    </Label>
+                  <div key={field.id} className={cn("space-y-2", isGrayedOut && "opacity-50")}>
+                    <FieldLabel field={field} isRequired={isRequired} />
                     <div className="space-y-2">
                       {(field.options || []).map((option) => (
                         <label key={option} className="flex items-center gap-2 text-sm">
@@ -439,10 +570,13 @@ export default function DynamicScoutFormPage() {
                             checked={selected.includes(option)}
                             onCheckedChange={() => handleToggleOption(field.id, option)}
                           />
-                          <span>{option}</span>
+                          <span className="font-semibold">{option}</span>
                         </label>
                       ))}
                     </div>
+                    {isGrayedOut ? (
+                      <p className="text-xs text-muted-foreground">Mutual exclusion active: {activeFieldLabel}</p>
+                    ) : null}
                     {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
                   </div>
                 )
@@ -450,16 +584,35 @@ export default function DynamicScoutFormPage() {
 
               if (field.type === "checkbox") {
                 return (
-                  <div key={field.id} className="space-y-2">
+                  <div key={field.id} className={cn("space-y-2", isGrayedOut && "opacity-50")}>
                     <label className="flex items-center gap-2 text-sm">
                       <Checkbox
                         checked={Boolean(fieldValue)}
                         onCheckedChange={(value) => handleValueChange(field.id, Boolean(value))}
                       />
-                      <span>
+                      <span className="font-semibold">
                         {field.label} {isRequired ? "*" : ""}
                       </span>
+                      {field.helpText ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              className="inline-flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                              aria-label={`${field.label} description`}
+                            >
+                              <CircleHelp className="h-4 w-4" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-xs">
+                            {field.helpText}
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : null}
                     </label>
+                    {isGrayedOut ? (
+                      <p className="text-xs text-muted-foreground">Mutual exclusion active: {activeFieldLabel}</p>
+                    ) : null}
                     {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
                   </div>
                 )
@@ -467,10 +620,8 @@ export default function DynamicScoutFormPage() {
 
               if (field.type === "image") {
                 return (
-                  <div key={field.id} className="space-y-2">
-                    <Label>
-                      {field.label} {isRequired ? "*" : ""}
-                    </Label>
+                  <div key={field.id} className={cn("space-y-2", isGrayedOut && "opacity-50")}>
+                    <FieldLabel field={field} isRequired={isRequired} />
                     <div className="flex flex-wrap items-center gap-3">
                       <Button variant="outline" type="button" className="relative">
                         <input
@@ -505,6 +656,9 @@ export default function DynamicScoutFormPage() {
                         />
                       </div>
                     ) : null}
+                    {isGrayedOut ? (
+                      <p className="text-xs text-muted-foreground">Mutual exclusion active: {activeFieldLabel}</p>
+                    ) : null}
                     {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
                   </div>
                 )
@@ -516,10 +670,8 @@ export default function DynamicScoutFormPage() {
                 const step = field.step ?? 1
                 const numericValue = Number(fieldValue || min)
                 return (
-                  <div key={field.id} className="space-y-2">
-                    <Label>
-                      {field.label} {isRequired ? "*" : ""}
-                    </Label>
+                  <div key={field.id} className={cn("space-y-2", isGrayedOut && "opacity-50")}>
+                    <FieldLabel field={field} isRequired={isRequired} />
                     <div className="flex items-center gap-3">
                       <input
                         type="range"
@@ -532,6 +684,9 @@ export default function DynamicScoutFormPage() {
                       />
                       <span className="text-sm font-medium w-10 text-right">{numericValue}</span>
                     </div>
+                    {isGrayedOut ? (
+                      <p className="text-xs text-muted-foreground">Mutual exclusion active: {activeFieldLabel}</p>
+                    ) : null}
                     {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
                   </div>
                 )
@@ -542,10 +697,8 @@ export default function DynamicScoutFormPage() {
                 const max = field.max ?? 5
                 const options = Array.from({ length: max - min + 1 }, (_, idx) => String(min + idx))
                 return (
-                  <div key={field.id} className="space-y-2">
-                    <Label>
-                      {field.label} {isRequired ? "*" : ""}
-                    </Label>
+                  <div key={field.id} className={cn("space-y-2", isGrayedOut && "opacity-50")}>
+                    <FieldLabel field={field} isRequired={isRequired} />
                     <Select
                       value={String(fieldValue ?? "")}
                       onValueChange={(value) => handleValueChange(field.id, value)}
@@ -561,6 +714,9 @@ export default function DynamicScoutFormPage() {
                         ))}
                       </SelectContent>
                     </Select>
+                    {isGrayedOut ? (
+                      <p className="text-xs text-muted-foreground">Mutual exclusion active: {activeFieldLabel}</p>
+                    ) : null}
                     {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
                   </div>
                 )
@@ -576,18 +732,16 @@ export default function DynamicScoutFormPage() {
                       : "text"
 
               return (
-                <div key={field.id} className="space-y-2">
-                  <Label>
-                    {field.label} {isRequired ? "*" : ""}
-                  </Label>
+                <div key={field.id} className={cn("space-y-2", isGrayedOut && "opacity-50")}>
+                  <FieldLabel field={field} isRequired={isRequired} />
                   <Input
                     type={inputType}
                     value={String(fieldValue ?? "")}
                     onChange={(event) => handleValueChange(field.id, event.target.value)}
                     placeholder={field.placeholder || ""}
                   />
-                  {field.helpText ? (
-                    <p className="text-xs text-muted-foreground">{field.helpText}</p>
+                  {isGrayedOut ? (
+                    <p className="text-xs text-muted-foreground">Mutual exclusion active: {activeFieldLabel}</p>
                   ) : null}
                   {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
                 </div>
@@ -629,6 +783,7 @@ export default function DynamicScoutFormPage() {
             </Button>
           )}
         </div>
+      </div>
       </div>
     </div>
   )
