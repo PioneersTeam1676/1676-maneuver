@@ -88,16 +88,6 @@ const data = {
           minRole: "lead" as UserRole,
         },
         {
-          title: "Pit Scouting",
-          url: "/pit-scouting",
-          minRole: "lead" as UserRole,
-        },
-        {
-          title: "Drive Team Scouting",
-          url: "/drive-scouting",
-          minRole: "lead" as UserRole,
-        },
-        {
           title: "Match Data QR",
           url: "/match-data-qr",
           minRole: "lead" as UserRole,
@@ -118,12 +108,12 @@ const data = {
         {
           title: "Scout Management",
           url: "/scout-management",
-          minRole: "admin" as UserRole,
+          minRole: "lead" as UserRole,
         },
         {
           title: "Pi Panel",
           url: "/pi-panel",
-          minRole: "admin" as UserRole,
+          minRole: "lead" as UserRole,
         },
         {
           title: "Achievements",
@@ -136,61 +126,61 @@ const data = {
       title: "Data Tools",
       url: "#",
       icon: Settings,
-      minRole: "form_maker" as UserRole,
+      minRole: "lead" as UserRole,
       items: [
         {
           title: "Form Maker",
           url: "/form-maker",
           icon: ClipboardSignature,
-          minRole: "form_maker" as UserRole,
+          minRole: "lead" as UserRole,
         },
         {
           title: "Data Management",
           url: "/data-management",
-          minRole: "ultra_admin" as UserRole,
+          minRole: "tech_lead" as UserRole,
         },
         {
           title: "API Data",
           url: "/api-data",
-          minRole: "ultra_admin" as UserRole,
+          minRole: "tech_lead" as UserRole,
         },
         {
           title: "JSON Data Transfer",
           url: "/json-transfer",
-          minRole: "admin" as UserRole,
+          minRole: "lead" as UserRole,
         },
         {
           title: "QR Data Transfer",
           url: "/qr-data-transfer",
-          minRole: "admin" as UserRole,
+          minRole: "lead" as UserRole,
         },
         {
           title: "Clear Data",
           url: "/clear-data",
-          minRole: "ultra_admin" as UserRole,
+          minRole: "tech_lead" as UserRole,
         },
         {
           title: "Admin Panel",
           url: "/admin",
-          minRole: "ultra_admin" as UserRole,
+          minRole: "tech_lead" as UserRole,
         },
         {
           title: "User Management",
           url: "/user-management",
           icon: UserCog,
-          minRole: "admin" as UserRole,
+          minRole: "lead" as UserRole,
         },
         {
           title: "Scout Activity",
           url: "/scout-activity",
           icon: Activity,
-          minRole: "admin" as UserRole,
+          minRole: "lead" as UserRole,
         },
         ...(import.meta.env.DEV
           ? [{
               title: "Dev Utilities",
               url: "/dev-utilities",
-              minRole: "ultra_admin" as UserRole,
+              minRole: "tech_lead" as UserRole,
             }]
           : []),
       ],

@@ -39,15 +39,15 @@ import { toast } from "sonner"
 import { sendManualNotification } from "@/lib/pushNotifications"
 import { clearAllScoutingData } from "@/lib/dexieDB"
 
-const ROLE_OPTIONS: Array<Exclude<UserRole, "pending">> = ["scout", "lead", "form_maker", "admin", "ultra_admin"]
+const ROLE_OPTIONS: Array<Exclude<UserRole, "pending">> = ["pit_scout", "drive_team", "scout", "lead", "tech_lead"]
 
 const roleLabels: Record<UserRole, string> = {
   pending: "Pending approval",
+  pit_scout: "Pit Scout",
+  drive_team: "Drive Team",
   scout: "Scout",
   lead: "Lead",
-  form_maker: "Form Maker",
-  admin: "Admin",
-  ultra_admin: "Ultra Admin",
+  tech_lead: "Technical Lead",
 }
 
 const formatTimestamp = (isoString?: string) => {
@@ -108,7 +108,7 @@ export default function AdminPanelPage() {
     ? normalizedNotificationEmail
     : ""
 
-  const adminCount = assignments.filter((x) => x.assignedRole === "admin" || x.assignedRole === "ultra_admin").length
+  const adminCount = assignments.filter((x) => x.assignedRole === "lead" || x.assignedRole === "tech_lead").length
 
   const recentUsersWithRoles = useMemo(
     () =>
@@ -184,13 +184,13 @@ export default function AdminPanelPage() {
   }
 
   const handleRoleUpdate = (addr: string, current: UserRole, next: Exclude<UserRole, "pending">) => {
-    if (current === "ultra_admin") {
-      toast.error("Ultra admin role cannot be changed.")
+    if (current === "tech_lead") {
+      toast.error("Technical Lead role cannot be changed.")
       return
     }
-    const isAdminRole = (r: string) => r === "admin" || r === "ultra_admin"
+    const isAdminRole = (r: string) => r === "lead" || r === "tech_lead"
     if (isAdminRole(current) && !isAdminRole(next) && adminCount <= 1) {
-      toast.error("Add another admin before demoting this account.")
+      toast.error("Add another lead before demoting this account.")
       return
     }
     setRole(addr, next)
@@ -198,13 +198,13 @@ export default function AdminPanelPage() {
   }
 
   const handleRemove = (addr: string, current: UserRole) => {
-    if (current === "ultra_admin") {
-      toast.error("Ultra admin cannot be removed.")
+    if (current === "tech_lead") {
+      toast.error("Technical Lead cannot be removed.")
       return
     }
-    const isAdminRole = (r: string) => r === "admin" || r === "ultra_admin"
+    const isAdminRole = (r: string) => r === "lead" || r === "tech_lead"
     if (isAdminRole(current) && adminCount <= 1) {
-      toast.error("Add another admin before demoting this account.")
+      toast.error("Add another lead before removing this account.")
       return
     }
     removeRole(addr)
@@ -502,7 +502,7 @@ export default function AdminPanelPage() {
                       <Select 
                         value={assignedRole} 
                         onValueChange={(v) => handleRoleUpdate(addr, assignedRole, v as Exclude<UserRole, "pending">)}
-                        disabled={assignedRole === "ultra_admin"}
+                        disabled={assignedRole === "tech_lead"}
                       >
                         <SelectTrigger className="w-36">
                           <SelectValue />
@@ -519,8 +519,8 @@ export default function AdminPanelPage() {
                         variant="ghost" 
                         onClick={() => handleRemove(addr, assignedRole)} 
                         disabled={
-                          assignedRole === "ultra_admin" || 
-                          (assignedRole === "admin" && adminCount <= 1)
+                          assignedRole === "tech_lead" ||
+                          (assignedRole === "lead" && adminCount <= 1)
                         }
                       >
                         Remove

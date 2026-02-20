@@ -24,11 +24,11 @@ const matchesAllowedDomain = (email: string, domains: string[]) => {
 
 const roleLabels: Record<UserRole, string> = {
   pending: "Pending",
+  pit_scout: "Pit Scout",
+  drive_team: "Drive Team",
   scout: "Scout",
   lead: "Lead",
-  form_maker: "Form Maker",
-  admin: "Admin",
-  ultra_admin: "Ultra Admin",
+  tech_lead: "Technical Lead",
 }
 
 type ApproveRole = Exclude<UserRole, "pending"> | "pending"
@@ -252,10 +252,10 @@ export default function VerificationCenterPage() {
                             <SelectValue placeholder="Choose role" />
                           </SelectTrigger>
                           <SelectContent>
+                          <SelectItem value="pit_scout">Pit Scout</SelectItem>
+                          <SelectItem value="drive_team">Drive Team</SelectItem>
                           <SelectItem value="scout">Scout</SelectItem>
                           <SelectItem value="lead">Lead</SelectItem>
-                          <SelectItem value="form_maker">Form Maker</SelectItem>
-                          <SelectItem value="admin">Admin</SelectItem>
                           </SelectContent>
                         </Select>
                       ) : (

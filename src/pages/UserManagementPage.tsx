@@ -24,7 +24,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { toast } from "sonner"
-import { Trash2, Search, UserX, Shield, User, Users, Crown, ClipboardSignature, type LucideIcon } from "lucide-react"
+import { Trash2, Search, UserX, User, Users, Crown, Wrench, Gamepad2, type LucideIcon } from "lucide-react"
 
 interface User {
   email: string
@@ -44,20 +44,20 @@ interface User {
 
 const roleColors: Record<string, string> = {
   pending: "bg-gray-500",
+  pit_scout: "bg-green-500",
+  drive_team: "bg-cyan-500",
   scout: "bg-blue-500",
   lead: "bg-purple-500",
-  form_maker: "bg-teal-500",
-  admin: "bg-orange-500",
-  ultra_admin: "bg-amber-700",
+  tech_lead: "bg-amber-700",
 }
 
 const roleIcons: Record<string, LucideIcon> = {
   pending: UserX,
+  pit_scout: Wrench,
+  drive_team: Gamepad2,
   scout: User,
   lead: Users,
-  form_maker: ClipboardSignature,
-  admin: Shield,
-  ultra_admin: Crown,
+  tech_lead: Crown,
 }
 
 type RecentUserApiRecord = {
@@ -252,7 +252,7 @@ export default function UserManagementPage() {
       )
 
       // Sort by role importance, then by email
-      const roleOrder = ["ultra_admin", "admin", "form_maker", "lead", "scout", "pending"]
+      const roleOrder = ["tech_lead", "lead", "scout", "pit_scout", "drive_team", "pending"]
       usersWithActivity.sort((a, b) => {
         const roleCompare =
           roleOrder.indexOf(a.role) - roleOrder.indexOf(b.role)
@@ -279,15 +279,15 @@ export default function UserManagementPage() {
       return
     }
 
-    // Prevent deleting ultra admins or the last remaining admin
-    const adminCount = users.filter((u) => u.role === 'admin' || u.role === 'ultra_admin').length
-    if (userToDelete.role === 'ultra_admin') {
-      toast.error("Ultra admin accounts cannot be deleted")
+    // Prevent deleting tech leads or the last remaining lead
+    const adminCount = users.filter((u) => u.role === 'lead' || u.role === 'tech_lead').length
+    if (userToDelete.role === 'tech_lead') {
+      toast.error("Technical Lead accounts cannot be deleted")
       setDeleteDialogOpen(false)
       return
     }
-    if (userToDelete.role === 'admin' && adminCount <= 1) {
-      toast.error("Add another admin before removing this account")
+    if (userToDelete.role === 'lead' && adminCount <= 1) {
+      toast.error("Add another lead before removing this account")
       setDeleteDialogOpen(false)
       return
     }
@@ -360,7 +360,7 @@ export default function UserManagementPage() {
 
   const stats = {
     total: users.length,
-    admins: users.filter((u) => u.role === "admin" || u.role === "ultra_admin").length,
+    admins: users.filter((u) => u.role === "lead" || u.role === "tech_lead").length,
     scouts: users.filter((u) => u.role === "scout").length,
     pending: users.filter((u) => u.role === "pending").length,
   }

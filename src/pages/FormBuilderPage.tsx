@@ -1297,6 +1297,7 @@ export default function FormBuilderPage() {
                                         </div>
                                       )}
 
+
                                       {/* Numeric Config */}
                                       {showsNumeric && (
                                         <div className="flex gap-4 rounded-md border border-dashed p-3">

@@ -74,7 +74,7 @@ const readSessionTbaApiKey = (): string => {
   }
 }
 
-const isAuthorizedRole = (role: string) => role === "lead" || role === "admin" || role === "ultra_admin"
+const isAuthorizedRole = (role: string) => role === "lead" || role === "tech_lead"
 
 const EventSettingsPage = () => {
   const { role, user, authorizationReady } = useAuth()

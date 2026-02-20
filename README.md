@@ -10,11 +10,16 @@ This fork introduces **enterprise-grade authentication and admin controls** whil
 
 ### � Google OAuth Authentication & Role-Based Access Control
 - **Seamless Google Sign-In**: Integrated Google Identity Services for secure authentication
-- **Role Hierarchy**: Five-tier permission system (Pending → Scout → Lead → Admin → Ultra Admin)
+- **Role Hierarchy**: Six-tier permission system (Pending → Pit Scout → Drive Team → Scout → Lead → Technical Lead)
+  - **Pit Scout**: Access to pit scouting forms only
+  - **Drive Team**: Access to drive team scouting forms only
+  - **Scout**: Full match scouting access
+  - **Lead**: Team management, analytics, and all administrative functions (formerly Admin)
+  - **Technical Lead**: System administration and advanced data management (formerly Ultra Admin)
 - **Verification Center**: Leads can review and approve external sign-ins from non-alliance domains
 - **Admin Panel**: Comprehensive interface for managing team permissions and reviewing access requests
 - **Alliance Confirmations**: Custom form for scouts outside the primary domain to verify their team affiliation
-- **Ultra Admin Protection**: Environment-configured super-admin accounts that cannot be demoted or removed
+- **Tech Lead Protection**: Environment-configured super-admin accounts that cannot be demoted or removed
 
 ### 🎯 Enhanced User Experience
 - **Smart PWA Updates**: Manual update prompts instead of forced refreshes—users control when to apply updates
@@ -29,7 +34,7 @@ This fork introduces **enterprise-grade authentication and admin controls** whil
 
 ### 🎨 Modern UI Refinements
 - **Verification Status Components**: Reusable check/X badge system for approval states
-- **Navigation Enhancements**: Ultra Admin badge in sidebar, role-aware menu visibility
+- **Navigation Enhancements**: Technical Lead badge in sidebar, role-aware menu visibility
 - **Status Bar Theming**: iOS Safari status bar color follows app theme (light/dark mode)
 - **Improved Accessibility**: ARIA labels and semantic HTML throughout authentication flows
 
@@ -56,6 +61,14 @@ This fork introduces **enterprise-grade authentication and admin controls** whil
 ### 🏗️ Pit Scouting & Assignments
 - **Full Pit Scouting UI**: Forms for robot specs, photos, auto/teleop/endgame, technical notes
 - **Pit Assignment Tools**: Assignment controls, event configuration, pit map visualization, spatial clustering
+
+### 📝 Advanced Form Builder
+- **Dynamic Multi-Page Forms**: Create custom scouting forms with multiple pages and sections
+- **Radio Button MCQs**: Multiple-choice questions use single-tap radio buttons for improved mobile UX
+- **Conditional Navigation**: Smart page routing based on field values (e.g., Win Auto checkbox routes to different periods)
+- **Rich Field Types**: 13+ field types including short/long text, number, select, multi-select, radio, checkbox, rating, slider, date, time, and image
+- **Database Integration**: Forms can write directly to MySQL databases with custom webhook support
+- **Role-Based Forms**: Separate forms for match scouting, pit scouting, and drive team scouting
 
 ### 📱 Data Management & Transfer
 - **Flexible Transfer**: JSON files and fountain codes for large datasets
@@ -259,8 +272,8 @@ server/                 # Backend API (NEW in this version)
 
 - **Database is authoritative**: Most app state and exports/imports flow through `src/lib/dexieDB.ts` (`db`, `pitDB`, `gameDB`).
 - **Authentication Flow**: `AuthContext` wraps the app, manages Google OAuth, syncs roles with backend API, and provides role checks (`isAdmin`, `isLead`, etc.) to all components.
-- **Backend API**: Express server (`server/src/server.js`) handles role CRUD operations with SQLite persistence. Roles include `ultra_admin`, `admin`, `lead`, `scout`, and `pending`.
-- **Role Protection**: Ultra admin accounts (configured via `VITE_GOOGLE_ADMIN_EMAIL`) cannot be demoted or removed through the UI.
+- **Backend API**: Express server (`server/src/server.js`) handles role CRUD operations with SQLite persistence. Roles include `tech_lead`, `lead`, `scout`, `drive_team`, `pit_scout`, and `pending`.
+- **Role Protection**: Technical Lead accounts (configured via `VITE_GOOGLE_ADMIN_EMAIL`) cannot be demoted or removed through the UI.
 - **PWA Strategy**: Service worker uses `NetworkFirst` caching; updates are detected but not auto-applied—users see a prompt and choose when to refresh.
 - **Environment Variables**: All config lives in `.env` files; never commit credentials or client secrets to version control.
 - **Verification History**: Each time a user moves from pending to any other role, the API records the event in `verified_users` with a timestamp so the last seven days of approvals can be queried server-side.
@@ -321,7 +334,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 |---------|------------------|--------------|
 | **Authentication** | None (open access) | Google OAuth with role-based access control |
 | **User Management** | Not applicable | Admin panel, verification center, role hierarchy |
-| **Access Control** | Everyone has full access | Five-tier permission system (pending → ultra admin) |
+| **Access Control** | Everyone has full access | Six-tier permission system (pending → tech lead) |
 | **Multi-Team Support** | Single team/domain | Alliance domain whitelisting, external scout verification |
 | **PWA Updates** | Auto-refresh on update | User-controlled update prompts |
 | **Scout Profiles** | Device-local only | Google account-linked, persistent across devices |
@@ -374,6 +387,22 @@ For questions, issues, or feature requests:
 ---
 
 ## 🗒️ Changelog
+
+### 2026-02-20
+- Role system enhancements:
+  - Added **Pit Scout** role with access to pit scouting forms only
+  - Added **Drive Team** role with access to drive team scouting forms only
+  - Renamed **Ultra Admin** to **Technical Lead** for clearer role designation
+  - Consolidated **Admin** permissions into **Lead** role (removed separate admin role)
+  - Removed **Form Maker** role (permissions merged into Lead)
+  - Updated role hierarchy: Pending → Pit Scout/Drive Team → Scout → Lead → Technical Lead
+- Form builder improvements:
+  - Multiple-choice questions now use radio buttons instead of dropdowns for better mobile UX
+  - Implemented conditional page navigation for dynamic form flows
+  - Added hardcoded Win Auto checkbox routing (won auto → Inactive Period, lost auto → Active Period)
+- Navigation restructuring:
+  - Moved Pit Scouting and Drive Team forms to top-level sidebar for easier access
+  - Removed nested folder structure for specialized scouting forms
 
 ### 2025-10-29
 - Push notifications and match reminders:

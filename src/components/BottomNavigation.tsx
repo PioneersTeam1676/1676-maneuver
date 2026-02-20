@@ -28,7 +28,7 @@ const baseNavItems: BottomNavItem[] = [
     icon: QrCode,
     label: 'QR Data',
     href: '/qr-data-transfer',
-    minRole: 'admin',
+    minRole: 'lead',
   },
   {
     icon: TrendingUp,
@@ -42,7 +42,7 @@ const devNavItem: BottomNavItem = {
   icon: Settings,
   label: 'Dev',
   href: '/dev-utilities',
-  minRole: 'admin',
+  minRole: 'tech_lead',
 };
 
 const navItems: BottomNavItem[] = import.meta.env.DEV 

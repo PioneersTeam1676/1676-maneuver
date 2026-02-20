@@ -63,7 +63,7 @@ export function EventNameSelector({ currentEventName, onEventNameChange }: Event
   const [eventsList, setEventsList] = useState<string[]>(loadEventsFromStorage)
   const [isUpdating, setIsUpdating] = useState(false)
   const { role } = useAuth()
-  const isEditable = role === "admin" || role === "lead" || role === "ultra_admin"
+  const isEditable = role === "lead" || role === "tech_lead"
   const navigate = useNavigate()
 
   // Load saved events list on component mount

@@ -8,7 +8,7 @@ type User = {
   sub: string // Google subject (user id)
 }
 
-export type UserRole = 'pending' | 'scout' | 'lead' | 'form_maker' | 'admin' | 'ultra_admin'
+export type UserRole = 'pending' | 'pit_scout' | 'drive_team' | 'scout' | 'lead' | 'tech_lead'
 
 type RoleAssignments = Record<string, UserRole>
 
@@ -127,7 +127,7 @@ const ULTRA_ADMIN_EMAILS: string[] = collectEmails(
   import.meta.env.VITE_GOOGLE_ADMIN_EMAIL as string | undefined
 )
 
-const VALID_ROLES: UserRole[] = ['pending', 'scout', 'lead', 'form_maker', 'admin', 'ultra_admin']
+const VALID_ROLES: UserRole[] = ['pending', 'pit_scout', 'drive_team', 'scout', 'lead', 'tech_lead']
 
 const isUserRole = (value: unknown): value is UserRole => VALID_ROLES.includes(value as UserRole)
 
@@ -252,12 +252,12 @@ const generateOpaqueString = () => {
 }
 
 const roleRank: Record<UserRole, number> = {
-  pending: 1,
-  scout: 1,
-  lead: 2,
-  form_maker: 3,
-  admin: 4,
-  ultra_admin: 5,
+  pending: 0,
+  pit_scout: 1,
+  drive_team: 1,
+  scout: 2,
+  lead: 3,
+  tech_lead: 4,
 }
 
 const routePermissions: Array<{ pattern: RegExp; minRole: UserRole | null }> = [
@@ -273,8 +273,8 @@ const routePermissions: Array<{ pattern: RegExp; minRole: UserRole | null }> = [
   { pattern: /^\/privacy$/, minRole: null }, // Public privacy policy
   { pattern: /^\/match-strategy$/, minRole: 'lead' },
   { pattern: /^\/team-stats$/, minRole: 'lead' },
-  { pattern: /^\/pit-scouting$/, minRole: 'lead' },
-  { pattern: /^\/drive-scouting$/, minRole: 'lead' },
+  { pattern: /^\/pit-scouting$/, minRole: 'pit_scout' },
+  { pattern: /^\/drive-scouting$/, minRole: 'drive_team' },
   { pattern: /^\/pick-list$/, minRole: 'lead' },
   { pattern: /^\/strategy-overview$/, minRole: 'lead' },
   { pattern: /^\/pit-assignments$/, minRole: 'lead' },
@@ -283,28 +283,28 @@ const routePermissions: Array<{ pattern: RegExp; minRole: UserRole | null }> = [
   { pattern: /^\/schedule-automation$/, minRole: 'lead' },
   { pattern: /^\/achievements$/, minRole: 'lead' },
   { pattern: /^\/event-settings$/, minRole: 'lead' },
-  { pattern: /^\/scout-management$/, minRole: 'admin' },
-  { pattern: /^\/admin$/, minRole: 'ultra_admin' },
-  { pattern: /^\/pi-panel$/, minRole: 'admin' },
-  { pattern: /^\/form-maker/, minRole: 'form_maker' },
-  { pattern: /^\/data-management$/, minRole: 'ultra_admin' },
-  { pattern: /^\/clear-data$/, minRole: 'ultra_admin' },
-  { pattern: /^\/json-transfer$/, minRole: 'admin' },
-  { pattern: /^\/qr-data-transfer$/, minRole: 'admin' },
-  { pattern: /^\/api-data$/, minRole: 'ultra_admin' },
-  { pattern: /^\/dev-utilities$/, minRole: 'ultra_admin' },
-  { pattern: /^\/user-management$/, minRole: 'ultra_admin' },
-  { pattern: /^\/scout-activity$/, minRole: 'admin' },
+  { pattern: /^\/scout-management$/, minRole: 'lead' },
+  { pattern: /^\/admin$/, minRole: 'tech_lead' },
+  { pattern: /^\/pi-panel$/, minRole: 'lead' },
+  { pattern: /^\/form-maker/, minRole: 'lead' },
+  { pattern: /^\/data-management$/, minRole: 'tech_lead' },
+  { pattern: /^\/clear-data$/, minRole: 'tech_lead' },
+  { pattern: /^\/json-transfer$/, minRole: 'lead' },
+  { pattern: /^\/qr-data-transfer$/, minRole: 'lead' },
+  { pattern: /^\/api-data$/, minRole: 'tech_lead' },
+  { pattern: /^\/dev-utilities$/, minRole: 'tech_lead' },
+  { pattern: /^\/user-management$/, minRole: 'tech_lead' },
+  { pattern: /^\/scout-activity$/, minRole: 'lead' },
   { pattern: /^\/alliance-onboarding$/, minRole: null }, // Accessible to anyone, including pending/unverified
   { pattern: /^\/auth\/google\/callback$/, minRole: null }, // Accessible to anyone for OAuth flow
 ]
 
 const DEFAULT_ROUTE_BY_ROLE: Record<UserRole, string> = {
-  ultra_admin: '/',
-  admin: '/',
-  form_maker: '/form-maker',
+  tech_lead: '/',
   lead: '/',
   scout: '/',
+  pit_scout: '/pit-scouting',
+  drive_team: '/drive-scouting',
   pending: '/alliance-onboarding',
 }
 
@@ -337,7 +337,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const raw = localStorage.getItem(ROLE_STORAGE_KEY)
       if (!raw) return {}
       const parsed = JSON.parse(raw) as RoleAssignments
-      const validRoles = new Set<UserRole>(['pending', 'scout', 'lead', 'form_maker', 'admin', 'ultra_admin'])
+      const validRoles = new Set<UserRole>(['pending', 'pit_scout', 'drive_team', 'scout', 'lead', 'tech_lead'])
       const normalizedAssignments = Object.entries(parsed).reduce<RoleAssignments>((acc, [email, role]) => {
         // Only keep valid roles
         if (validRoles.has(role)) {
@@ -349,12 +349,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }, {})
       ULTRA_ADMIN_EMAILS.forEach((ultraAdminEmail: string) => {
         if (ultraAdminEmail) {
-          normalizedAssignments[ultraAdminEmail] = 'ultra_admin'
+          normalizedAssignments[ultraAdminEmail] = 'tech_lead'
         }
       })
       ADMIN_EMAILS.forEach((adminEmail: string) => {
         if (adminEmail && !ULTRA_ADMIN_EMAILS.includes(adminEmail)) {
-          normalizedAssignments[adminEmail] = 'admin'
+          normalizedAssignments[adminEmail] = 'lead'
         }
       })
       return normalizedAssignments
@@ -363,12 +363,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const fallback: RoleAssignments = {}
       ULTRA_ADMIN_EMAILS.forEach((ultraAdminEmail: string) => {
         if (ultraAdminEmail) {
-          fallback[ultraAdminEmail] = 'ultra_admin'
+          fallback[ultraAdminEmail] = 'tech_lead'
         }
       })
       ADMIN_EMAILS.forEach((adminEmail: string) => {
         if (adminEmail && !ULTRA_ADMIN_EMAILS.includes(adminEmail)) {
-          fallback[adminEmail] = 'admin'
+          fallback[adminEmail] = 'lead'
         }
       })
       return fallback
@@ -457,23 +457,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Ensure ultra admins always have ultra_admin role
     ULTRA_ADMIN_EMAILS.forEach((ultraAdminEmail) => {
       if (ultraAdminEmail) {
-        next[ultraAdminEmail] = 'ultra_admin'
+        next[ultraAdminEmail] = 'tech_lead'
       }
     })
 
     // Ensure regular admins have admin role (but not if they're ultra admins)
     ADMIN_EMAILS.forEach((adminEmail) => {
       if (adminEmail && !ULTRA_ADMIN_EMAILS.includes(adminEmail)) {
-        next[adminEmail] = 'admin'
+        next[adminEmail] = 'lead'
       }
     })
 
-    const hasAdmin = Object.values(next).some((roleValue) => roleValue === 'admin' || roleValue === 'ultra_admin')
+    const hasAdmin = Object.values(next).some((roleValue) => roleValue === 'lead' || roleValue === 'tech_lead')
     if (!hasAdmin) {
       if (candidateEmail) {
-        next[candidateEmail] = 'admin'
+        next[candidateEmail] = 'lead'
       } else if (user) {
-        next[normalizeEmail(user.email)] = 'admin'
+        next[normalizeEmail(user.email)] = 'lead'
       }
     }
 
@@ -520,21 +520,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           }
 
-          ADMIN_EMAILS.forEach((adminEmail) => assignRole(adminEmail, 'admin'))
+          ADMIN_EMAILS.forEach((adminEmail) => assignRole(adminEmail, 'lead'))
 
           const existingRole = next[normalized]
           const isConfiguredAdmin = ADMIN_EMAILS.includes(normalized)
 
           if (!existingRole) {
-            assignRole(normalized, isConfiguredAdmin ? 'admin' : 'scout')
-          } else if (isConfiguredAdmin && existingRole !== 'admin') {
-            next[normalized] = 'admin'
+            assignRole(normalized, isConfiguredAdmin ? 'lead' : 'scout')
+          } else if (isConfiguredAdmin && existingRole !== 'lead') {
+            next[normalized] = 'lead'
             changed = true
           }
 
-          const hasAdmin = Object.values(next).some((roleValue) => roleValue === 'admin')
+          const hasAdmin = Object.values(next).some((roleValue) => roleValue === 'lead' || roleValue === 'tech_lead')
           if (!hasAdmin) {
-            assignRole(normalized, 'admin')
+            assignRole(normalized, 'lead')
           }
 
           return changed ? next : prev
@@ -549,7 +549,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Clean up any invalid roles from localStorage on mount
-    const validRoles = new Set<UserRole>(['pending', 'scout', 'lead', 'form_maker', 'admin', 'ultra_admin'])
+    const validRoles = new Set<UserRole>(['pending', 'pit_scout', 'drive_team', 'scout', 'lead', 'tech_lead'])
     setRoleAssignments((prev) => {
       const cleaned = Object.entries(prev).reduce<RoleAssignments>((acc, [email, role]) => {
         if (validRoles.has(role)) {
@@ -563,12 +563,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Re-add admin emails
       ULTRA_ADMIN_EMAILS.forEach((ultraAdminEmail: string) => {
         if (ultraAdminEmail) {
-          cleaned[ultraAdminEmail] = 'ultra_admin'
+          cleaned[ultraAdminEmail] = 'tech_lead'
         }
       })
       ADMIN_EMAILS.forEach((adminEmail: string) => {
         if (adminEmail && !ULTRA_ADMIN_EMAILS.includes(adminEmail)) {
-          cleaned[adminEmail] = 'admin'
+          cleaned[adminEmail] = 'lead'
         }
       })
       
@@ -772,11 +772,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const existingRole = next[normalizedEmail]
 
         if (existingRole) {
-          if (isConfiguredAdmin && existingRole !== 'admin') {
-            next[normalizedEmail] = 'admin'
+          if (isConfiguredAdmin && existingRole !== 'lead') {
+            next[normalizedEmail] = 'lead'
           }
         } else if (isConfiguredAdmin) {
-          next[normalizedEmail] = 'admin'
+          next[normalizedEmail] = 'lead'
         } else if (isAllowedDomainUser) {
           next[normalizedEmail] = 'scout'
         } else {
@@ -900,7 +900,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    if (currentRole === 'admin' || currentRole === 'lead' || currentRole === 'ultra_admin') {
+    if (currentRole === 'lead' || currentRole === 'tech_lead') {
       setPlayerStation('lead')
       return
     }
@@ -1031,20 +1031,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const normalized = normalizeEmail(email)
     
     // Prevent changing ultra admin emails
-    if (ULTRA_ADMIN_EMAILS.includes(normalized) && role !== 'ultra_admin') {
+    if (ULTRA_ADMIN_EMAILS.includes(normalized) && role !== 'tech_lead') {
       console.warn('Ultra admin email cannot be assigned a different role')
       return
     }
     
-    if (ADMIN_EMAILS.includes(normalized) && role !== 'admin' && role !== 'ultra_admin') {
-      console.warn('Configured admin email cannot be assigned a non-admin role')
+    if (ADMIN_EMAILS.includes(normalized) && role !== 'lead' && role !== 'tech_lead') {
+      console.warn('Configured admin email cannot be assigned a non-lead role')
       return
     }
     
     setRoleAssignments((prev) => {
       const currentRole = prev[normalized]
-      const isAdminRole = (r: string) => r === 'admin' || r === 'ultra_admin'
-      
+      const isAdminRole = (r: string) => r === 'lead' || r === 'tech_lead'
+
       if (isAdminRole(currentRole) && !isAdminRole(role)) {
         const remainingAdmins = Object.values(prev).filter((value) => isAdminRole(value)).length
         if (remainingAdmins <= 1) {
@@ -1097,7 +1097,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!prev[normalized]) return prev
       const next = { ...prev }
       delete next[normalized]
-      const hasAdmin = Object.values(next).some((role) => role === 'admin' || role === 'ultra_admin')
+      const hasAdmin = Object.values(next).some((role) => role === 'lead' || role === 'tech_lead')
       if (!hasAdmin) {
         console.warn('Cannot remove last admin role assignment')
         return prev
@@ -1161,20 +1161,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const assigned = roleAssignments[normalized]
 
-    if (assigned === 'ultra_admin' || ULTRA_ADMIN_EMAILS.includes(normalized)) {
-      return 'ultra_admin'
-    }
-
-    if (assigned === 'admin') {
-      return 'admin'
-    }
-
-    if (assigned === 'form_maker') {
-      return 'form_maker'
+    if (assigned === 'tech_lead' || ULTRA_ADMIN_EMAILS.includes(normalized)) {
+      return 'tech_lead'
     }
 
     if (assigned === 'lead') {
       return 'lead'
+    }
+
+    if (assigned === 'pit_scout') {
+      return 'pit_scout'
+    }
+
+    if (assigned === 'drive_team') {
+      return 'drive_team'
     }
 
     if (assigned === 'scout') {
@@ -1186,7 +1186,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (ADMIN_EMAILS.includes(normalized)) {
-      return 'admin'
+      return 'lead'
     }
 
     return emailMatchesAllowedDomain(normalized) ? 'scout' : 'pending'
@@ -1199,13 +1199,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const requiredRole = descriptor?.minRole
     // null minRole means public route, accessible to everyone
     if (requiredRole === null) return true
-    // If no route descriptor found, require admin access
-    if (requiredRole === undefined) return roleRank[role] >= roleRank['admin']
+    // If no route descriptor found, require lead access
+    if (requiredRole === undefined) return roleRank[role] >= roleRank['lead']
     return roleRank[role] >= roleRank[requiredRole]
   }, [role])
 
-  const isUltraAdmin = role === 'ultra_admin'
-  const isAdmin = roleRank[role] >= roleRank.admin
+  const isUltraAdmin = role === 'tech_lead'
+  const isAdmin = roleRank[role] >= roleRank.lead
   const isLead = roleRank[role] >= roleRank.lead
 
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { Binoculars, ChevronRight, type LucideIcon } from "lucide-react"
+import { Binoculars, ChevronRight, Wrench, Gamepad2, type LucideIcon } from "lucide-react"
 import { useAuth, type UserRole } from "@/contexts/AuthContext"
 import {
   Collapsible,
@@ -22,11 +22,11 @@ import { toast } from "sonner";
 
 const roleWeights: Record<UserRole, number> = {
   pending: 0,
-  scout: 1,
-  lead: 2,
-  form_maker: 3,
-  admin: 4,
-  ultra_admin: 5,
+  pit_scout: 1,
+  drive_team: 1,
+  scout: 2,
+  lead: 3,
+  tech_lead: 4,
 }
 
 export function NavMain({
@@ -111,6 +111,22 @@ export function NavMain({
               <span>Scout</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
+          {roleWeights[role] >= roleWeights['pit_scout'] && (
+            <SidebarMenuItem className="flex items-center gap-2">
+              <SidebarMenuButton tooltip={"Pit Scouting"} onClick={() => proceedClick("/pit-scouting")}>
+                <Wrench />
+                <span>Pit Scouting</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
+          {roleWeights[role] >= roleWeights['drive_team'] && (
+            <SidebarMenuItem className="flex items-center gap-2">
+              <SidebarMenuButton tooltip={"Drive Team Scouting"} onClick={() => proceedClick("/drive-scouting")}>
+                <Gamepad2 />
+                <span>Drive Team Scouting</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
           {items
             .filter((item) => !item.minRole || roleWeights[role] >= roleWeights[item.minRole])
             .map((item) => (

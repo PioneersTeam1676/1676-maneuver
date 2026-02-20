@@ -28,6 +28,7 @@ export type FormField = {
   min?: number
   max?: number
   step?: number
+  conditionalNavigation?: Record<string, string> // Maps option value to target page ID
 }
 
 export type FormSection = {

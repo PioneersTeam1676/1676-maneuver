@@ -17,14 +17,16 @@ export function NavUser() {
 
   const roleLabel = (() => {
     switch (role) {
-      case 'ultra_admin':
-        return 'Ultra Admin'
-      case 'admin':
-        return 'Admin'
+      case 'tech_lead':
+        return 'Technical Lead'
       case 'lead':
         return 'Lead'
       case 'scout':
         return 'Scout'
+      case 'pit_scout':
+        return 'Pit Scout'
+      case 'drive_team':
+        return 'Drive Team'
       default:
         return 'Pending approval'
     }
@@ -76,7 +78,7 @@ export function NavUser() {
                 <div className="text-xs min-w-0 flex-1">
                   <div className="flex items-center gap-1 font-semibold leading-none">
                     <span>{user.name}</span>
-                    {(role === 'lead' || role === 'admin' || role === 'ultra_admin') && (
+                    {(role === 'lead' || role === 'tech_lead') && (
                       <Button
                         size="icon"
                         variant="ghost"

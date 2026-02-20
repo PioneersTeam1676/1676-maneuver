@@ -348,6 +348,44 @@ export default function DynamicScoutFormPage() {
       toast.error("Please fill out all required fields.")
       return
     }
+
+    // Hardcoded: Win Auto checkbox conditional navigation
+    for (const field of currentPageFields) {
+      const fieldValue = values[field.id]
+
+      // Check if this is the "Win Auto" checkbox
+      if (field.type === "checkbox" && field.label.toLowerCase().includes("win") && field.label.toLowerCase().includes("auto")) {
+        const wonAuto = fieldValue === true
+
+        // Find active/inactive pages
+        const activePage = displayPages.find(p =>
+          p.title.toLowerCase().includes("active") && !p.title.toLowerCase().includes("inactive")
+        )
+        const inactivePage = displayPages.find(p =>
+          p.title.toLowerCase().includes("inactive")
+        )
+
+        let targetPage = null
+        if (wonAuto && inactivePage) {
+          // Won auto → Inactive Period
+          targetPage = inactivePage
+        } else if (!wonAuto && activePage) {
+          // Lost auto → Active Period
+          targetPage = activePage
+        }
+
+        if (targetPage) {
+          const targetIndex = displayPages.findIndex(p => p.id === targetPage.id)
+          if (targetIndex >= 0) {
+            setPageIndex(targetIndex)
+            window.scrollTo({ top: 0, behavior: "smooth" })
+            return
+          }
+        }
+      }
+    }
+
+    // Default: sequential navigation
     setPageIndex((prev) => Math.min(prev + 1, displayPageCount - 1))
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
@@ -531,7 +569,7 @@ export default function DynamicScoutFormPage() {
                 )
               }
 
-              if (field.type === "select" || field.type === "radio") {
+              if (field.type === "select") {
                 return (
                   <div key={field.id} className={cn("space-y-2", isGrayedOut && "opacity-50")}>
                     <FieldLabel field={field} isRequired={isRequired} />
@@ -550,6 +588,33 @@ export default function DynamicScoutFormPage() {
                         ))}
                       </SelectContent>
                     </Select>
+                    {isGrayedOut ? (
+                      <p className="text-xs text-muted-foreground">Mutual exclusion active: {activeFieldLabel}</p>
+                    ) : null}
+                    {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
+                  </div>
+                )
+              }
+
+              if (field.type === "radio") {
+                return (
+                  <div key={field.id} className={cn("space-y-2", isGrayedOut && "opacity-50")}>
+                    <FieldLabel field={field} isRequired={isRequired} />
+                    <div className="space-y-2">
+                      {(field.options || []).map((option) => (
+                        <label key={option} className="flex items-center gap-2 text-sm cursor-pointer">
+                          <input
+                            type="radio"
+                            name={field.id}
+                            value={option}
+                            checked={String(fieldValue ?? "") === option}
+                            onChange={() => handleValueChange(field.id, option)}
+                            className="accent-primary h-4 w-4"
+                          />
+                          <span className="font-semibold">{option}</span>
+                        </label>
+                      ))}
+                    </div>
                     {isGrayedOut ? (
                       <p className="text-xs text-muted-foreground">Mutual exclusion active: {activeFieldLabel}</p>
                     ) : null}

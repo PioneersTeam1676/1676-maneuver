@@ -5,7 +5,7 @@ const { nowSeconds } = require("../utils/dbUtils")
 
 const router = express.Router()
 
-const validRoles = new Set(["pending", "scout", "lead", "form_maker", "admin", "ultra_admin"])
+const validRoles = new Set(["pending", "pit_scout", "drive_team", "scout", "lead", "tech_lead"])
 
 const parseIsoDate = (value) => {
   const date = new Date(value)
