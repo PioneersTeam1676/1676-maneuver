@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { SpecialMultipleChoice } from "@/components/ui/special-multiple-choice"
 
 import { getForm } from "@/lib/formBuilderApi"
 import { ACTIVE_FORM_UPDATED_EVENT, getActiveFormId, syncActiveFormConfig } from "@/lib/activeForm"
@@ -608,13 +609,51 @@ export default function DynamicScoutFormPage() {
                             name={field.id}
                             value={option}
                             checked={String(fieldValue ?? "") === option}
-                            onChange={() => handleValueChange(field.id, option)}
+                            onChange={() => {
+                              // Allow deselect: if clicking the same option, clear it
+                              if (String(fieldValue ?? "") === option) {
+                                handleValueChange(field.id, "")
+                              } else {
+                                handleValueChange(field.id, option)
+                              }
+                            }}
                             className="accent-primary h-4 w-4"
                           />
                           <span className="font-semibold">{option}</span>
                         </label>
                       ))}
                     </div>
+                    {typeof fieldValue === "string" && fieldValue.length > 0 ? (
+                      <Button
+                        variant="ghost"
+                        type="button"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => handleValueChange(field.id, "")}
+                        disabled={isGrayedOut}
+                      >
+                        Clear selection
+                      </Button>
+                    ) : null}
+                    {isGrayedOut ? (
+                      <p className="text-xs text-muted-foreground">Mutual exclusion active: {activeFieldLabel}</p>
+                    ) : null}
+                    {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
+                  </div>
+                )
+              }
+
+              if (field.type === "radio_cards") {
+                return (
+                  <div key={field.id} className={cn("space-y-2", isGrayedOut && "opacity-50")}>
+                    <FieldLabel field={field} isRequired={isRequired} />
+                    <SpecialMultipleChoice
+                      ariaLabel={field.label}
+                      options={field.options}
+                      value={String(fieldValue ?? "")}
+                      onValueChange={(value) => handleValueChange(field.id, value)}
+                      allowDeselect={Boolean(field.allowDeselect)}
+                      disabled={isGrayedOut}
+                    />
                     {isGrayedOut ? (
                       <p className="text-xs text-muted-foreground">Mutual exclusion active: {activeFieldLabel}</p>
                     ) : null}

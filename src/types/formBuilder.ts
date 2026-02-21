@@ -8,6 +8,7 @@ export type FormFieldType =
   | "select"
   | "multi_select"
   | "radio"
+  | "radio_cards"
   | "checkbox"
   | "rating"
   | "slider"
@@ -22,6 +23,7 @@ export type FormField = {
   key?: string
   helpText?: string
   exclusiveGroup?: string
+  allowDeselect?: boolean
   required?: boolean
   placeholder?: string
   options?: string[]

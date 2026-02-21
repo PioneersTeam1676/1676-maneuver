@@ -80,6 +80,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { cn } from "@/lib/utils"
+import {
+  joinSpecialChoiceOption,
+  joinSpecialChoiceOptionForEditing,
+  splitSpecialChoiceOptionForEditing,
+} from "@/lib/specialChoiceOptions"
 
 const createId = () => {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -129,15 +134,21 @@ const fieldTypeConfig: Record<FormFieldType, { label: string; icon: React.Elemen
   select: { label: "Dropdown", icon: List, group: "Selection" },
   multi_select: { label: "Multi-select", icon: List, group: "Selection" },
   radio: { label: "Multiple choice", icon: CheckSquare, group: "Selection" },
+  radio_cards: { label: "Special multiple choice", icon: CheckSquare, group: "Selection" },
   checkbox: { label: "Checkbox", icon: CheckSquare, group: "Selection" },
   date: { label: "Date", icon: Calendar, group: "Date/Time" },
   time: { label: "Time", icon: Clock, group: "Date/Time" },
   image: { label: "Image / Camera", icon: ImageIcon, group: "Media" },
 }
 
-const optionFieldTypes = new Set<FormFieldType>(["select", "multi_select", "radio"])
+const optionFieldTypes = new Set<FormFieldType>(["select", "multi_select", "radio", "radio_cards"])
 const numericFieldTypes = new Set<FormFieldType>(["number", "rating", "slider"])
 const webhookMethods: FormWebhookMethod[] = ["GET", "POST", "PUT", "PATCH", "DELETE"]
+const mcqFieldTypes = new Set<FormFieldType>(["radio", "radio_cards"])
+const getDefaultOptionValue = (type: FormFieldType, index: number) =>
+  type === "radio_cards"
+    ? joinSpecialChoiceOption(`Option ${index}`, "Add description")
+    : `Option ${index}`
 
 const normalizeFormType = (value?: string | null): FormType =>
   value === "pit" ? "pit" : value === "drive" ? "drive" : "match"
@@ -506,9 +517,10 @@ export default function FormBuilderPage() {
       key: "",
       helpText: "",
       exclusiveGroup: "",
+      allowDeselect: mcqFieldTypes.has(type) ? false : undefined,
       required: false,
       placeholder: "",
-      options: type === "select" || type === "radio" || type === "multi_select" ? ["Option 1"] : [],
+      options: optionFieldTypes.has(type) ? [getDefaultOptionValue(type, 1)] : [],
       min: 1,
       max: 5,
       step: 1,
@@ -559,10 +571,12 @@ export default function FormBuilderPage() {
     updateField(pageId, sectionId, fieldId, (field) => {
       const needsOptions = optionFieldTypes.has(nextType)
       const needsNumeric = numericFieldTypes.has(nextType)
+      const supportsDeselect = mcqFieldTypes.has(nextType)
       return {
         ...field,
         type: nextType,
-        options: needsOptions ? (field.options?.length ? field.options : ["Option 1"]) : [],
+        allowDeselect: supportsDeselect ? field.allowDeselect ?? false : undefined,
+        options: needsOptions ? (field.options?.length ? field.options : [getDefaultOptionValue(nextType, 1)]) : [],
         min: needsNumeric ? field.min ?? 1 : undefined,
         max: needsNumeric ? field.max ?? 5 : undefined,
         step: needsNumeric ? field.step ?? 1 : undefined,
@@ -1194,6 +1208,7 @@ export default function FormBuilderPage() {
                               const Icon = fieldTypeConfig[field.type]?.icon || Type
                               const showsOptions = optionFieldTypes.has(field.type)
                               const showsNumeric = numericFieldTypes.has(field.type)
+                              const showsMcqSettings = mcqFieldTypes.has(field.type)
 
                               return (
                                 <motion.div
@@ -1247,24 +1262,55 @@ export default function FormBuilderPage() {
                                         </div>
                                       </div>
 
-                                      {/* Options for Select/Radio */}
+                                      {/* Options for selection fields */}
                                       {showsOptions && (
                                         <div className="rounded-md border border-dashed p-3">
                                           <Label className="mb-2 block text-xs font-medium">Options</Label>
                                           <div className="space-y-2">
                                             {field.options?.map((opt, idx) => (
-                                              <div key={idx} className="flex gap-2">
-                                                <Input
-                                                  value={opt}
-                                                  onChange={(e) =>
-                                                    updateField(page.id, section.id, field.id, (f) => {
-                                                      const next = [...(f.options || [])]
-                                                      next[idx] = e.target.value
-                                                      return { ...f, options: next }
-                                                    })
-                                                  }
-                                                  className="h-8 text-sm"
-                                                />
+                                              <div key={idx} className={cn(field.type === "radio_cards" ? "grid gap-2 md:grid-cols-[1fr_1fr_auto]" : "flex gap-2")}>
+                                                {field.type === "radio_cards" ? (
+                                                  <>
+                                                    <Input
+                                                      value={splitSpecialChoiceOptionForEditing(opt).title}
+                                                      onChange={(e) =>
+                                                        updateField(page.id, section.id, field.id, (f) => {
+                                                          const next = [...(f.options || [])]
+                                                          const current = splitSpecialChoiceOptionForEditing(next[idx] || "")
+                                                          next[idx] = joinSpecialChoiceOptionForEditing(e.target.value, current.description)
+                                                          return { ...f, options: next }
+                                                        })
+                                                      }
+                                                      className="h-8 text-sm"
+                                                      placeholder="Option title"
+                                                    />
+                                                    <Input
+                                                      value={splitSpecialChoiceOptionForEditing(opt).description}
+                                                      onChange={(e) =>
+                                                        updateField(page.id, section.id, field.id, (f) => {
+                                                          const next = [...(f.options || [])]
+                                                          const current = splitSpecialChoiceOptionForEditing(next[idx] || "")
+                                                          next[idx] = joinSpecialChoiceOptionForEditing(current.title, e.target.value)
+                                                          return { ...f, options: next }
+                                                        })
+                                                      }
+                                                      className="h-8 text-sm"
+                                                      placeholder="Option description"
+                                                    />
+                                                  </>
+                                                ) : (
+                                                  <Input
+                                                    value={opt}
+                                                    onChange={(e) =>
+                                                      updateField(page.id, section.id, field.id, (f) => {
+                                                        const next = [...(f.options || [])]
+                                                        next[idx] = e.target.value
+                                                        return { ...f, options: next }
+                                                      })
+                                                    }
+                                                    className="h-8 text-sm"
+                                                  />
+                                                )}
                                                 <Button
                                                   variant="ghost"
                                                   size="icon"
@@ -1280,6 +1326,11 @@ export default function FormBuilderPage() {
                                                 </Button>
                                               </div>
                                             ))}
+                                            {field.type === "radio_cards" ? (
+                                              <p className="text-[11px] text-muted-foreground">
+                                                Special choices render as stacked cards. Use the title + description fields above.
+                                              </p>
+                                            ) : null}
                                             <Button
                                               variant="outline"
                                               size="sm"
@@ -1287,7 +1338,10 @@ export default function FormBuilderPage() {
                                               onClick={() =>
                                                 updateField(page.id, section.id, field.id, (f) => ({
                                                   ...f,
-                                                  options: [...(f.options || []), 'Option ' + ((f.options || []).length + 1)],
+                                                  options: [
+                                                    ...(f.options || []),
+                                                    getDefaultOptionValue(field.type, (f.options || []).length + 1),
+                                                  ],
                                                 }))
                                               }
                                             >
@@ -1392,6 +1446,20 @@ export default function FormBuilderPage() {
                                           />
                                           Required
                                         </label>
+                                        {showsMcqSettings ? (
+                                          <label className="flex items-center gap-1.5 text-muted-foreground">
+                                            <Checkbox
+                                              checked={Boolean(field.allowDeselect)}
+                                              onCheckedChange={(c) =>
+                                                updateField(page.id, section.id, field.id, (f) => ({
+                                                  ...f,
+                                                  allowDeselect: !!c,
+                                                }))
+                                              }
+                                            />
+                                            Allow deselect
+                                          </label>
+                                        ) : null}
                                         <div className="flex items-center gap-2 text-muted-foreground">
                                           <span>Key:</span>
                                           <Input

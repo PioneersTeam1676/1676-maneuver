@@ -84,6 +84,7 @@ const fieldTypeToSql = (field: FormField) => {
       return "INT"
     case "select":
     case "radio":
+    case "radio_cards":
       return "VARCHAR(160)"
     case "multi_select":
       return "TEXT"
