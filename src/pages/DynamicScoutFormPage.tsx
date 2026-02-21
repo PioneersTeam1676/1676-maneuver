@@ -422,29 +422,44 @@ export default function DynamicScoutFormPage() {
         }
       }
     }
+
+    // On endgame: back to shift 4 of whichever path (won/lost) was taken
+    const isEndgame = currentPage.title?.toLowerCase().includes("endgame") || currentPage.id?.toLowerCase().includes("endgame")
+    if (isEndgame) {
+      const wonAutoField = allFields.find(f => f.type === "checkbox" && f.label.toLowerCase().includes("alliance") && f.label.toLowerCase().includes("won"))
+      const path = wonAutoField && values[wonAutoField.id] === true ? "won" : "lost"
+      const lastShift = displayPages.find(p => p.id === `${path}_s4`) ?? displayPages.find(p => p.id === `${path}_s3`)
+      if (lastShift) {
+        setPageIndex(displayPages.findIndex(p => p.id === lastShift.id))
+        window.scrollTo({ top: 0, behavior: "smooth" })
+        return
+      }
+    }
+
     setPageIndex((prev) => Math.max(prev - 1, 0))
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
   const handleSubmit = async () => {
     if (!form || !inputs) return
-    const nextErrors: Record<string, string> = {}
+    const didNotShow = values["field_did_not_show"] === true
 
-    allFields.forEach((field) => {
-      if (field.required && isEmptyValue(values[field.id], field)) {
-        nextErrors[field.id] = "Required"
+    if (!didNotShow) {
+      const nextErrors: Record<string, string> = {}
+      allFields.forEach((field) => {
+        if (field.required && isEmptyValue(values[field.id], field)) {
+          nextErrors[field.id] = "Required"
+        }
+      })
+      if (Object.keys(nextErrors).length > 0) {
+        setErrors(nextErrors)
+        toast.error("Please fill out all required fields.")
+        return
       }
-    })
-
-    if (Object.keys(nextErrors).length > 0) {
-      setErrors(nextErrors)
-      toast.error("Please fill out all required fields.")
-      return
     }
 
     setSaving(true)
     try {
-      const didNotShow = values["field_did_not_show"] === true
       let submissionValues: Record<string, unknown> | undefined
       if (didNotShow) {
         submissionValues = { field_did_not_show: true }
