@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { toast } from "sonner"
+import { RefreshCw } from "lucide-react"
 
 import { useAuth, type UserRole } from "@/contexts/AuthContext"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -45,9 +46,29 @@ export default function VerificationCenterPage() {
     setRole,
     removeRole,
     removeAllianceProfile,
+    refreshRecentUsers,
+    refreshRoles,
   } = useAuth()
   const navigate = useNavigate()
   const [roleSelections, setRoleSelections] = useState<Record<string, ApproveRole>>({})
+  const [refreshing, setRefreshing] = useState(false)
+
+  useEffect(() => {
+    if (!isLead) return
+    void refreshRecentUsers().catch(() => {})
+    void refreshRoles().catch(() => {})
+  }, [isLead, refreshRecentUsers, refreshRoles])
+
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    try {
+      await Promise.all([refreshRecentUsers(), refreshRoles()])
+    } catch {
+      // errors already logged in context
+    } finally {
+      setRefreshing(false)
+    }
+  }
 
   const allowedDomains = allowedAllianceDomains.filter(Boolean)
 
@@ -201,11 +222,17 @@ export default function VerificationCenterPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Verification Center</h1>
-        <p className="text-muted-foreground">
-          Review Google sign-ins from outside the scouting domain. Approve them when you confirm their identity so they can access the platform.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Verification Center</h1>
+          <p className="text-muted-foreground">
+            Review Google sign-ins from outside the scouting domain. Approve them when you confirm their identity so they can access the platform.
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing} className="shrink-0 mt-1">
+          <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
+          Refresh
+        </Button>
       </div>
 
       <Card>

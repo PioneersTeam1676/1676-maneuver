@@ -26,6 +26,8 @@ const { databaseInfo } = require("./db")
 const { initWebhookSync } = require("./webhookSyncManager")
 const { imageStorageDir } = require("./utils/imagePermalinkStore")
 
+const compression = require("compression")
+
 const app = express()
 const PORT = process.env.PORT || 4000
 const ALLOWED_ORIGIN = process.env.CORS_ORIGIN || "*"
@@ -132,6 +134,7 @@ const corsOptions = {
   optionsSuccessStatus: 204,
 }
 
+app.use(compression())
 app.use(cors(corsOptions))
 app.options("*", cors(corsOptions))
 

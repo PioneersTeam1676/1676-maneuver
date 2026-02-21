@@ -72,6 +72,9 @@ export class PitScoutingDB extends Dexie {
 		this.version(1).stores({
 			pitScoutingData: 'id, teamNumber, eventName, scoutName, timestamp, [teamNumber+eventName]',
 		});
+		this.version(2).stores({
+			pitScoutingData: 'id, teamNumber, eventName, scoutName, timestamp, synced, [teamNumber+eventName]',
+		});
 	}
 }
 
@@ -187,7 +190,6 @@ const normalizeScoutingEntry = (entry: ScoutingEntryDB): ScoutingEntryDB => {
 
 type PitEntryWithData = PitScoutingEntry & { data?: Record<string, unknown> };
 type PitSaveResponse = { success?: boolean; entry?: PitEntryWithData };
-type PitBulkResponse = { success?: boolean; count?: number; entries?: PitEntryWithData[] };
 
 const pitEntryPayload = (entry: PitScoutingEntry): PitEntryWithData => ({
 	...entry,
@@ -382,13 +384,12 @@ export const syncCachedPitScoutingEntries = async (): Promise<void> => {
 	pitSyncPromise = (async () => {
 		try {
 			const localEntries = await pitDB.pitScoutingData.toArray();
-			if (!localEntries.length) return;
-			const response = await apiPost<PitBulkResponse>('/pit/bulk', withScoutingSeasonBody({
-				entries: localEntries.map(pitEntryPayload),
+			const pendingEntries = localEntries.filter((entry) => entry.synced === false);
+			if (!pendingEntries.length) return;
+			await apiPost('/pit/bulk', withScoutingSeasonBody({
+				entries: pendingEntries.map(pitEntryPayload),
 			}));
-			if (Array.isArray(response.entries) && response.entries.length) {
-				await pitDB.pitScoutingData.bulkPut(response.entries.map(mergePitEntry));
-			}
+			await pitDB.pitScoutingData.bulkPut(pendingEntries.map((entry) => ({ ...entry, synced: true })));
 		} catch (error) {
 			handleApiError('failed to sync cached pit entries', error);
 		} finally {
@@ -879,55 +880,46 @@ export const getFilterOptions = async (): Promise<{
 };
 
 export const savePitScoutingEntry = async (entry: PitScoutingEntry): Promise<PitScoutingEntry> => {
-	await pitDB.pitScoutingData.put(entry);
-	let persistedEntry = entry;
+	const unsynced = { ...entry, synced: false };
+	await pitDB.pitScoutingData.put(unsynced);
 
 	try {
-		const response = await apiPost<PitSaveResponse>('/pit', withScoutingSeasonBody({ entry: pitEntryPayload(entry) }));
-		if (response.entry) {
-			persistedEntry = mergePitEntry(response.entry);
-			await pitDB.pitScoutingData.put(persistedEntry);
-		}
+		const response = await apiPost<PitSaveResponse>('/pit', withScoutingSeasonBody({ entry: pitEntryPayload(unsynced) }));
+		const persisted = response.entry ? { ...mergePitEntry(response.entry), synced: true } : { ...unsynced, synced: true };
+		await pitDB.pitScoutingData.put(persisted);
+		return persisted;
 	} catch (error) {
 		handleApiError('failed to persist pit scouting entry remotely', error);
+		return unsynced;
 	}
-
-	return persistedEntry;
 };
 
 export const loadAllPitScoutingEntries = async (): Promise<PitScoutingEntry[]> => {
-	try {
-		const localEntries = await pitDB.pitScoutingData.toArray();
-		if (localEntries.length && !readScoutingSeason()) {
-			const response = await apiPost<PitBulkResponse>(
-				'/pit/bulk',
-				withScoutingSeasonBody({ entries: localEntries.map(pitEntryPayload) }),
-			);
-			if (Array.isArray(response.entries) && response.entries.length) {
-				await pitDB.pitScoutingData.bulkPut(response.entries.map(mergePitEntry));
-			}
-		}
-	} catch (error) {
-		handleApiError('failed to push cached pit entries to API', error);
-	}
+	// Push any unsynced local entries before fetching from server
+	await syncCachedPitScoutingEntries();
 
 	try {
 		const { entries } = await apiGet<{ entries: PitEntryWithData[] }>(
 			`/pit${toQueryString(withScoutingSeasonParams({}))}`,
 		);
-		const normalized = entries.map(mergePitEntry);
+		const normalized = entries.map((e) => ({ ...mergePitEntry(e), synced: true as const }));
 
-			await pitDB.pitScoutingData.clear();
-			if (normalized.length) {
-				await pitDB.pitScoutingData.bulkPut(normalized);
-			}
+		// Merge: preserve unsynced local entries not yet on server
+		const localEntries = await pitDB.pitScoutingData.toArray();
+		const unsyncedLocal = localEntries.filter((e) => e.synced === false);
+		const serverIds = new Set(normalized.map((e) => e.id));
+		const localOnly = unsyncedLocal.filter((e) => !serverIds.has(e.id));
 
-		return normalized;
+		await pitDB.pitScoutingData.clear();
+		await pitDB.pitScoutingData.bulkPut([...normalized, ...localOnly]);
+
+		return [...normalized, ...localOnly];
 	} catch (error) {
 		handleApiError('failed to load pit scouting entries from API', error);
 		return pitDB.pitScoutingData.toArray();
 	}
 };
+
 
 export const loadPitScoutingByTeam = async (teamNumber: string): Promise<PitScoutingEntry[]> => {
 	try {

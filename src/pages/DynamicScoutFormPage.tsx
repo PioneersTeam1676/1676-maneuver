@@ -210,6 +210,7 @@ export default function DynamicScoutFormPage() {
     () => Object.fromEntries(allFields.map((field) => [field.id, field])),
     [allFields]
   )
+  const didNotShowActive = currentPageFields.some(f => f.id === "field_did_not_show") && values["field_did_not_show"] === true
   const activeExclusiveByGroup = useMemo(() => {
     const next: Record<string, string> = {}
     allFields.forEach((field) => {
@@ -282,7 +283,8 @@ export default function DynamicScoutFormPage() {
     })
   }
 
-  const buildSubmission = (currentForm: FormDefinition, scoutInputs: ScoutInputs) => {
+  const buildSubmission = (currentForm: FormDefinition, scoutInputs: ScoutInputs, valueOverrides?: Record<string, unknown>) => {
+    const effectiveValues = valueOverrides ?? values
     const usedKeys = new Set<string>()
     const responseData: Record<string, unknown> = {}
 
@@ -297,7 +299,7 @@ export default function DynamicScoutFormPage() {
       }
       usedKeys.add(key)
 
-      let value = values[field.id]
+      let value = effectiveValues[field.id]
       if (field.type === "number" || field.type === "rating" || field.type === "slider") {
         if (value !== "" && value !== undefined && value !== null) {
           const num = Number(value)
@@ -350,38 +352,45 @@ export default function DynamicScoutFormPage() {
       return
     }
 
-    // Hardcoded: Win Auto checkbox conditional navigation
+    // Did Not Show: skip all remaining pages and go straight to endgame
+    const didNotShowField = currentPageFields.find(f => f.id === "field_did_not_show")
+    if (didNotShowField && values[didNotShowField.id] === true) {
+      const endgamePage = displayPages.find(p => p.title.toLowerCase().includes("endgame"))
+      setPageIndex(endgamePage
+        ? displayPages.findIndex(p => p.id === endgamePage.id)
+        : displayPageCount - 1)
+      window.scrollTo({ top: 0, behavior: "smooth" })
+      return
+    }
+
+    // Shift page routing: stay within same won/lost path, jump to endgame after shift 4
+    const shiftMatch = currentPage.id.match(/^(won|lost)_s(\d+)$/)
+    if (shiftMatch) {
+      const path = shiftMatch[1]
+      const shiftNum = parseInt(shiftMatch[2])
+      const nextShiftPage = displayPages.find(p => p.id === `${path}_s${shiftNum + 1}`)
+      if (nextShiftPage) {
+        setPageIndex(displayPages.findIndex(p => p.id === nextShiftPage.id))
+      } else {
+        const endgamePage = displayPages.find(p => p.title.toLowerCase().includes("endgame"))
+        setPageIndex(endgamePage
+          ? displayPages.findIndex(p => p.id === endgamePage.id)
+          : Math.min(pageIndex + 1, displayPageCount - 1))
+      }
+      window.scrollTo({ top: 0, behavior: "smooth" })
+      return
+    }
+
+    // Alliance Won Auto checkbox: route to correct shift path
     for (const field of currentPageFields) {
-      const fieldValue = values[field.id]
-
-      // Check if this is the "Win Auto" checkbox
-      if (field.type === "checkbox" && field.label.toLowerCase().includes("win") && field.label.toLowerCase().includes("auto")) {
-        const wonAuto = fieldValue === true
-
-        // Find active/inactive pages
-        const activePage = displayPages.find(p =>
-          p.title.toLowerCase().includes("active") && !p.title.toLowerCase().includes("inactive")
-        )
-        const inactivePage = displayPages.find(p =>
-          p.title.toLowerCase().includes("inactive")
-        )
-
-        let targetPage = null
-        if (wonAuto && inactivePage) {
-          // Won auto → Inactive Period
-          targetPage = inactivePage
-        } else if (!wonAuto && activePage) {
-          // Lost auto → Active Period
-          targetPage = activePage
-        }
-
+      const label = field.label.toLowerCase()
+      if (field.type === "checkbox" && label.includes("alliance") && label.includes("won") && label.includes("auto")) {
+        const path = values[field.id] === true ? "won" : "lost"
+        const targetPage = displayPages.find(p => p.id === `${path}_s1`)
         if (targetPage) {
-          const targetIndex = displayPages.findIndex(p => p.id === targetPage.id)
-          if (targetIndex >= 0) {
-            setPageIndex(targetIndex)
-            window.scrollTo({ top: 0, behavior: "smooth" })
-            return
-          }
+          setPageIndex(displayPages.findIndex(p => p.id === targetPage.id))
+          window.scrollTo({ top: 0, behavior: "smooth" })
+          return
         }
       }
     }
@@ -393,6 +402,26 @@ export default function DynamicScoutFormPage() {
 
   const handleBackPage = () => {
     if (!isPaged) return
+    const shiftMatch = currentPage.id.match(/^(won|lost)_s(\d+)$/)
+    if (shiftMatch) {
+      const path = shiftMatch[1]
+      const shiftNum = parseInt(shiftMatch[2])
+      if (shiftNum > 1) {
+        const prevPage = displayPages.find(p => p.id === `${path}_s${shiftNum - 1}`)
+        if (prevPage) {
+          setPageIndex(displayPages.findIndex(p => p.id === prevPage.id))
+          window.scrollTo({ top: 0, behavior: "smooth" })
+          return
+        }
+      } else {
+        const transitionPage = displayPages.find(p => p.id === "page_transition")
+        if (transitionPage) {
+          setPageIndex(displayPages.findIndex(p => p.id === transitionPage.id))
+          window.scrollTo({ top: 0, behavior: "smooth" })
+          return
+        }
+      }
+    }
     setPageIndex((prev) => Math.max(prev - 1, 0))
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
@@ -415,7 +444,22 @@ export default function DynamicScoutFormPage() {
 
     setSaving(true)
     try {
-      const submission = buildSubmission(form, inputs)
+      const didNotShow = values["field_did_not_show"] === true
+      let submissionValues: Record<string, unknown> | undefined
+      if (didNotShow) {
+        submissionValues = { field_did_not_show: true }
+        allFields.forEach((field) => {
+          if (field.id === "field_did_not_show") return
+          if (field.type === "number" || field.type === "slider" || field.type === "rating") {
+            submissionValues![field.id] = 0
+          } else if (field.type === "checkbox") {
+            submissionValues![field.id] = false
+          } else {
+            submissionValues![field.id] = null
+          }
+        })
+      }
+      const submission = buildSubmission(form, inputs, submissionValues)
       const [entry] = addIdsToScoutingData([submission])
       if (entry) {
         await saveScoutingEntry(entry)
@@ -755,7 +799,7 @@ export default function DynamicScoutFormPage() {
                         <img
                           src={fieldValue}
                           alt={field.label}
-                          className="h-48 w-full object-cover"
+                          className="w-full object-contain"
                           loading="lazy"
                         />
                       </div>
@@ -868,7 +912,7 @@ export default function DynamicScoutFormPage() {
           </Button>
         ) : null}
         <div className="flex items-center gap-3">
-          {isPaged && pageIndex < displayPageCount - 1 ? (
+          {isPaged && pageIndex < displayPageCount - 1 && !didNotShowActive ? (
             <Button
               variant={uiConfig.nav?.nextVariant}
               className={cn("transition-transform hover:-translate-y-0.5", uiConfig.nav?.nextClassName)}

@@ -28,6 +28,7 @@ export interface PitScoutingEntry {
   eventName: string;
   scoutName: string;
   timestamp: number;
+  synced?: boolean;
   [key: string]: unknown;
   
   // Basic Information

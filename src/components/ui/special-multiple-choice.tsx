@@ -15,11 +15,10 @@ export function SpecialMultipleChoice({
   options,
   value,
   onValueChange,
-  allowDeselect = false,
+  allowDeselect = true,
   disabled = false,
 }: SpecialMultipleChoiceProps) {
   const parsedOptions = parseSpecialChoiceOptions(options)
-  const hasValue = typeof value === "string" && value.length > 0
 
   if (!parsedOptions.length) {
     return null
@@ -37,14 +36,15 @@ export function SpecialMultipleChoice({
               type="button"
               role="radio"
               aria-checked={isSelected}
-              onClick={() => onValueChange(option.value)}
+              onClick={() => onValueChange(isSelected && allowDeselect ? "" : option.value)}
               disabled={disabled}
               className={cn(
                 "w-full rounded-xl border px-4 py-4 text-center transition-all sm:px-5 sm:py-5",
-                "bg-card border-border/70 hover:border-border hover:bg-muted/30",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
                 "disabled:cursor-not-allowed disabled:opacity-60",
-                isSelected && "border-primary/80 bg-primary/10"
+                isSelected
+                  ? "border-primary/80 bg-primary/10 hover:bg-primary/15"
+                  : "bg-card border-border/70 hover:border-border hover:bg-muted/30"
               )}
             >
               <p className="text-balance text-lg font-semibold leading-tight sm:text-xl">{option.title}</p>
@@ -55,16 +55,6 @@ export function SpecialMultipleChoice({
           )
         })}
       </div>
-      {allowDeselect && hasValue ? (
-        <button
-          type="button"
-          onClick={() => onValueChange("")}
-          disabled={disabled}
-          className="text-xs text-muted-foreground underline underline-offset-2 transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          Clear selection
-        </button>
-      ) : null}
     </div>
   )
 }

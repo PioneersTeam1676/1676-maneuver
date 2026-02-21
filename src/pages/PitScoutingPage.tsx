@@ -795,7 +795,7 @@ const PitScoutingPage = () => {
                         <img
                           src={fieldValue}
                           alt={field.label}
-                          className="h-48 w-full object-cover"
+                          className="w-full object-contain"
                           loading="lazy"
                         />
                       </div>

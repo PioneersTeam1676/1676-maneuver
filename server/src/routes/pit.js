@@ -176,11 +176,7 @@ router.post(
       await prisma.$transaction(operations)
     }
 
-    res.status(201).json({
-      success: true,
-      count: entries.length,
-      entries: preparedEntries.map(({ payload, data }) => payloadToEntry(payload, data))
-    })
+    res.status(201).json({ success: true, count: entries.length })
   })
 )
 
