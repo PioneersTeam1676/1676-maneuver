@@ -454,7 +454,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const ensureAdminPresence = useCallback((assignments: RoleAssignments, candidateEmail?: string): RoleAssignments => {
     const next = { ...assignments }
 
-    // Ensure ultra admins always have ultra_admin role
+    // Ensure ultra admins always have tech_lead role
     ULTRA_ADMIN_EMAILS.forEach((ultraAdminEmail) => {
       if (ultraAdminEmail) {
         next[ultraAdminEmail] = 'tech_lead'
