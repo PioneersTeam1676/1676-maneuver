@@ -518,10 +518,11 @@ export default function FormBuilderPage() {
       helpText: "",
       exclusiveGroup: "",
       allowDeselect: mcqFieldTypes.has(type) ? false : undefined,
+      multiSelect: mcqFieldTypes.has(type) ? false : undefined,
       required: false,
       placeholder: "",
       options: optionFieldTypes.has(type) ? [getDefaultOptionValue(type, 1)] : [],
-      min: 1,
+      min: 0,
       max: 5,
       step: 1,
     }
@@ -577,7 +578,7 @@ export default function FormBuilderPage() {
         type: nextType,
         allowDeselect: supportsDeselect ? field.allowDeselect ?? false : undefined,
         options: needsOptions ? (field.options?.length ? field.options : [getDefaultOptionValue(nextType, 1)]) : [],
-        min: needsNumeric ? field.min ?? 1 : undefined,
+        min: needsNumeric ? field.min ?? 0 : undefined,
         max: needsNumeric ? field.max ?? 5 : undefined,
         step: needsNumeric ? field.step ?? 1 : undefined,
       }
@@ -1361,12 +1362,13 @@ export default function FormBuilderPage() {
                                               type="number"
                                               className="h-8"
                                               value={field.min ?? ""}
-                                              onChange={(e) =>
+                                              onChange={(e) => {
+                                                const v = e.target.value
                                                 updateField(page.id, section.id, field.id, (f) => ({
                                                   ...f,
-                                                  min: Number(e.target.value),
+                                                  min: v === "" ? undefined : Number(v),
                                                 }))
-                                              }
+                                              }}
                                             />
                                           </div>
                                           <div className="flex-1">
@@ -1375,12 +1377,13 @@ export default function FormBuilderPage() {
                                               type="number"
                                               className="h-8"
                                               value={field.max ?? ""}
-                                              onChange={(e) =>
+                                              onChange={(e) => {
+                                                const v = e.target.value
                                                 updateField(page.id, section.id, field.id, (f) => ({
                                                   ...f,
-                                                  max: Number(e.target.value),
+                                                  max: v === "" ? undefined : Number(v),
                                                 }))
-                                              }
+                                              }}
                                             />
                                           </div>
                                           <div className="flex-1">
@@ -1389,12 +1392,13 @@ export default function FormBuilderPage() {
                                               type="number"
                                               className="h-8"
                                               value={field.step ?? ""}
-                                              onChange={(e) =>
+                                              onChange={(e) => {
+                                                const v = e.target.value
                                                 updateField(page.id, section.id, field.id, (f) => ({
                                                   ...f,
-                                                  step: Number(e.target.value),
+                                                  step: v === "" ? undefined : Number(v),
                                                 }))
-                                              }
+                                              }}
                                             />
                                           </div>
                                         </div>
@@ -1447,18 +1451,32 @@ export default function FormBuilderPage() {
                                           Required
                                         </label>
                                         {showsMcqSettings ? (
-                                          <label className="flex items-center gap-1.5 text-muted-foreground">
-                                            <Checkbox
-                                              checked={Boolean(field.allowDeselect)}
-                                              onCheckedChange={(c) =>
-                                                updateField(page.id, section.id, field.id, (f) => ({
-                                                  ...f,
-                                                  allowDeselect: !!c,
-                                                }))
-                                              }
-                                            />
-                                            Allow deselect
-                                          </label>
+                                          <>
+                                            <label className="flex items-center gap-1.5 text-muted-foreground">
+                                              <Checkbox
+                                                checked={Boolean(field.allowDeselect)}
+                                                onCheckedChange={(c) =>
+                                                  updateField(page.id, section.id, field.id, (f) => ({
+                                                    ...f,
+                                                    allowDeselect: !!c,
+                                                  }))
+                                                }
+                                              />
+                                              Allow deselect
+                                            </label>
+                                            <label className="flex items-center gap-1.5 text-muted-foreground">
+                                              <Checkbox
+                                                checked={Boolean(field.multiSelect)}
+                                                onCheckedChange={(c) =>
+                                                  updateField(page.id, section.id, field.id, (f) => ({
+                                                    ...f,
+                                                    multiSelect: !!c,
+                                                  }))
+                                                }
+                                              />
+                                              Allow multiple selections
+                                            </label>
+                                          </>
                                         ) : null}
                                         <div className="flex items-center gap-2 text-muted-foreground">
                                           <span>Key:</span>

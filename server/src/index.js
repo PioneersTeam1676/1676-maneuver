@@ -178,6 +178,7 @@ app.get("/images/pit/:eventCode/:filename", async (req, res, next) => {
 app.use("/images", express.static(imageStorageDir))
 
 const apiAuthMiddleware = createApiAuthMiddleware()
+const openGoogleAuthMiddleware = createApiAuthMiddleware({ skipDomainCheck: true })
 
 const registerRoutes = (prefix = "") => {
   const resolvePath = (suffix) => {
@@ -194,7 +195,7 @@ const registerRoutes = (prefix = "") => {
   app.use(resolvePath("/pit"), apiAuthMiddleware, pitRouter)
   app.use(resolvePath("/game"), apiAuthMiddleware, gameRouter)
   app.use(resolvePath("/events"), apiAuthMiddleware, eventsRouter)
-  app.use(resolvePath("/recent-users"), apiAuthMiddleware, recentUsersRouter)
+  app.use(resolvePath("/recent-users"), openGoogleAuthMiddleware, recentUsersRouter)
   app.use(resolvePath("/verified-users"), apiAuthMiddleware, verifiedUsersRouter)
   app.use(resolvePath("/schedule"), apiAuthMiddleware, scheduleRouter)
   app.use(resolvePath("/push"), apiAuthMiddleware, pushRouter)

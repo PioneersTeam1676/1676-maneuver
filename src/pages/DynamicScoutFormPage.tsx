@@ -50,6 +50,7 @@ const isEmptyValue = (value: unknown, field: FormField) => {
 const getInitialValue = (field: FormField) => {
   if (field.type === "checkbox") return false
   if (field.type === "multi_select") return [] as string[]
+  if ((field.type === "radio" || field.type === "radio_cards") && field.multiSelect) return [] as string[]
   if (field.type === "image") return ""
   return ""
 }
@@ -657,6 +658,30 @@ export default function DynamicScoutFormPage() {
               }
 
               if (field.type === "radio") {
+                if (field.multiSelect) {
+                  const selected = Array.isArray(fieldValue) ? (fieldValue as string[]) : []
+                  return (
+                    <div key={field.id} className={cn("space-y-2", isGrayedOut && "opacity-50")}>
+                      <FieldLabel field={field} isRequired={isRequired} />
+                      <div className="space-y-2">
+                        {(field.options || []).map((option) => (
+                          <label key={option} className="flex items-center gap-2 text-sm cursor-pointer">
+                            <Checkbox
+                              checked={selected.includes(option)}
+                              onCheckedChange={() => handleToggleOption(field.id, option)}
+                              disabled={isGrayedOut}
+                            />
+                            <span className="font-semibold">{option}</span>
+                          </label>
+                        ))}
+                      </div>
+                      {isGrayedOut ? (
+                        <p className="text-xs text-muted-foreground">Mutual exclusion active: {activeFieldLabel}</p>
+                      ) : null}
+                      {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
+                    </div>
+                  )
+                }
                 return (
                   <div key={field.id} className={cn("space-y-2", isGrayedOut && "opacity-50")}>
                     <FieldLabel field={field} isRequired={isRequired} />
@@ -669,7 +694,6 @@ export default function DynamicScoutFormPage() {
                             value={option}
                             checked={String(fieldValue ?? "") === option}
                             onChange={() => {
-                              // Allow deselect: if clicking the same option, clear it
                               if (String(fieldValue ?? "") === option) {
                                 handleValueChange(field.id, "")
                               } else {
@@ -702,14 +726,18 @@ export default function DynamicScoutFormPage() {
               }
 
               if (field.type === "radio_cards") {
+                const isMulti = Boolean(field.multiSelect)
                 return (
                   <div key={field.id} className={cn("space-y-2", isGrayedOut && "opacity-50")}>
                     <FieldLabel field={field} isRequired={isRequired} />
                     <SpecialMultipleChoice
                       ariaLabel={field.label}
                       options={field.options}
-                      value={String(fieldValue ?? "")}
+                      multiSelect={isMulti}
+                      value={isMulti ? "" : String(fieldValue ?? "")}
+                      values={isMulti ? (Array.isArray(fieldValue) ? (fieldValue as string[]) : []) : undefined}
                       onValueChange={(value) => handleValueChange(field.id, value)}
+                      onValuesChange={(vals) => handleValueChange(field.id, vals)}
                       allowDeselect={Boolean(field.allowDeselect)}
                       disabled={isGrayedOut}
                     />
@@ -856,7 +884,7 @@ export default function DynamicScoutFormPage() {
               }
 
               if (field.type === "rating") {
-                const min = field.min ?? 1
+                const min = field.min ?? 0
                 const max = field.max ?? 5
                 const options = Array.from({ length: max - min + 1 }, (_, idx) => String(min + idx))
                 return (

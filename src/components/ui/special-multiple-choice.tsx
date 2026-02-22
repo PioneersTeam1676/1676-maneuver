@@ -5,7 +5,10 @@ type SpecialMultipleChoiceProps = {
   ariaLabel: string
   options?: string[]
   value?: string
+  values?: string[]
   onValueChange: (value: string) => void
+  onValuesChange?: (values: string[]) => void
+  multiSelect?: boolean
   allowDeselect?: boolean
   disabled?: boolean
 }
@@ -14,7 +17,10 @@ export function SpecialMultipleChoice({
   ariaLabel,
   options,
   value,
+  values,
   onValueChange,
+  onValuesChange,
+  multiSelect = false,
   allowDeselect = true,
   disabled = false,
 }: SpecialMultipleChoiceProps) {
@@ -22,6 +28,44 @@ export function SpecialMultipleChoice({
 
   if (!parsedOptions.length) {
     return null
+  }
+
+  if (multiSelect) {
+    const selected = values ?? []
+    return (
+      <div role="group" aria-label={ariaLabel} className="space-y-3">
+        {parsedOptions.map((option, index) => {
+          const isSelected = selected.includes(option.value)
+          return (
+            <button
+              key={`${option.value}_${index}`}
+              type="button"
+              aria-pressed={isSelected}
+              onClick={() => {
+                const next = isSelected
+                  ? selected.filter((v) => v !== option.value)
+                  : [...selected, option.value]
+                onValuesChange?.(next)
+              }}
+              disabled={disabled}
+              className={cn(
+                "w-full rounded-xl border px-4 py-4 text-center transition-all sm:px-5 sm:py-5",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+                "disabled:cursor-not-allowed disabled:opacity-60",
+                isSelected
+                  ? "border-primary/80 bg-primary/10 hover:bg-primary/15"
+                  : "bg-card border-border/70 hover:border-border hover:bg-muted/30"
+              )}
+            >
+              <p className="text-balance text-lg font-semibold leading-tight sm:text-xl">{option.title}</p>
+              {option.description ? (
+                <p className="mt-1.5 text-balance text-[11px] text-muted-foreground sm:text-xs">{option.description}</p>
+              ) : null}
+            </button>
+          )
+        })}
+      </div>
+    )
   }
 
   return (

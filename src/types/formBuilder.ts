@@ -24,6 +24,7 @@ export type FormField = {
   helpText?: string
   exclusiveGroup?: string
   allowDeselect?: boolean
+  multiSelect?: boolean
   required?: boolean
   placeholder?: string
   options?: string[]

@@ -57,7 +57,7 @@ const extractToken = (req) => {
   return null
 }
 
-const createApiAuthMiddleware = () => {
+const createApiAuthMiddleware = ({ skipDomainCheck = false } = {}) => {
   const tokens = resolveAuthTokens()
   const disableGoogleAuth = normalizeToken(process.env.DISABLE_GOOGLE_ID_AUTH)
   const googleClientId = normalizeToken(process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID)
@@ -71,6 +71,12 @@ const createApiAuthMiddleware = () => {
 
   return async (req, res, next) => {
     if (req.method === "OPTIONS") {
+      return next()
+    }
+
+    // Self-registration writes (PUT to recent-users) are always allowed —
+    // no token needed so non-domain users can record their sign-in.
+    if (skipDomainCheck && req.method === "PUT") {
       return next()
     }
 
@@ -92,7 +98,7 @@ const createApiAuthMiddleware = () => {
         if (payload?.email_verified === false) {
           return res.status(403).json({ error: "Email not verified" })
         }
-        if (allowedDomains.size) {
+        if (!skipDomainCheck && allowedDomains.size) {
           const domain = email.split("@")[1] || ""
           if (!domain || !allowedDomains.has(domain)) {
             return res.status(403).json({ error: "Forbidden" })
