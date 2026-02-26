@@ -1,3 +1,4 @@
+/* QE: reduced button heights (h-12→h-8), text sizes (text-2xl→text-lg, text-lg→text-sm), and gaps throughout */
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -91,7 +92,7 @@ const AutoStartPage = () => {
   return (
     <div className="min-h-screen w-full flex flex-col items-center px-4 pt-6 pb-8 md:pb-6">
       <div className="w-full max-w-7xl xl:max-w-[90rem] 2xl:max-w-[100rem]">
-        <h1 className="text-2xl font-bold pb-4 xl:text-3xl 2xl:text-4xl xl:pb-6">Auto Start</h1>
+        <h1 className="text-lg font-bold pb-2 xl:text-xl 2xl:text-2xl xl:pb-3">Auto Start</h1>
       </div>
       <div className="flex flex-col lg:flex-row items-start gap-6 xl:gap-8 2xl:gap-10 max-w-7xl xl:max-w-[90rem] 2xl:max-w-[100rem] w-full flex-1">
         
@@ -99,7 +100,7 @@ const AutoStartPage = () => {
         <div className="w-full lg:flex-1 h-96 lg:h-full min-h-96 lg:min-h-[32rem] xl:min-h-[40rem] 2xl:min-h-[48rem]">
           <Card className="w-full h-full">
             <CardHeader className="pb-3 lg:pb-4">
-              <CardTitle className="text-xl xl:text-2xl">Starting Position</CardTitle>
+              <CardTitle className="text-sm xl:text-base">Starting Position</CardTitle>
               <p className="text-sm text-muted-foreground">
                 Click where your robot starts on the field
               </p>
@@ -128,7 +129,7 @@ const AutoStartPage = () => {
           {states?.inputs && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Match Details</CardTitle>
+                <CardTitle className="text-sm">Match Details</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
                 <div className="flex justify-between">
@@ -159,7 +160,7 @@ const AutoStartPage = () => {
           {/* Instructions Card - Hidden on mobile to save space */}
           <Card className="hidden lg:block">
             <CardHeader className="pb-3">
-              <CardTitle className="text-lg">Instructions</CardTitle>
+              <CardTitle className="text-sm">Instructions</CardTitle>
             </CardHeader>
             <CardContent>
               <ul className="space-y-2 text-sm text-muted-foreground">
@@ -201,13 +202,13 @@ const AutoStartPage = () => {
             <Button
               variant="outline"
               onClick={handleBack}
-              className="flex-1 h-12 text-lg"
+              className="flex-1 h-8 text-sm"
             >
               Back
             </Button>
             <Button
               onClick={handleProceed}
-              className="flex-2 h-12 text-lg font-semibold"
+              className="flex-2 h-8 text-sm font-semibold"
               disabled={!hasSelection}
             >
               Continue to Auto

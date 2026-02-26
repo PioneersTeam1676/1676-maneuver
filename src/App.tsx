@@ -249,7 +249,7 @@ function App() {
   }
 
   return (
-    <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
+    <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
       <AuthProvider>
         <FullscreenProvider>
           <div className="min-h-screen bg-background">

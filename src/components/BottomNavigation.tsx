@@ -85,7 +85,8 @@ export function BottomNavigation() {
         className="fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-t border-border shadow-lg safe-area-bottom safe-area-inline"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
-        <nav className="flex items-center justify-around py-2.5 px-2" aria-label="Bottom navigation">
+        {/* QE: reduced nav padding */}
+        <nav className="flex items-center justify-around py-1 px-1" aria-label="Bottom navigation">
           {visibleNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.href;
@@ -96,8 +97,9 @@ export function BottomNavigation() {
                 variant="ghost"
                 onClick={() => handleNavigation(item.href, item.label)}
                 className={cn(
-                  "flex flex-col items-center gap-1.5 p-2.5 rounded-xl transition-all duration-200",
-                  "min-w-0 flex-1 max-w-24 h-auto min-h-[3.5rem] touch-manipulation",
+                  /* QE: reduced nav button padding and size */
+                  "flex flex-col items-center gap-0.5 p-1.5 rounded-lg transition-all duration-200",
+                  "min-w-0 flex-1 max-w-20 h-auto min-h-[2.5rem] touch-manipulation",
                   isActive 
                     ? "text-primary bg-primary/15 font-semibold shadow-sm" 
                     : "text-muted-foreground hover:text-foreground hover:bg-muted/60 active:scale-95"
@@ -105,8 +107,9 @@ export function BottomNavigation() {
                 aria-label={item.label}
                 aria-current={isActive ? 'page' : undefined}
               >
-                <Icon className="h-6 w-6 flex-shrink-0" />
-                <span className="text-[0.75rem] font-medium truncate w-full text-center leading-tight">{item.label}</span>
+                {/* QE: smaller nav icons and text */}
+                <Icon className="h-4 w-4 flex-shrink-0" />
+                <span className="text-[0.625rem] font-medium truncate w-full text-center leading-tight">{item.label}</span>
               </Button>
             );
           })}

@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { SpecialMultipleChoice } from "@/components/ui/special-multiple-choice"
 
@@ -17,9 +17,10 @@ import { getForm } from "@/lib/formBuilderApi"
 import { ACTIVE_FORM_UPDATED_EVENT, getActiveFormId, syncActiveFormConfig } from "@/lib/activeForm"
 import { addIdsToScoutingData } from "@/lib/scoutingDataUtils"
 import { saveScoutingEntry } from "@/lib/dexieDB"
+import { splitSpecialChoiceOption } from "@/lib/specialChoiceOptions"
 import { cn } from "@/lib/utils"
 import { coercePages, flattenFields, getPageFields, normalizeUiConfig } from "@/lib/formSchema"
-import type { FormDefinition, FormField, FormFloatingImage } from "@/types/formBuilder"
+import type { FormDefinition, FormField, FormFloatingImage, FormPage } from "@/types/formBuilder"
 
 type ScoutInputs = {
   matchNumber: string
@@ -58,11 +59,370 @@ const getInitialValue = (field: FormField) => {
 const normalizeExclusiveGroup = (value?: string) =>
   typeof value === "string" ? value.trim().toLowerCase() : ""
 
-const FieldLabel = ({ field, isRequired }: { field: FormField; isRequired: boolean }) => {
-  const description = typeof field.helpText === "string" ? field.helpText.trim() : ""
+const isAutoCollectionField = (label: string) =>
+  label.trim().toLowerCase().includes("where did they collect in auto")
+
+const isGenericCollectionPrompt = (label: string) =>
+  label.trim().toLowerCase().includes("where did they collect")
+
+const CLIMB_SPECIAL_MCQ_OPTIONS = ["Yes", "Attempted but failed", "No"]
+
+const isClimbSpecialField = (field: FormField) => {
+  const label = (field.label || "").trim().toLowerCase()
+  const options = field.options || []
+  if (label !== "climb?") return false
+  if (options.length !== CLIMB_SPECIAL_MCQ_OPTIONS.length) return false
+  const normalized = options.map((option) => splitSpecialChoiceOption(option).title.trim().toLowerCase())
+  return CLIMB_SPECIAL_MCQ_OPTIONS.every((option) => normalized.includes(option.toLowerCase()))
+}
+
+const isAutoInteractionField = (field?: FormField) => {
+  if (!field) return false
+  const label = (field.label || "").trim().toLowerCase()
+  const key = (field.key || "").trim().toLowerCase()
   return (
-    <div className="flex items-center gap-1.5">
-      <Label className="flex-1">
+    isAutoCollectionField(label) ||
+    isClimbSpecialField(field) ||
+    label.includes("auto") ||
+    key.includes("auto")
+  )
+}
+
+const isAutoStrategyField = (field: FormField) => {
+  const label = (field.label || "").trim().toLowerCase()
+  if (isAutoCollectionField(label)) return false
+  return label.includes("auto") && (label.includes("strat") || label.includes("strategy"))
+}
+
+const STATUS_KEYWORDS = [
+  "did not show",
+]
+
+const NON_FUNCTIONING_KEYWORDS = ["non-functioning", "non functioning", "not functioning"]
+
+const normalizeOptionTitle = (value: string) => splitSpecialChoiceOption(value).title.trim().toLowerCase()
+
+const normalizeOptionDisplayText = (value: string) => {
+  const parsed = splitSpecialChoiceOption(value)
+  const normalizedTitle =
+    parsed.title.trim().toLowerCase() === "hybrid scoring" ? "Hybrid" : parsed.title
+  if (normalizedTitle === parsed.title) return value
+  return parsed.description ? `${normalizedTitle} | ${parsed.description}` : normalizedTitle
+}
+
+const isAutoPageLike = (page: FormPage) => {
+  const title = (page.title || "").trim().toLowerCase()
+  const pageId = (page.id || "").trim().toLowerCase()
+  return title.includes("auto") || pageId.includes("auto")
+}
+
+const normalizeAutoCollectionField = (field: FormField, onAutoPage: boolean): FormField => {
+  const label = field.label || ""
+  const shouldConvert =
+    isAutoCollectionField(label) ||
+    (onAutoPage && isGenericCollectionPrompt(label))
+  if (!shouldConvert) return field
+  return {
+    ...field,
+    type: "radio_cards",
+    label: "Climb?",
+    options: CLIMB_SPECIAL_MCQ_OPTIONS,
+    multiSelect: false,
+    allowDeselect: false,
+  }
+}
+
+const normalizeFieldOptionLabels = (field: FormField): FormField => {
+  if (!Array.isArray(field.options) || field.options.length === 0) return field
+  const nextOptions = field.options.map((option) => normalizeOptionDisplayText(option))
+  const changed = nextOptions.some((option, index) => option !== field.options?.[index])
+  if (!changed) return field
+  return { ...field, options: nextOptions }
+}
+
+const normalizePagesOptionLabels = (pages: FormPage[]): FormPage[] =>
+  pages.map((page) => ({
+    ...page,
+    sections: page.sections.map((section) => ({
+      ...section,
+      fields: (section.fields || [])
+        .map((field) => normalizeAutoCollectionField(field, isAutoPageLike(page)))
+        .map((field) => normalizeFieldOptionLabels(field)),
+    })),
+  }))
+
+const hasKeyword = (value: string, keywords: string[]) => {
+  const normalized = value.trim().toLowerCase()
+  return keywords.some((keyword) => normalized.includes(keyword))
+}
+
+const isNonFunctioningLabel = (value: string) => hasKeyword(value, NON_FUNCTIONING_KEYWORDS)
+
+const isStatusField = (field: FormField) => {
+  const label = field.label || ""
+  if (hasKeyword(label, STATUS_KEYWORDS)) return true
+  return (field.options || []).some((option) => hasKeyword(normalizeOptionTitle(option), STATUS_KEYWORDS))
+}
+
+const isPredictionField = (field: FormField) => {
+  const label = (field.label || "").trim().toLowerCase()
+  return label.includes("prediction") || (label.includes("winner") && label.includes("alliance"))
+}
+
+const isRedOption = (option: string) => {
+  const title = normalizeOptionTitle(option)
+  return title === "red" || title.startsWith("red ") || title.includes("red alliance")
+}
+
+const isBlueOption = (option: string) => {
+  const title = normalizeOptionTitle(option)
+  return title === "blue" || title.startsWith("blue ") || title.includes("blue alliance")
+}
+
+const hasRedBlueOptions = (field: FormField) => {
+  const options = field.options || []
+  return options.some((option) => isRedOption(option)) && options.some((option) => isBlueOption(option))
+}
+
+const isAllianceWonAutoField = (field: FormField) => {
+  const label = (field.label || "").toLowerCase()
+  return field.type === "checkbox" && label.includes("alliance") && label.includes("won") && label.includes("auto")
+}
+
+const isStratRateField = (field: FormField) => {
+  const label = (field.label || "").trim().toLowerCase()
+  return (label.includes("strat") || label.includes("strategy")) && (label.includes("rate") || label.includes("rating"))
+}
+
+const isTransitionRatingField = (field: FormField) => {
+  const label = (field.label || "").trim().toLowerCase()
+  return label.includes("transition") && (label.includes("rate") || label.includes("rating"))
+}
+
+const isWideRatingField = (field: FormField) =>
+  isStratRateField(field) || isTransitionRatingField(field)
+
+const isStratChoiceField = (field: FormField) => {
+  const label = (field.label || "").trim().toLowerCase()
+  const key = (field.key || "").trim().toLowerCase()
+  const strategyContext =
+    label.includes("strat") ||
+    label.includes("strategy") ||
+    key.includes("strat") ||
+    key.includes("strategy")
+  const roleContext = label.includes("role") || key.includes("role")
+  if (!(strategyContext || roleContext)) return false
+  return !label.includes("rate") && !label.includes("rating")
+}
+
+const isSecondaryStratRoleField = (field: FormField) => {
+  const label = (field.label || "").trim().toLowerCase()
+  const key = (field.key || "").trim().toLowerCase()
+  return isStratChoiceField(field) && (label.includes("secondary") || key.includes("secondary"))
+}
+
+const withSecondaryDefenseOption = (field: FormField, options: string[]) => {
+  if (!isSecondaryStratRoleField(field)) return options
+  let result = options.map((opt) => {
+    if (splitSpecialChoiceOption(opt).title.trim().toLowerCase() === "defense") return "Was Defending"
+    return opt
+  })
+  const hasDefense = result.some((option) => {
+    const t = splitSpecialChoiceOption(option).title.trim().toLowerCase()
+    return t === "was defending" || t === "defense"
+  })
+  if (!hasDefense) result = [...result, "Was Defending"]
+  const hasNonFunc = result.some((option) =>
+    hasKeyword(splitSpecialChoiceOption(option).title, NON_FUNCTIONING_KEYWORDS)
+  )
+  if (!hasNonFunc) result = [...result, "Non-Functioning"]
+  return result
+}
+
+const normalizeStratRoleSignature = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/[_-]+/g, " ")
+    .replace(/\b(primary|secondary|first|second|1st|2nd)\b/g, " ")
+    .replace(/\b(role|scorer)\b/g, " ")
+    .replace(/\b\d+\b/g, " ")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+
+const getStratRoleSignature = (field: FormField) => {
+  const keySignature = normalizeStratRoleSignature(field.key || "")
+  const labelSignature = normalizeStratRoleSignature(field.label || "")
+  return keySignature || labelSignature || "__strat_role__"
+}
+
+const mergeStratRoleOptions = (optionGroups: string[][]) => {
+  const merged: string[] = []
+  const seen = new Set<string>()
+
+  optionGroups.forEach((options) => {
+    options.forEach((option) => {
+      const signature = normalizeOptionTitle(option)
+      if (!signature || seen.has(signature)) return
+      seen.add(signature)
+      merged.push(option)
+    })
+  })
+
+  return merged
+}
+
+const normalizeMergedStratRoleLabel = (label: string) => {
+  const normalized = String(label || "")
+    .replace(/\(([^)]*(primary|secondary)[^)]*)\)/gi, " ")
+    .replace(/\b(primary|secondary)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+  return normalized || "Strategy Role"
+}
+
+const mergeStratRolesForPages = (pages: FormPage[]): FormPage[] =>
+  pages.map((page) => {
+    const pageFields = page.sections.flatMap((section) => section.fields || [])
+    const primaryFields = pageFields.filter(
+      (field) => isStratChoiceField(field) && !isSecondaryStratRoleField(field)
+    )
+    const primarySignatures = new Set(primaryFields.map((field) => getStratRoleSignature(field)))
+    const firstPrimaryFieldId = primaryFields[0]?.id || ""
+
+    const secondaryBySignature = new Map<string, FormField[]>()
+    pageFields.forEach((field) => {
+      if (!isSecondaryStratRoleField(field)) return
+      const signature = getStratRoleSignature(field)
+      const existing = secondaryBySignature.get(signature) || []
+      existing.push(field)
+      secondaryBySignature.set(signature, existing)
+    })
+    const unmatchedSecondaryOptions = Array.from(secondaryBySignature.entries())
+      .filter(([signature]) => !primarySignatures.has(signature))
+      .flatMap(([, fields]) =>
+        fields.flatMap((secondaryField) =>
+          withSecondaryDefenseOption(secondaryField, secondaryField.options || [])
+        )
+      )
+
+    return {
+      ...page,
+      sections: page.sections.map((section) => ({
+        ...section,
+        fields: (section.fields || []).flatMap((field) => {
+          if (isSecondaryStratRoleField(field)) {
+            const signature = getStratRoleSignature(field)
+            if (primarySignatures.has(signature) || primaryFields.length > 0) return []
+            return [
+              {
+                ...field,
+                label: normalizeMergedStratRoleLabel(field.label || ""),
+                options: withSecondaryDefenseOption(field, field.options || []),
+              },
+            ]
+          }
+
+          if (!isStratChoiceField(field)) return [field]
+
+          const signature = getStratRoleSignature(field)
+          const secondaryFields = secondaryBySignature.get(signature) || []
+          if (secondaryFields.length === 0) return [field]
+
+          const secondaryOptions = secondaryFields.flatMap((secondaryField) =>
+            withSecondaryDefenseOption(secondaryField, secondaryField.options || [])
+          )
+          const fallbackOptions = field.id === firstPrimaryFieldId ? unmatchedSecondaryOptions : []
+
+          return [
+            {
+              ...field,
+              label: normalizeMergedStratRoleLabel(field.label || ""),
+              required: Boolean(field.required || secondaryFields.some((secondaryField) => secondaryField.required)),
+              options: mergeStratRoleOptions([field.options || [], secondaryOptions, fallbackOptions]),
+            },
+          ]
+        }),
+      })),
+    }
+  })
+
+const normalizeStratDefenseLabels = (pages: FormPage[]): FormPage[] =>
+  pages.map((page) => ({
+    ...page,
+    sections: page.sections.map((section) => ({
+      ...section,
+      fields: (section.fields || []).map((field) => {
+        const label = (field.label || "").trim().toLowerCase()
+        let newLabel = field.label
+        if (label === "defended") newLabel = "Was Defended"
+        if (label === "defense") newLabel = "Was Defending"
+
+        if (isStratChoiceField(field)) {
+          const options = (field.options || []).map((opt) => {
+            if (splitSpecialChoiceOption(opt).title.trim().toLowerCase() === "defense") return "Was Defending"
+            if (splitSpecialChoiceOption(opt).title.trim().toLowerCase() === "defended") return "Was Defended"
+            return opt
+          })
+          const hasNonFunc = options.some((opt) =>
+            hasKeyword(splitSpecialChoiceOption(opt).title, NON_FUNCTIONING_KEYWORDS)
+          )
+          const finalOptions = hasNonFunc ? options : [...options, "Non-Functioning"]
+          return { ...field, label: newLabel, options: finalOptions }
+        }
+
+        if (newLabel !== field.label) return { ...field, label: newLabel }
+        return field
+      }),
+    })),
+  }))
+
+const isAutoWhereDidTheyCollectField = (field: FormField) => {
+  const label = (field.label || "").trim().toLowerCase()
+  return isAutoCollectionField(label)
+}
+
+const isClimbField = (field: FormField) => {
+  const label = (field.label || "").trim().toLowerCase()
+  if (isAutoCollectionField(label)) return false
+  return label.includes("where did they collect") || label.includes("climb")
+}
+
+const isMiscField = (field: FormField) => (field.label || "").trim().toLowerCase().includes("misc")
+
+const isDefendedField = (field: FormField) => {
+  const label = (field.label || "").trim().toLowerCase()
+  return label.includes("defended") || label.includes("defense") || label.includes("defending")
+}
+
+const isNotesField = (field: FormField) => (field.label || "").trim().toLowerCase().includes("note")
+
+const CLIMB_LEVEL_OPTIONS = ["Level 1", "Level 2", "Level 3"]
+
+const getFieldPriority = (field: FormField, onTransitionPage = false) => {
+  if (onTransitionPage && isAllianceWonAutoField(field)) return -1
+  if (onTransitionPage && isTransitionRatingField(field)) return 0
+  if (onTransitionPage && isDefendedField(field)) return 2.1
+  if (isStatusField(field)) return 1
+  return 0
+}
+
+const isTransitionPhasePageId = (pageId: string) => /^(won|lost)_s\d+$/i.test(pageId.trim())
+
+const FieldLabel = ({
+  field,
+  isRequired,
+  hideDescription = false,
+}: {
+  field: FormField
+  isRequired: boolean
+  hideDescription?: boolean
+}) => {
+  const description =
+    hideDescription || typeof field.helpText !== "string" ? "" : field.helpText.trim()
+  return (
+    <div className="flex items-center gap-1">
+      <Label className="flex-1 text-sm leading-tight">
         {field.label} {isRequired ? "*" : ""}
       </Label>
       {description ? (
@@ -70,10 +430,10 @@ const FieldLabel = ({ field, isRequired }: { field: FormField; isRequired: boole
           <TooltipTrigger asChild>
             <button
               type="button"
-              className="inline-flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+              className="inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
               aria-label={`${field.label} description`}
             >
-              <CircleHelp className="h-4 w-4" />
+              <CircleHelp className="h-3.5 w-3.5" />
             </button>
           </TooltipTrigger>
           <TooltipContent side="top" className="max-w-xs">
@@ -100,6 +460,13 @@ const normalizeFloatingImage = (image: FormFloatingImage): FormFloatingImage => 
   zIndex: toFiniteNumber(image.zIndex, 0),
   showOnMobile: image.showOnMobile !== false,
 })
+
+const toggleOptionValue = (current: unknown, option: string) => {
+  const selected = Array.isArray(current) ? current.filter((value): value is string => typeof value === "string") : []
+  return selected.includes(option)
+    ? selected.filter((value) => value !== option)
+    : [...selected, option]
+}
 
 export default function DynamicScoutFormPage() {
   const navigate = useNavigate()
@@ -158,7 +525,7 @@ export default function DynamicScoutFormPage() {
     setLoading(true)
     getForm(activeFormId)
       .then((data) => {
-        const pages = coercePages(data.schema)
+        const pages = normalizeStratDefenseLabels(mergeStratRolesForPages(normalizePagesOptionLabels(coercePages(data.schema))))
         setForm({
           ...data,
           schema: {
@@ -187,6 +554,10 @@ export default function DynamicScoutFormPage() {
 
   const pages = useMemo(() => coercePages(form?.schema), [form])
   const uiConfig = useMemo(() => normalizeUiConfig(form?.schema?.ui), [form])
+  const compactFieldSpacingClass = useMemo(
+    () => (uiConfig.fieldSpacingClass || "").replace(/\bspace-y-\d+\b/g, "").trim(),
+    [uiConfig.fieldSpacingClass]
+  )
   const layoutMode = uiConfig.layout || "auto"
   const isPaged = layoutMode === "paged" || (layoutMode === "auto" && pages.length > 1)
   const displayPages = useMemo(() => {
@@ -231,21 +602,44 @@ export default function DynamicScoutFormPage() {
     [currentPage]
   )
 
+  const isTransitionPage = currentPage.id === "page_transition" || (currentPage.title || "").toLowerCase().includes("transition")
+  const isAutoPage = (currentPage.title || "").toLowerCase().includes("auto") || currentPage.id.toLowerCase().includes("auto")
+  const isTransitionOrPhasePage = isTransitionPage || isTransitionPhasePageId(currentPage.id)
+  const isEndgamePage = (currentPage.title || "").toLowerCase().includes("endgame") || currentPage.id.toLowerCase().includes("endgame")
+  const isPostMatchPage = (currentPage.title || "").toLowerCase().includes("post") || currentPage.id.toLowerCase().includes("post_match") || currentPage.id.toLowerCase().includes("post-match")
+
+  // Auto = 0, Transition = 1, Shifts 1-4 = 2-5, Endgame = 6
+  const logicalPageNumber = useMemo(() => {
+    const id = currentPage.id
+    if (isAutoPage) return 0
+    const shiftMatch = id.match(/^(?:won|lost)_s(\d+)$/)
+    if (shiftMatch) return 1 + parseInt(shiftMatch[1])
+    if (isEndgamePage) return 6
+    // Transition or other pre-shift page
+    return 1
+  }, [currentPage, isAutoPage, isEndgamePage])
+
+  const logicalPageCount = 6
+
   useEffect(() => {
     setPageIndex((prev) => Math.min(prev, displayPageCount - 1))
   }, [displayPageCount])
 
   const handleValueChange = (fieldId: string, value: unknown) => {
     setValues((prev) => {
-      const next = { ...prev, [fieldId]: value }
       const changedField = allFields.find((field) => field.id === fieldId)
-      const group = normalizeExclusiveGroup(changedField?.exclusiveGroup)
+      const group =
+        isAutoPage || isAutoInteractionField(changedField)
+          ? ""
+          : normalizeExclusiveGroup(changedField?.exclusiveGroup)
+      const next = { ...prev, [fieldId]: value }
       if (!changedField || !group || isEmptyValue(value, changedField)) {
         return next
       }
       allFields.forEach((field) => {
         if (field.id === fieldId) return
         if (normalizeExclusiveGroup(field.exclusiveGroup) !== group) return
+        if (isAutoInteractionField(field)) return
         next[field.id] = getInitialValue(field)
       })
       return next
@@ -263,15 +657,19 @@ export default function DynamicScoutFormPage() {
       const current = Array.isArray(prev[fieldId]) ? (prev[fieldId] as string[]) : []
       const exists = current.includes(option)
       const next = exists ? current.filter((item) => item !== option) : [...current, option]
-      const nextValues: Record<string, unknown> = { ...prev, [fieldId]: next }
       const changedField = allFields.find((field) => field.id === fieldId)
-      const group = normalizeExclusiveGroup(changedField?.exclusiveGroup)
+      const group =
+        isAutoPage || isAutoInteractionField(changedField)
+          ? ""
+          : normalizeExclusiveGroup(changedField?.exclusiveGroup)
+      const nextValues: Record<string, unknown> = { ...prev, [fieldId]: next }
       if (!changedField || !group || isEmptyValue(next, changedField)) {
         return nextValues
       }
       allFields.forEach((field) => {
         if (field.id === fieldId) return
         if (normalizeExclusiveGroup(field.exclusiveGroup) !== group) return
+        if (isAutoInteractionField(field)) return
         nextValues[field.id] = getInitialValue(field)
       })
       return nextValues
@@ -515,7 +913,7 @@ export default function DynamicScoutFormPage() {
   return (
     <div
       className={cn(
-        "container mx-auto max-w-5xl animate-in fade-in-0 duration-300 relative overflow-hidden",
+        "container mx-auto max-w-4xl animate-in fade-in-0 duration-300 relative overflow-hidden px-2 pb-0 !pt-2",
         uiConfig.pagePaddingClass
       )}
     >
@@ -544,48 +942,27 @@ export default function DynamicScoutFormPage() {
         </div>
       ) : null}
 
-      <div className={cn("relative z-10", uiConfig.pageSpacingClass)}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-bold">{form.name}</h1>
-          <p className="text-muted-foreground">
-            {inputs?.eventName} • Match {inputs?.matchNumber} • Team {inputs?.selectTeam}
-          </p>
+      <div className={cn("relative z-10 text-sm", uiConfig.pageSpacingClass)}>
+      {isPaged ? (
+        <div className="absolute left-0 top-0 z-20 text-xs font-medium text-muted-foreground">
+          {logicalPageNumber}/{logicalPageCount}
         </div>
-        <Button variant="outline" onClick={() => navigate("/game-start", { state })}>
+      ) : null}
+      <div className="pointer-events-none absolute right-0 top-0 z-20">
+        <Button
+          variant="outline"
+          className="pointer-events-auto"
+          onClick={() => navigate("/game-start", { state })}
+        >
           Back
         </Button>
       </div>
 
-      {(currentPage?.title || currentPage?.description || (uiConfig.nav?.showProgress && isPaged)) && (
-        <div
-          className={cn(
-            "rounded-lg border bg-muted/30 p-4 animate-in fade-in-0 slide-in-from-bottom-1 duration-300",
-            uiConfig.pageHeaderClassName
-          )}
-        >
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              {currentPage?.title ? (
-                <h2 className="text-xl font-semibold">{currentPage.title}</h2>
-              ) : null}
-              {currentPage?.description ? (
-                <p className="text-sm text-muted-foreground">{currentPage.description}</p>
-              ) : null}
-            </div>
-            {uiConfig.nav?.showProgress && isPaged ? (
-              <span className="text-xs text-muted-foreground">
-                Page {pageIndex + 1} of {displayPageCount}
-              </span>
-            ) : null}
-          </div>
-        </div>
-      )}
 
       <div
         key={currentPage.id}
         className={cn(
-          "animate-in fade-in-0 slide-in-from-bottom-2 duration-300",
+          "animate-in fade-in-0 slide-in-from-bottom-2 duration-300 !mt-0",
           uiConfig.sectionSpacingClass
         )}
       >
@@ -598,29 +975,70 @@ export default function DynamicScoutFormPage() {
             )}
           >
             <CardHeader className={cn("space-y-2", uiConfig.sectionHeaderClassName)}>
-              <CardTitle className="text-xl">{section.title}</CardTitle>
-              {section.description ? (
-                <CardDescription>{section.description}</CardDescription>
-              ) : null}
+              <CardTitle className="text-sm leading-tight">{section.title}</CardTitle>
             </CardHeader>
-            <CardContent className={cn(uiConfig.fieldSpacingClass)}>
-              {section.fields.map((field) => {
+            <CardContent className={cn("grid grid-cols-2 items-start gap-x-1.5 gap-y-1", compactFieldSpacingClass)}>
+              {(() => {
+                const sortedFields = [...section.fields].sort(
+                  (a, b) => getFieldPriority(a, isTransitionOrPhasePage) - getFieldPriority(b, isTransitionOrPhasePage)
+                )
+                const primaryEndgameClimbFieldId = isEndgamePage ? sortedFields.find(isClimbField)?.id || "" : ""
+                const sectionFields = sortedFields.filter((field) => {
+                  if (isMiscField(field)) return false
+                  if (field.type === "checkbox" && isNonFunctioningLabel(field.label || "")) {
+                    return false
+                  }
+                  if (isEndgamePage && primaryEndgameClimbFieldId && isClimbField(field) && field.id !== primaryEndgameClimbFieldId) {
+                    return false
+                  }
+                  return true
+                })
+
+                return sectionFields.map((field) => {
                 const fieldValue = values[field.id]
                 const isRequired = Boolean(field.required)
                 const fieldError = errors[field.id]
                 const group = normalizeExclusiveGroup(field.exclusiveGroup)
                 const activeFieldId = group ? activeExclusiveByGroup[group] : ""
-                const isGrayedOut = Boolean(group && activeFieldId && activeFieldId !== field.id)
+                const isGrayedOut = false
                 const activeFieldLabel = activeFieldId ? fieldMap[activeFieldId]?.label || "another field" : ""
+                const showMergedClimbControl =
+                  isEndgamePage && primaryEndgameClimbFieldId === field.id
+                const normalizedClimbField = showMergedClimbControl ? { ...field, label: "Climb?" } : field
+
+              if (showMergedClimbControl) {
+                return (
+                  <div key={field.id} className={cn("col-span-2 space-y-1", isGrayedOut && "opacity-50")}>
+                    <FieldLabel field={normalizedClimbField} isRequired={isRequired} />
+                    <SpecialMultipleChoice
+                      ariaLabel={normalizedClimbField.label}
+                      options={CLIMB_LEVEL_OPTIONS}
+                      value={typeof fieldValue === "string" ? fieldValue : ""}
+                      onValueChange={(value) => handleValueChange(field.id, value)}
+                      allowDeselect={Boolean(field.allowDeselect)}
+                      disabled={isGrayedOut}
+                    />
+                    {isGrayedOut ? (
+                      <p className="text-xs text-muted-foreground">Mutual exclusion active: {activeFieldLabel}</p>
+                    ) : null}
+                    {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
+                  </div>
+                )
+              }
 
               if (field.type === "long_text") {
+                const isEndgameNotesField = isEndgamePage && isNotesField(field)
                 return (
-                  <div key={field.id} className={cn("space-y-2", isGrayedOut && "opacity-50")}>
+                  <div key={field.id} className={cn("col-span-2 space-y-1", isGrayedOut && "opacity-50")}>
                     <FieldLabel field={field} isRequired={isRequired} />
                     <Textarea
                       value={String(fieldValue ?? "")}
                       onChange={(event) => handleValueChange(field.id, event.target.value)}
                       placeholder={field.placeholder || ""}
+                      className={cn(
+                        "w-full",
+                        (isPostMatchPage || isEndgameNotesField) && "min-h-80"
+                      )}
                     />
                     {isGrayedOut ? (
                       <p className="text-xs text-muted-foreground">Mutual exclusion active: {activeFieldLabel}</p>
@@ -631,24 +1049,156 @@ export default function DynamicScoutFormPage() {
               }
 
               if (field.type === "select") {
+                const selectOptions = withSecondaryDefenseOption(field, field.options || [])
+                const isTransitionDefended =
+                  isTransitionOrPhasePage && isDefendedField(field)
+                const showStatusChecks = !isTransitionDefended && isStatusField(field) && selectOptions.length > 0
+                const showPredictionButtons = isPredictionField(field) && hasRedBlueOptions(field)
+                const selectedStatuses = Array.isArray(fieldValue)
+                  ? fieldValue.filter((value): value is string => typeof value === "string")
+                  : typeof fieldValue === "string" && fieldValue
+                    ? [fieldValue]
+                    : []
+
+                if (showStatusChecks) {
+                  return (
+                    <div key={field.id} className={cn("col-span-2 space-y-1", isGrayedOut && "opacity-50")}>
+                      <FieldLabel field={field} isRequired={isRequired} hideDescription />
+                      <div className="space-y-1">
+                        {selectOptions.map((option) => {
+                          const isChecked = selectedStatuses.includes(option)
+                          return (
+                            <label
+                              key={option}
+                              className="flex items-center gap-1.5 rounded-xl border border-border/60 px-2 py-1 text-sm leading-tight"
+                            >
+                              <Checkbox
+                                checked={isChecked}
+                                onCheckedChange={() => handleValueChange(field.id, toggleOptionValue(selectedStatuses, option))}
+                                disabled={isGrayedOut}
+                              />
+                              <span className="font-medium">{splitSpecialChoiceOption(option).title}</span>
+                            </label>
+                          )
+                        })}
+                      </div>
+                      {isGrayedOut ? (
+                        <p className="text-xs text-muted-foreground">Mutual exclusion active: {activeFieldLabel}</p>
+                      ) : null}
+                      {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
+                    </div>
+                  )
+                }
+
+                if (showPredictionButtons) {
+                  return (
+                    <div key={field.id} className={cn("col-span-2 space-y-1", isGrayedOut && "opacity-50")}>
+                      <FieldLabel field={field} isRequired={isRequired} hideDescription />
+                      <div className="grid grid-cols-2 gap-1">
+                        {selectOptions.map((option) => {
+                          const isSelected = String(fieldValue ?? "") === option
+                          const red = isRedOption(option)
+                          const blue = isBlueOption(option)
+
+                          return (
+                            <Button
+                              key={option}
+                              type="button"
+                              variant="outline"
+                              className={cn(
+                                "h-7 rounded-xl px-2 text-sm font-semibold leading-tight",
+                                red &&
+                                  (isSelected
+                                    ? "border-red-700 bg-red-600 text-white hover:bg-red-600"
+                                    : "border-red-300 bg-red-50 text-red-700 hover:bg-red-100"),
+                                blue &&
+                                  (isSelected
+                                    ? "border-blue-700 bg-blue-600 text-white hover:bg-blue-600"
+                                    : "border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100"),
+                                !red && !blue && isSelected && "border-primary/80 bg-primary/20 text-white hover:bg-primary/25"
+                              )}
+                              onClick={() => handleValueChange(field.id, isSelected && field.allowDeselect ? "" : option)}
+                              disabled={isGrayedOut}
+                            >
+                              {splitSpecialChoiceOption(option).title}
+                            </Button>
+                          )
+                        })}
+                      </div>
+                      {isGrayedOut ? (
+                        <p className="text-xs text-muted-foreground">Mutual exclusion active: {activeFieldLabel}</p>
+                      ) : null}
+                      {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
+                    </div>
+                  )
+                }
+
+                if (isStratChoiceField(field)) {
+                  return (
+                    <div key={field.id} className={cn("col-span-2 space-y-1", isGrayedOut && "opacity-50")}>
+                      <FieldLabel field={field} isRequired={isRequired} />
+                      <div className="grid grid-cols-2 gap-1">
+                        {selectOptions.map((option) => {
+                          const isSelected = String(fieldValue ?? "") === option
+                          return (
+                            <button
+                              key={option}
+                              type="button"
+                              aria-pressed={isSelected}
+                              className={cn(
+                                "h-6 rounded-xl border px-2 text-sm font-semibold leading-tight text-white touch-manipulation select-none",
+                                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+                                isSelected
+                                  ? "border-primary bg-primary/35 shadow-[0_0_0_1px_color-mix(in_oklab,var(--color-primary)_60%,transparent)]"
+                                  : "border-border/70 bg-card hover:bg-muted/30"
+                              )}
+                              onClick={() => handleValueChange(field.id, isSelected && field.allowDeselect ? "" : option)}
+                              disabled={isGrayedOut}
+                              style={{ WebkitTapHighlightColor: "transparent" }}
+                            >
+                              {splitSpecialChoiceOption(option).title}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      {isGrayedOut ? (
+                        <p className="text-xs text-muted-foreground">Mutual exclusion active: {activeFieldLabel}</p>
+                      ) : null}
+                      {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
+                    </div>
+                  )
+                }
+
                 return (
-                  <div key={field.id} className={cn("space-y-2", isGrayedOut && "opacity-50")}>
+                  <div
+                    key={field.id}
+                    className={cn("col-span-2 space-y-1", isGrayedOut && "opacity-50")}
+                  >
                     <FieldLabel field={field} isRequired={isRequired} />
-                    <Select
-                      value={String(fieldValue ?? "")}
-                      onValueChange={(value) => handleValueChange(field.id, value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={field.placeholder || "Select an option"} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(field.options || []).map((option) => (
-                          <SelectItem key={option} value={option}>
-                            {option}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="grid grid-cols-2 gap-1">
+                      {(field.options || []).map((option) => {
+                        const isSelected = String(fieldValue ?? "") === option
+                        return (
+                          <button
+                            key={option}
+                            type="button"
+                            aria-pressed={isSelected}
+                            className={cn(
+                              "h-6 rounded-xl border px-2 text-sm font-semibold leading-tight text-white touch-manipulation select-none",
+                              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+                              isSelected
+                                ? "border-primary bg-primary/35 shadow-[0_0_0_1px_color-mix(in_oklab,var(--color-primary)_60%,transparent)]"
+                                : "border-border/70 bg-card hover:bg-muted/30"
+                            )}
+                            onClick={() => handleValueChange(field.id, isSelected && field.allowDeselect ? "" : option)}
+                            disabled={isGrayedOut}
+                            style={{ WebkitTapHighlightColor: "transparent" }}
+                          >
+                            {splitSpecialChoiceOption(option).title}
+                          </button>
+                        )
+                      })}
+                    </div>
                     {isGrayedOut ? (
                       <p className="text-xs text-muted-foreground">Mutual exclusion active: {activeFieldLabel}</p>
                     ) : null}
@@ -661,17 +1211,17 @@ export default function DynamicScoutFormPage() {
                 if (field.multiSelect) {
                   const selected = Array.isArray(fieldValue) ? (fieldValue as string[]) : []
                   return (
-                    <div key={field.id} className={cn("space-y-2", isGrayedOut && "opacity-50")}>
+                    <div key={field.id} className={cn("col-span-2 space-y-1", isGrayedOut && "opacity-50")}>
                       <FieldLabel field={field} isRequired={isRequired} />
-                      <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-0.5">
                         {(field.options || []).map((option) => (
-                          <label key={option} className="flex items-center gap-2 text-sm cursor-pointer">
+                          <label key={option} className="flex items-center gap-1 text-xs cursor-pointer leading-tight">
                             <Checkbox
                               checked={selected.includes(option)}
                               onCheckedChange={() => handleToggleOption(field.id, option)}
                               disabled={isGrayedOut}
                             />
-                            <span className="font-semibold">{option}</span>
+                            <span className="font-medium">{option}</span>
                           </label>
                         ))}
                       </div>
@@ -682,41 +1232,233 @@ export default function DynamicScoutFormPage() {
                     </div>
                   )
                 }
-                return (
-                  <div key={field.id} className={cn("space-y-2", isGrayedOut && "opacity-50")}>
-                    <FieldLabel field={field} isRequired={isRequired} />
-                    <div className="space-y-2">
-                      {(field.options || []).map((option) => (
-                        <label key={option} className="flex items-center gap-2 text-sm cursor-pointer">
-                          <input
-                            type="radio"
-                            name={field.id}
-                            value={option}
-                            checked={String(fieldValue ?? "") === option}
-                            onChange={() => {
-                              if (String(fieldValue ?? "") === option) {
-                                handleValueChange(field.id, "")
-                              } else {
-                                handleValueChange(field.id, option)
-                              }
-                            }}
-                            className="accent-primary h-4 w-4"
-                          />
-                          <span className="font-semibold">{option}</span>
-                        </label>
-                      ))}
+                const isAutoCollectField = isAutoWhereDidTheyCollectField(field)
+                const isAutoStratField = isAutoStrategyField(field)
+                const radioOptions = withSecondaryDefenseOption(field, field.options || [])
+                const isTransitionDefended =
+                  isTransitionOrPhasePage && isDefendedField(field)
+                const showStatusChecks = !isTransitionDefended && isStatusField(field) && radioOptions.length > 0
+                const showPredictionButtons = isPredictionField(field) && hasRedBlueOptions(field)
+                const showStratRole = isStratChoiceField(field)
+                const selectedStatuses = Array.isArray(fieldValue)
+                  ? fieldValue.filter((value): value is string => typeof value === "string")
+                  : typeof fieldValue === "string" && fieldValue
+                    ? [fieldValue]
+                    : []
+                const showTwoColumnRadioGrid =
+                  !isAutoStratField &&
+                  !showStatusChecks &&
+                  !showPredictionButtons &&
+                  !showStratRole &&
+                  radioOptions.length > 0 &&
+                  radioOptions.length <= 4
+
+                if (isAutoCollectField) {
+                  return (
+                    <div key={field.id} className={cn("col-span-2 space-y-1", isGrayedOut && "opacity-50")}>
+                      <FieldLabel field={field} isRequired={isRequired} hideDescription />
+                      <div className="grid grid-cols-2 gap-1">
+                        {(field.options || []).map((option) => {
+                          const isSelected = String(fieldValue ?? "") === option
+                          return (
+                            <Button
+                              key={option}
+                              type="button"
+                              variant="outline"
+                              className={cn(
+                                "h-5 rounded-xl border px-1 py-0 text-xs font-semibold leading-tight text-white",
+                                isSelected
+                                  ? "border-primary/80 bg-primary/10"
+                                  : "border-border/70 bg-card hover:bg-muted/30"
+                              )}
+                              onClick={() => handleValueChange(field.id, isSelected && field.allowDeselect ? "" : option)}
+                              disabled={isGrayedOut}
+                            >
+                              {option}
+                            </Button>
+                          )
+                        })}
+                      </div>
+                      {isGrayedOut ? (
+                        <p className="text-xs text-muted-foreground">Mutual exclusion active: {activeFieldLabel}</p>
+                      ) : null}
+                      {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
                     </div>
-                    {typeof fieldValue === "string" && fieldValue.length > 0 ? (
-                      <Button
-                        variant="ghost"
-                        type="button"
-                        className="h-7 px-2 text-xs"
-                        onClick={() => handleValueChange(field.id, "")}
-                        disabled={isGrayedOut}
-                      >
-                        Clear selection
-                      </Button>
-                    ) : null}
+                  )
+                }
+
+                if (showStatusChecks) {
+                  return (
+                    <div key={field.id} className={cn("col-span-2 space-y-1", isGrayedOut && "opacity-50")}>
+                      <FieldLabel field={field} isRequired={isRequired} hideDescription />
+                      <div className="space-y-1">
+                        {radioOptions.map((option) => {
+                          const isChecked = selectedStatuses.includes(option)
+                          return (
+                            <label
+                              key={option}
+                              className="flex items-center gap-1.5 rounded-xl border border-border/60 px-2 py-1 text-sm leading-tight"
+                            >
+                              <Checkbox
+                                checked={isChecked}
+                                onCheckedChange={() => handleValueChange(field.id, toggleOptionValue(selectedStatuses, option))}
+                                disabled={isGrayedOut}
+                              />
+                              <span className="font-medium">{option}</span>
+                            </label>
+                          )
+                        })}
+                      </div>
+                      {isGrayedOut ? (
+                        <p className="text-xs text-muted-foreground">Mutual exclusion active: {activeFieldLabel}</p>
+                      ) : null}
+                      {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
+                    </div>
+                  )
+                }
+
+                if (showPredictionButtons) {
+                  return (
+                    <div key={field.id} className={cn("col-span-2 space-y-1", isGrayedOut && "opacity-50")}>
+                      <FieldLabel field={field} isRequired={isRequired} hideDescription />
+                      <div className="grid grid-cols-2 gap-1">
+                        {radioOptions.map((option) => {
+                          const isSelected = String(fieldValue ?? "") === option
+                          const red = isRedOption(option)
+                          const blue = isBlueOption(option)
+                          return (
+                            <Button
+                              key={option}
+                              type="button"
+                              variant="outline"
+                              className={cn(
+                                "h-7 rounded-xl px-2 text-sm font-semibold leading-tight",
+                                red &&
+                                  (isSelected
+                                    ? "border-red-700 bg-red-600 text-white hover:bg-red-600"
+                                    : "border-red-300 bg-red-50 text-red-700 hover:bg-red-100"),
+                                blue &&
+                                  (isSelected
+                                    ? "border-blue-700 bg-blue-600 text-white hover:bg-blue-600"
+                                    : "border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100"),
+                                !red && !blue && isSelected && "border-primary/80 bg-primary/20 text-white hover:bg-primary/25"
+                              )}
+                              onClick={() => handleValueChange(field.id, isSelected && field.allowDeselect ? "" : option)}
+                              disabled={isGrayedOut}
+                            >
+                              {option}
+                            </Button>
+                          )
+                        })}
+                      </div>
+                      {isGrayedOut ? (
+                        <p className="text-xs text-muted-foreground">Mutual exclusion active: {activeFieldLabel}</p>
+                      ) : null}
+                      {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
+                    </div>
+                  )
+                }
+
+                if (showStratRole) {
+                  return (
+                    <div key={field.id} className={cn("col-span-2 space-y-1", isGrayedOut && "opacity-50")}>
+                      <FieldLabel field={field} isRequired={isRequired} />
+                      <div className="grid grid-cols-2 gap-1">
+                        {radioOptions.map((option) => {
+                          const isSelected = String(fieldValue ?? "") === option
+                          return (
+                            <button
+                              key={option}
+                              type="button"
+                              aria-pressed={isSelected}
+                              className={cn(
+                                "h-6 rounded-xl border px-2 text-sm font-semibold leading-tight text-white touch-manipulation select-none",
+                                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+                                isSelected
+                                  ? "border-primary bg-primary/35 shadow-[0_0_0_1px_color-mix(in_oklab,var(--color-primary)_60%,transparent)]"
+                                  : "border-border/70 bg-card hover:bg-muted/30"
+                              )}
+                              onClick={() => handleValueChange(field.id, isSelected && field.allowDeselect ? "" : option)}
+                              disabled={isGrayedOut}
+                              style={{ WebkitTapHighlightColor: "transparent" }}
+                            >
+                              {option}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      {isGrayedOut ? (
+                        <p className="text-xs text-muted-foreground">Mutual exclusion active: {activeFieldLabel}</p>
+                      ) : null}
+                      {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
+                    </div>
+                  )
+                }
+
+                if (showTwoColumnRadioGrid) {
+                  return (
+                    <div key={field.id} className={cn("col-span-2 space-y-1", isGrayedOut && "opacity-50")}>
+                      <FieldLabel field={field} isRequired={isRequired} />
+                      <div className="grid grid-cols-2 gap-1">
+                        {radioOptions.map((option) => {
+                          const isSelected = String(fieldValue ?? "") === option
+                          return (
+                            <Button
+                              key={option}
+                              type="button"
+                              variant="outline"
+                              className={cn(
+                                "h-6 px-1.5 py-0.5 text-sm font-medium leading-tight text-white",
+                                isSelected
+                                  ? "border-primary/80 bg-primary/20 hover:bg-primary/25"
+                                  : "border-border/70 bg-card hover:bg-muted/30"
+                              )}
+                              onClick={() => handleValueChange(field.id, isSelected && field.allowDeselect ? "" : option)}
+                              disabled={isGrayedOut}
+                            >
+                              {option}
+                            </Button>
+                          )
+                        })}
+                      </div>
+                      {isGrayedOut ? (
+                        <p className="text-xs text-muted-foreground">Mutual exclusion active: {activeFieldLabel}</p>
+                      ) : null}
+                      {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
+                    </div>
+                  )
+                }
+
+                return (
+                  <div
+                    key={field.id}
+                    className={cn("col-span-2 space-y-1", isGrayedOut && "opacity-50")}
+                  >
+                    <FieldLabel field={field} isRequired={isRequired} />
+                    <div className="grid grid-cols-2 gap-1">
+                      {(field.options || []).map((option) => {
+                        const isSelected = String(fieldValue ?? "") === option
+                        return (
+                          <button
+                            key={option}
+                            type="button"
+                            aria-pressed={isSelected}
+                            className={cn(
+                              "h-6 rounded-xl border px-2 text-sm font-semibold leading-tight text-white touch-manipulation select-none",
+                              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+                              isSelected
+                                ? "border-primary bg-primary/35 shadow-[0_0_0_1px_color-mix(in_oklab,var(--color-primary)_60%,transparent)]"
+                                : "border-border/70 bg-card hover:bg-muted/30"
+                            )}
+                            onClick={() => handleValueChange(field.id, isSelected && field.allowDeselect ? "" : option)}
+                            disabled={isGrayedOut}
+                            style={{ WebkitTapHighlightColor: "transparent" }}
+                          >
+                            {splitSpecialChoiceOption(option).title}
+                          </button>
+                        )
+                      })}
+                    </div>
                     {isGrayedOut ? (
                       <p className="text-xs text-muted-foreground">Mutual exclusion active: {activeFieldLabel}</p>
                     ) : null}
@@ -727,8 +1469,152 @@ export default function DynamicScoutFormPage() {
 
               if (field.type === "radio_cards") {
                 const isMulti = Boolean(field.multiSelect)
+                const isAutoCollectField = isAutoWhereDidTheyCollectField(field)
+                const isClimbSpecial = isClimbSpecialField(field)
+                const isStratChoice = isStratChoiceField(field)
+                const parsedOptions = withSecondaryDefenseOption(field, field.options || [])
+                  .map((option) => splitSpecialChoiceOption(option))
+                  .filter((option) => option.title.length > 0)
+
+                if (!isMulti && isClimbSpecial && parsedOptions.length > 0) {
+                  return (
+                    <div key={field.id} className={cn("col-span-2 space-y-1", isGrayedOut && "opacity-50")}>
+                      <FieldLabel field={field} isRequired={isRequired} hideDescription />
+                      <SpecialMultipleChoice
+                        ariaLabel={field.label}
+                        options={parsedOptions.map((option) =>
+                          option.description ? `${option.title} | ${option.description}` : option.title
+                        )}
+                        value={typeof fieldValue === "string" ? fieldValue : ""}
+                        onValueChange={(value) => handleValueChange(field.id, value)}
+                        allowDeselect={Boolean(field.allowDeselect)}
+                        disabled={isGrayedOut}
+                      />
+                      {isGrayedOut ? (
+                        <p className="text-xs text-muted-foreground">Mutual exclusion active: {activeFieldLabel}</p>
+                      ) : null}
+                      {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
+                    </div>
+                  )
+                }
+
+                if (isAutoCollectField && parsedOptions.length > 0) {
+                  const selectedValues = Array.isArray(fieldValue) ? (fieldValue as string[]) : []
+                  return (
+                    <div key={field.id} className={cn("col-span-2 space-y-1", isGrayedOut && "opacity-50")}>
+                      <FieldLabel field={field} isRequired={isRequired} hideDescription />
+                      <div className="grid grid-cols-2 gap-0.5">
+                        {parsedOptions.map((option) => {
+                          const isSelected = isMulti
+                            ? selectedValues.includes(option.value)
+                            : String(fieldValue ?? "") === option.value
+                          return (
+                            <Button
+                              key={option.value}
+                              type="button"
+                              variant="outline"
+                              className={cn(
+                                "h-5 rounded-xl border px-1 py-0 text-xs font-semibold leading-tight text-white",
+                                isSelected
+                                  ? "border-primary/80 bg-primary/10"
+                                  : "border-border/70 bg-card hover:bg-muted/30"
+                              )}
+                              onClick={() => {
+                                if (isMulti) {
+                                  handleToggleOption(field.id, option.value)
+                                  return
+                                }
+                                handleValueChange(field.id, isSelected && field.allowDeselect ? "" : option.value)
+                              }}
+                              disabled={isGrayedOut}
+                            >
+                              {option.title}
+                            </Button>
+                          )
+                        })}
+                      </div>
+                      {isGrayedOut ? (
+                        <p className="text-xs text-muted-foreground">Mutual exclusion active: {activeFieldLabel}</p>
+                      ) : null}
+                      {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
+                    </div>
+                  )
+                }
+
+                if (!isMulti && isStratChoice && parsedOptions.length > 0) {
+                  return (
+                    <div key={field.id} className={cn("col-span-2 space-y-1", isGrayedOut && "opacity-50")}>
+                      <FieldLabel field={field} isRequired={isRequired} />
+                      <div className="grid grid-cols-2 gap-1">
+                        {parsedOptions.map((option) => {
+                          const isSelected = String(fieldValue ?? "") === option.value
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              aria-pressed={isSelected}
+                              className={cn(
+                                "h-6 rounded-xl border px-2 text-sm font-semibold leading-tight text-white touch-manipulation select-none",
+                                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+                                isSelected
+                                  ? "border-primary bg-primary/35 shadow-[0_0_0_1px_color-mix(in_oklab,var(--color-primary)_60%,transparent)]"
+                                  : "border-border/70 bg-card hover:bg-muted/30"
+                              )}
+                              onClick={() => handleValueChange(field.id, isSelected && field.allowDeselect ? "" : option.value)}
+                              disabled={isGrayedOut}
+                              style={{ WebkitTapHighlightColor: "transparent" }}
+                            >
+                              {option.title}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      {isGrayedOut ? (
+                        <p className="text-xs text-muted-foreground">Mutual exclusion active: {activeFieldLabel}</p>
+                      ) : null}
+                      {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
+                    </div>
+                  )
+                }
+
+                if (!isMulti) {
+                  return (
+                    <div key={field.id} className={cn("col-span-2 space-y-1", isGrayedOut && "opacity-50")}>
+                      <FieldLabel field={field} isRequired={isRequired} />
+                      <div className="grid grid-cols-2 gap-1">
+                        {parsedOptions.map((option) => {
+                          const isSelected = String(fieldValue ?? "") === option.value
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              aria-pressed={isSelected}
+                              className={cn(
+                                "h-6 rounded-xl border px-2 text-sm font-semibold leading-tight text-white touch-manipulation select-none",
+                                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+                                isSelected
+                                  ? "border-primary bg-primary/35 shadow-[0_0_0_1px_color-mix(in_oklab,var(--color-primary)_60%,transparent)]"
+                                  : "border-border/70 bg-card hover:bg-muted/30"
+                              )}
+                              onClick={() => handleValueChange(field.id, isSelected && field.allowDeselect ? "" : option.value)}
+                              disabled={isGrayedOut}
+                              style={{ WebkitTapHighlightColor: "transparent" }}
+                            >
+                              {option.title}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      {isGrayedOut ? (
+                        <p className="text-xs text-muted-foreground">Mutual exclusion active: {activeFieldLabel}</p>
+                      ) : null}
+                      {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
+                    </div>
+                  )
+                }
+
                 return (
-                  <div key={field.id} className={cn("space-y-2", isGrayedOut && "opacity-50")}>
+                  <div key={field.id} className={cn("col-span-2 space-y-1", isGrayedOut && "opacity-50")}>
                     <FieldLabel field={field} isRequired={isRequired} />
                     <SpecialMultipleChoice
                       ariaLabel={field.label}
@@ -752,16 +1638,16 @@ export default function DynamicScoutFormPage() {
               if (field.type === "multi_select") {
                 const selected = Array.isArray(fieldValue) ? (fieldValue as string[]) : []
                 return (
-                  <div key={field.id} className={cn("space-y-2", isGrayedOut && "opacity-50")}>
+                  <div key={field.id} className={cn("col-span-2 space-y-1", isGrayedOut && "opacity-50")}>
                     <FieldLabel field={field} isRequired={isRequired} />
-                    <div className="space-y-2">
+                    <div className="grid grid-cols-2 gap-1">
                       {(field.options || []).map((option) => (
-                        <label key={option} className="flex items-center gap-2 text-sm">
+                        <label key={option} className="flex items-center gap-1 text-xs leading-tight">
                           <Checkbox
                             checked={selected.includes(option)}
                             onCheckedChange={() => handleToggleOption(field.id, option)}
                           />
-                          <span className="font-semibold">{option}</span>
+                          <span className="font-medium">{option}</span>
                         </label>
                       ))}
                     </div>
@@ -774,14 +1660,25 @@ export default function DynamicScoutFormPage() {
               }
 
               if (field.type === "checkbox") {
+                const isAllianceWonFull = isTransitionPage && isAllianceWonAutoField(field)
+                const isStatusCheckbox = isStatusField(field)
+                const isTransitionDefended =
+                  isTransitionOrPhasePage && isDefendedField(field)
                 return (
-                  <div key={field.id} className={cn("space-y-2", isGrayedOut && "opacity-50")}>
-                    <label className="flex items-center gap-2 text-sm">
+                  <div
+                    key={field.id}
+                    className={cn(
+                      "space-y-1",
+                      (isAllianceWonFull || (isStatusCheckbox && !isTransitionDefended)) && "col-span-2",
+                      isGrayedOut && "opacity-50"
+                    )}
+                  >
+                    <label className="flex items-center gap-1 text-sm leading-tight">
                       <Checkbox
                         checked={Boolean(fieldValue)}
                         onCheckedChange={(value) => handleValueChange(field.id, Boolean(value))}
                       />
-                      <span className="font-semibold">
+                      <span className="font-medium">
                         {field.label} {isRequired ? "*" : ""}
                       </span>
                       {field.helpText ? (
@@ -789,10 +1686,10 @@ export default function DynamicScoutFormPage() {
                           <TooltipTrigger asChild>
                             <button
                               type="button"
-                              className="inline-flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                              className="inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
                               aria-label={`${field.label} description`}
                             >
-                              <CircleHelp className="h-4 w-4" />
+                              <CircleHelp className="h-3.5 w-3.5" />
                             </button>
                           </TooltipTrigger>
                           <TooltipContent side="top" className="max-w-xs">
@@ -811,9 +1708,9 @@ export default function DynamicScoutFormPage() {
 
               if (field.type === "image") {
                 return (
-                  <div key={field.id} className={cn("space-y-2", isGrayedOut && "opacity-50")}>
+                  <div key={field.id} className={cn("col-span-2 space-y-1", isGrayedOut && "opacity-50")}>
                     <FieldLabel field={field} isRequired={isRequired} />
-                    <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Button variant="outline" type="button" className="relative">
                         <input
                           type="file"
@@ -842,7 +1739,7 @@ export default function DynamicScoutFormPage() {
                         <img
                           src={fieldValue}
                           alt={field.label}
-                          className="w-full object-contain"
+                          className="w-full max-h-40 object-contain"
                           loading="lazy"
                         />
                       </div>
@@ -860,10 +1757,14 @@ export default function DynamicScoutFormPage() {
                 const max = field.max ?? 5
                 const step = field.step ?? 1
                 const numericValue = Number(fieldValue || min)
+                const isFullWidthSlider = isWideRatingField(field) || isTransitionOrPhasePage
                 return (
-                  <div key={field.id} className={cn("space-y-2", isGrayedOut && "opacity-50")}>
+                  <div
+                    key={field.id}
+                    className={cn("space-y-1", isFullWidthSlider && "col-span-2", isGrayedOut && "opacity-50")}
+                  >
                     <FieldLabel field={field} isRequired={isRequired} />
-                    <div className="flex items-center gap-3">
+                    <div className="space-y-1">
                       <input
                         type="range"
                         min={min}
@@ -873,7 +1774,7 @@ export default function DynamicScoutFormPage() {
                         onChange={(event) => handleValueChange(field.id, event.target.value)}
                         className="w-full"
                       />
-                      <span className="text-sm font-medium w-10 text-right">{numericValue}</span>
+                      <div className="text-right text-xs font-medium">{numericValue}</div>
                     </div>
                     {isGrayedOut ? (
                       <p className="text-xs text-muted-foreground">Mutual exclusion active: {activeFieldLabel}</p>
@@ -888,23 +1789,35 @@ export default function DynamicScoutFormPage() {
                 const max = field.max ?? 5
                 const options = Array.from({ length: max - min + 1 }, (_, idx) => String(min + idx))
                 return (
-                  <div key={field.id} className={cn("space-y-2", isGrayedOut && "opacity-50")}>
+                  <div
+                    key={field.id}
+                    className={cn("space-y-1", isWideRatingField(field) && "col-span-2", isGrayedOut && "opacity-50")}
+                  >
                     <FieldLabel field={field} isRequired={isRequired} />
-                    <Select
-                      value={String(fieldValue ?? "")}
-                      onValueChange={(value) => handleValueChange(field.id, value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={field.placeholder || "Select rating"} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {options.map((option) => (
-                          <SelectItem key={option} value={option}>
+                    <div className="flex gap-1">
+                      {options.map((option) => {
+                        const isSelected = String(fieldValue ?? "") === option
+                        return (
+                          <button
+                            key={option}
+                            type="button"
+                            aria-pressed={isSelected}
+                            className={cn(
+                              "flex-1 h-6 rounded-xl border text-sm font-semibold leading-tight text-white touch-manipulation select-none",
+                              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+                              isSelected
+                                ? "border-primary bg-primary/35 shadow-[0_0_0_1px_color-mix(in_oklab,var(--color-primary)_60%,transparent)]"
+                                : "border-border/70 bg-card hover:bg-muted/30"
+                            )}
+                            onClick={() => handleValueChange(field.id, isSelected ? "" : option)}
+                            disabled={isGrayedOut}
+                            style={{ WebkitTapHighlightColor: "transparent" }}
+                          >
                             {option}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                          </button>
+                        )
+                      })}
+                    </div>
                     {isGrayedOut ? (
                       <p className="text-xs text-muted-foreground">Mutual exclusion active: {activeFieldLabel}</p>
                     ) : null}
@@ -923,7 +1836,10 @@ export default function DynamicScoutFormPage() {
                       : "text"
 
               return (
-                <div key={field.id} className={cn("space-y-2", isGrayedOut && "opacity-50")}>
+                <div
+                  key={field.id}
+                  className={cn("space-y-1", isWideRatingField(field) && "col-span-2", isGrayedOut && "opacity-50")}
+                >
                   <FieldLabel field={field} isRequired={isRequired} />
                   <Input
                     type={inputType}
@@ -937,13 +1853,14 @@ export default function DynamicScoutFormPage() {
                   {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
                 </div>
               )
-            })}
+                })
+              })()}
             </CardContent>
           </Card>
         ))}
       </div>
 
-      <div className={cn("flex flex-wrap items-center gap-3", isPaged ? "justify-between" : "justify-end")}>
+      <div className={cn("flex flex-wrap items-center gap-2", isPaged ? "justify-between" : "justify-end")}>
         {isPaged ? (
           <Button
             variant={uiConfig.nav?.backVariant}
@@ -954,7 +1871,7 @@ export default function DynamicScoutFormPage() {
             {uiConfig.nav?.backLabel}
           </Button>
         ) : null}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           {isPaged && pageIndex < displayPageCount - 1 && !didNotShowActive ? (
             <Button
               variant={uiConfig.nav?.nextVariant}

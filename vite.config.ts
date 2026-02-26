@@ -71,9 +71,10 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? 'dev'),
   },
+  /* QE: different port so both versions can run simultaneously on the same host */
   server: {
     host: true, // same as "--host" flag
-    port: 4175,
+    port: 4176,
     strictPort: true,
     // Allow requests to the local hostname used on this network
     allowedHosts: ["atlas.local", "scouting.1676.team", "scouting.team1676.org"],
@@ -85,10 +86,12 @@ export default defineConfig({
         }
       : undefined,
   },
+  /* QE: preview also on a separate port */
   preview: {
     port: 4174,
     host: true,
     strictPort: true,
+    allowedHosts: ["atlas.local", "scouting.1676.team", "scouting.team1676.org"],
   },
   resolve: {
     alias: {

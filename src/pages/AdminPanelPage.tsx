@@ -339,7 +339,7 @@ export default function AdminPanelPage() {
               <TableBody>
                 {allianceRequests.map((req) => (
                   <TableRow key={req.email} className={req.assignedRole === "pending" ? "bg-muted/30" : undefined}>
-                    <TableCell className="font-medium">{req.firstName} {req.lastName}</TableCell>
+                    <TableCell className="font-medium">{`${req.firstName || ''} ${req.lastName || ''}`.trim() || req.email}</TableCell>
                     <TableCell>#{req.teamNumber}</TableCell>
                     <TableCell>{req.email}</TableCell>
                     <TableCell>

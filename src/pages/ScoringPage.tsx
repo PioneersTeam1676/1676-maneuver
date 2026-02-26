@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+/* QE: compact phase layout for better mobile fit and consistent spacing */
 import { useState, useEffect, type Key } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -198,14 +199,14 @@ const ScoringPage = ({ phase }: ScoringPageProps) => {
   const actionCount = scoringActions.length;
 
   return (
-    <div className="h-fit w-full flex flex-col items-center px-4 pt-6 pb-8 md:pb-6">
+    <div className="h-fit w-full flex flex-col items-center px-2 pt-2 pb-2 md:pb-4">
       <div className="w-full max-w-7xl">
-        <h1 className="text-2xl font-bold pb-4">{phaseTitle}</h1>
+        <h1 className="text-base font-semibold pb-1">{phaseTitle}</h1>
       </div>
-      <div className="flex flex-col-reverse lg:flex-row items-start gap-0 lg:gap-6 max-w-7xl w-full h-full min-h-0">
+      <div className="flex flex-col-reverse lg:flex-row items-start gap-0 lg:gap-3 max-w-7xl w-full h-full min-h-0">
         
         {/* Main Scoring Section */}
-        <div className="w-full lg:flex-1 space-y-4 min-h-0 overflow-y-auto">
+        <div className="w-full lg:flex-1 space-y-2 min-h-0 overflow-y-auto">
           
           {/* Reef Scoring Section with Coral Pickup */}
           <ReefScoringSection 
@@ -226,17 +227,17 @@ const ScoringPage = ({ phase }: ScoringPageProps) => {
           />
 
           {/* Action Buttons */}
-          <div className="flex lg:hidden gap-4 w-full">
+          <div className="flex lg:hidden gap-2 w-full">
             <Button
               variant="outline"
               onClick={handleBack}
-              className="flex-1 h-12 text-lg"
+              className="flex-1 h-7 px-2 text-xs"
             >
               Back
             </Button>
             <Button
               onClick={handleProceed}
-              className={`flex-2 h-12 text-lg font-semibold ${
+              className={`flex-2 h-7 px-2 text-xs font-semibold ${
                 phase === "auto" && showFlashing ? "animate-pulse" : ""
               }`}
               style={phase === "auto" && showFlashing ? {
@@ -252,22 +253,22 @@ const ScoringPage = ({ phase }: ScoringPageProps) => {
 
 
         {/* Info and Controls Sidebar */}
-        <div className="flex flex-col gap-4 w-full lg:w-80 pb-4 lg:pb-0 min-h-0">
+        <div className="flex flex-col gap-2 w-full lg:w-80 pb-2 lg:pb-0 min-h-0">
           
           {/* Match Info Card */}
           {states?.inputs && (
             <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center justify-between">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs flex items-center justify-between">
                   {phaseTitle}
                   {phase === "auto" && showFlashing && (
-                    <Badge variant="destructive" className="animate-pulse">
+                    <Badge variant="destructive" className="animate-pulse text-[10px]">
                       Ending Soon!
                     </Badge>
                   )}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2">
+              <CardContent className="space-y-1 text-xs">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Match:</span>
                   <span className="font-medium">{states.inputs.matchNumber}</span>
@@ -285,20 +286,20 @@ const ScoringPage = ({ phase }: ScoringPageProps) => {
           )}
 
           {/* Recent Actions */}
-          <Card className="h-64">
-            <CardHeader>
-              <CardTitle className="text-lg">Recent Actions</CardTitle>
+          <Card className="h-48">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs">Recent Actions</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2 h-40 overflow-y-auto pb-2">
+              <div className="space-y-1 h-28 overflow-y-auto pb-1">
                 {scoringActions.slice(-8).reverse().map((action: { type: string; pieceType: any; location: any; level: string; timestamp: string | number | Date; }, index: Key | null | undefined) => (
-                  <div key={index} className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">
+                  <div key={index} className="flex items-center justify-between gap-1 text-xs">
+                    <span className="text-muted-foreground leading-tight">
                       {action.type === "passed_start_line" ? "Passed Start Line" :
                        action.type === "defense" ? "Played Defense" :
                        `${action.type} ${action.pieceType || ''} - ${action.location}${action.level ? ` (${action.level.toUpperCase()})` : ''}`}
                     </span>
-                    <Badge variant="outline" className="text-xs">
+                    <Badge variant="outline" className="text-[10px]">
                       {new Date(action.timestamp).toLocaleTimeString([], { 
                         minute: '2-digit', 
                         second: '2-digit' 
@@ -307,7 +308,7 @@ const ScoringPage = ({ phase }: ScoringPageProps) => {
                   </div>
                 ))}
                 {scoringActions.length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-2">
+                  <p className="text-xs text-muted-foreground text-center py-1">
                     No actions recorded yet
                   </p>
                 )}
@@ -318,15 +319,15 @@ const ScoringPage = ({ phase }: ScoringPageProps) => {
           {/* Toggle Actions Card - Only show if there are actions to toggle */}
           {(phase === "auto" || phase === "teleop") && (
             <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Robot Status</CardTitle>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs">Robot Status</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2">
+              <CardContent className="space-y-1">
                 {phase === "auto" && (
                   <Button
                     variant={passedStartLine ? "default" : "outline"}
                     onClick={() => handleToggleAction("passed_start_line")}
-                    className="w-full h-10"
+                    className="w-full h-7 text-xs"
                     style={passedStartLine ? {
                       backgroundColor: '#16a34a',
                       color: 'white'
@@ -339,7 +340,7 @@ const ScoringPage = ({ phase }: ScoringPageProps) => {
                   <Button
                     variant={playedDefense ? "default" : "outline"}
                     onClick={() => handleToggleAction("defense")}
-                    className="w-full h-10"
+                    className="w-full h-7 text-xs"
                     style={playedDefense ? {
                       backgroundColor: '#3b82f6',
                       color: 'white'
@@ -357,23 +358,23 @@ const ScoringPage = ({ phase }: ScoringPageProps) => {
             variant="outline"
             onClick={undoLastAction}
             disabled={scoringActions.length === 0}
-            className="w-full"
+            className="w-full h-7 text-xs"
           >
             Undo Last Action
           </Button>
 
           {/* Action Buttons */}
-          <div className="hidden lg:flex gap-4 w-full">
+          <div className="hidden lg:flex gap-2 w-full">
             <Button
               variant="outline"
               onClick={handleBack}
-              className="flex-1 h-12 text-lg"
+              className="flex-1 h-7 px-2 text-xs"
             >
               Back
             </Button>
             <Button
               onClick={handleProceed}
-              className={`flex-2 h-12 text-lg font-semibold ${
+              className={`flex-2 h-7 px-2 text-xs font-semibold ${
                 phase === "auto" && showFlashing ? "animate-pulse" : ""
               }`}
               style={phase === "auto" && showFlashing ? {
@@ -382,7 +383,7 @@ const ScoringPage = ({ phase }: ScoringPageProps) => {
               } : undefined}
             >
               {phase === "auto" ? "Continue to Teleop" : "Continue to Endgame"}
-              <ArrowRight className="ml-0.5" />
+              <ArrowRight className="ml-0.5 h-3.5 w-3.5" />
             </Button>
           </div>
         </div>

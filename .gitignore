@@ -71,3 +71,6 @@ ecosystem.config.js
 # Test coverage
 coverage/
 .nyc_output/
+
+# Hardcoded form data
+src/data/hardcodedMatchForm.json

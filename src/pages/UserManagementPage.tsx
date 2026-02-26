@@ -476,8 +476,8 @@ export default function UserManagementPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-medium truncate">
-                            {user.displayName || user.firstName && user.lastName 
-                              ? `${user.firstName} ${user.lastName}`.trim() 
+                            {user.displayName || (user.firstName || user.lastName)
+                              ? (user.displayName || `${user.firstName || ''} ${user.lastName || ''}`.trim())
                               : user.email}
                           </p>
                           {isSelf && (

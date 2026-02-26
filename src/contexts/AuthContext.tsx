@@ -16,6 +16,7 @@ type AllianceProfile = {
   email: string
   firstName: string
   lastName: string
+  displayName?: string
   teamNumber: string
   confirmedAlliance: boolean
   submittedAt: string
@@ -395,6 +396,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             email: normalized,
             firstName: typedProfile.firstName?.trim() || '',
             lastName: typedProfile.lastName?.trim() || '',
+            displayName: typedProfile.displayName?.trim() || undefined,
             teamNumber: typedProfile.teamNumber?.toString() || '',
             confirmedAlliance: Boolean(typedProfile.confirmedAlliance),
             submittedAt: typedProfile.submittedAt || new Date().toISOString(),
@@ -1003,6 +1005,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       email: normalized,
       firstName,
       lastName,
+      displayName: `${firstName} ${lastName}`.trim() || undefined,
       teamNumber,
       confirmedAlliance: true,
       submittedAt: timestamp,

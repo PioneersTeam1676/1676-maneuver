@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+/* QE: compact coral section for better mobile fit */
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -75,20 +76,20 @@ const ReefScoringSection = ({
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">Coral</CardTitle>
+          <CardTitle className="text-xs">Coral</CardTitle>
           <div className="flex items-center gap-2">
-            <Badge variant="secondary">
+            <Badge variant="secondary" className="text-[10px]">
               {currentCoral}/1 Coral Held
             </Badge>
             {currentCoral === 0 && (
-              <Badge variant="outline" className="text-amber-600">
+              <Badge variant="outline" className="text-[10px] text-amber-600">
                 Pick up coral first
               </Badge>
             )}
             {currentCoral >= 1 && (
-              <Badge variant="outline" className="text-green-600">
+              <Badge variant="outline" className="text-[10px] text-green-600">
                 Ready to score
               </Badge>
             )}
@@ -96,20 +97,20 @@ const ReefScoringSection = ({
         </div>
         
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-2">
         {/* Main Scoring Interface - Side by Side Layout */}
-        <div className="flex gap-4 h-80">
+        <div className="flex gap-2 h-52">
           {/* Coral Pickup Section - Left Side */}
-          <div className="flex flex-col gap-2 w-32 lg:w-40">
+          <div className="flex flex-col gap-1 w-20 lg:w-24">
             <div className="flex flex-col gap-2 flex-1">
               {coralPickupLocations.map((pickup) => (
                 <Button
                   key={pickup.location}
                   onClick={() => handleCoralPickup(pickup.location)}
                   variant={currentCoral > 0 && lastCoralPickupLocation === pickup.location ? "default" : "outline"}
-                  className={`h-12 text-xs lg:text-sm font-medium flex-1 ${
+                  className={`h-8 text-xs lg:text-sm font-medium flex-1 ${
                     currentCoral > 0 && lastCoralPickupLocation === pickup.location ? 'bg-primary text-primary-foreground' : ''
-                  }`}
+                  } h-6 px-1 py-1 text-[10px] leading-tight lg:text-xs`}
                 >
                   {pickup.label}
                 </Button>
@@ -127,7 +128,7 @@ const ReefScoringSection = ({
             }}
           >
             {/* Overlay buttons for each level - equal height distribution */}
-            <div className="absolute inset-0 flex flex-col p-1">
+            <div className="absolute inset-0 flex flex-col p-0.5">
               {reefLevels.map((reef, index) => (
                 <Button
                   key={reef.level}
@@ -135,8 +136,8 @@ const ReefScoringSection = ({
                   disabled={currentCoral <= 0}
                   variant={reef.level === "miss" ? "destructive" : "default"}
                   className={`
-                    flex-1 font-bold text-lg shadow-lg rounded-md
-                    ${index < reefLevels.length - 1 ? 'mb-1' : ''}
+                    flex-1 font-bold text-xs shadow-lg rounded-sm
+                    ${index < reefLevels.length - 1 ? 'mb-0.5' : ''}
                     ${currentCoral <= 0 ? 'cursor-not-allowed opacity-100' : 'opacity-95 hover:opacity-100'}
                     ${reef.level === "miss" 
                       ? 'bg-red-600 hover:bg-red-700 text-white border-2 border-red-800 opacity-100' 

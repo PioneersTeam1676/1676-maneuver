@@ -18,6 +18,7 @@ import { saveDriveTeamEntry } from "@/lib/driveTeamUtils";
 import { cn } from "@/lib/utils";
 import { coercePages, flattenFields, getPageFields, normalizeUiConfig } from "@/lib/formSchema";
 import type { FormDefinition, FormField, FormFloatingImage } from "@/types/formBuilder";
+import { useAuth } from "@/contexts/AuthContext";
 
 const normalizeKey = (value: string) =>
   value
@@ -96,11 +97,10 @@ const buildInitialValues = (form: FormDefinition): Record<string, unknown> => {
 
 type BaseErrors = {
   teamNumber?: string;
-  matchNumber?: string;
-  scoutName?: string;
 };
 
 const DriveTeamScoutingPage = () => {
+  const { user } = useAuth();
   const [activeFormId, setActiveFormIdState] = useState(() => getActiveFormId("drive"));
   const [form, setForm] = useState<FormDefinition | null>(null);
   const [values, setValues] = useState<Record<string, unknown>>({});
@@ -111,13 +111,14 @@ const DriveTeamScoutingPage = () => {
   const [pageIndex, setPageIndex] = useState(0);
 
   const [teamNumber, setTeamNumber] = useState("");
-  const [matchNumber, setMatchNumber] = useState("");
-  const [scoutName, setScoutName] = useState("");
-
-  useEffect(() => {
-    const savedScoutName = localStorage.getItem("currentScout") || localStorage.getItem("scoutName") || "";
-    setScoutName(savedScoutName);
-  }, []);
+  const scoutNameFromAccount = useMemo(() => {
+    const accountName = user?.name?.trim();
+    if (accountName) return accountName;
+    const accountEmail = user?.email?.trim();
+    if (accountEmail) return accountEmail;
+    const fallback = localStorage.getItem("currentScout") || localStorage.getItem("scoutName") || "";
+    return fallback.trim() || "Unknown Scout";
+  }, [user]);
 
   useEffect(() => {
     let cancelled = false;
@@ -302,8 +303,7 @@ const DriveTeamScoutingPage = () => {
 
     return {
       teamNumber: teamNumber.trim(),
-      matchNumber: Number(matchNumber.trim()),
-      scoutName: scoutName.trim(),
+      scoutName: scoutNameFromAccount,
       formId: currentForm.id,
       formName: currentForm.name,
       formYear: currentForm.year,
@@ -359,8 +359,6 @@ const DriveTeamScoutingPage = () => {
 
     const nextBaseErrors: BaseErrors = {};
     if (!teamNumber.trim()) nextBaseErrors.teamNumber = "Required";
-    if (!matchNumber.trim()) nextBaseErrors.matchNumber = "Required";
-    if (!scoutName.trim()) nextBaseErrors.scoutName = "Required";
 
     if (Object.keys(nextBaseErrors).length > 0) {
       setBaseErrors(nextBaseErrors);
@@ -391,8 +389,6 @@ const DriveTeamScoutingPage = () => {
       setBaseErrors({});
       setPageIndex(0);
       setTeamNumber("");
-      // Don't clear match number or scout name as they might be sequential/same
-      setMatchNumber((prev) => String(Number(prev) + 1));
     } catch (error) {
       console.error("Failed to save drive team entry", error);
       toast.error("Failed to save drive team entry.");
@@ -509,28 +505,11 @@ const DriveTeamScoutingPage = () => {
             )}
           >
             <CardHeader className={cn("space-y-2", uiConfig.sectionHeaderClassName)}>
-              <CardTitle className="text-xl">Match Info</CardTitle>
-              <CardDescription>Enter the match and team details.</CardDescription>
+              <CardTitle className="text-xl">Team Info</CardTitle>
+              <CardDescription>Enter the team being scouted.</CardDescription>
             </CardHeader>
             <CardContent className={cn(uiConfig.fieldSpacingClass)}>
-              <div className="grid gap-4 md:grid-cols-3">
-                <div className="space-y-2">
-                  <Label>Match Number *</Label>
-                  <Input
-                    type="number"
-                    value={matchNumber}
-                    onChange={(event) => {
-                      setMatchNumber(event.target.value);
-                      if (baseErrors.matchNumber) {
-                        setBaseErrors((prev) => ({ ...prev, matchNumber: undefined }));
-                      }
-                    }}
-                    placeholder="e.g. 1"
-                  />
-                  {baseErrors.matchNumber ? (
-                    <p className="text-xs text-destructive">{baseErrors.matchNumber}</p>
-                  ) : null}
-                </div>
+              <div className="grid gap-4">
                 <div className="space-y-2">
                   <Label>Team Number *</Label>
                   <Input
@@ -547,23 +526,8 @@ const DriveTeamScoutingPage = () => {
                     <p className="text-xs text-destructive">{baseErrors.teamNumber}</p>
                   ) : null}
                 </div>
-                <div className="space-y-2">
-                  <Label>Scout Name *</Label>
-                  <Input
-                    value={scoutName}
-                    onChange={(event) => {
-                      setScoutName(event.target.value);
-                      if (baseErrors.scoutName) {
-                        setBaseErrors((prev) => ({ ...prev, scoutName: undefined }));
-                      }
-                    }}
-                    placeholder="Your name"
-                  />
-                  {baseErrors.scoutName ? (
-                    <p className="text-xs text-destructive">{baseErrors.scoutName}</p>
-                  ) : null}
-                </div>
               </div>
+              <p className="text-sm text-muted-foreground">Scout: {scoutNameFromAccount}</p>
             </CardContent>
           </Card>
         ) : null}
@@ -632,7 +596,7 @@ const DriveTeamScoutingPage = () => {
                         <Button
                           variant="ghost"
                           type="button"
-                          className="h-7 px-2 text-xs"
+                          className="h-7 px-2 text-sm"
                           onClick={() => handleValueChange(field.id, "")}
                           disabled={isGrayedOut}
                         >

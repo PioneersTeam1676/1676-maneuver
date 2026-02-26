@@ -1,6 +1,18 @@
 import { apiDelete, apiGet, apiPost, apiPut, ApiError } from "@/lib/apiClient"
 import type { FormDbConfig, FormDefinition, FormField, FormSummary } from "@/types/formBuilder"
 
+let hardcodedMatchForm: FormDefinition | null = null
+const loadHardcodedForm = async (): Promise<FormDefinition | null> => {
+  if (hardcodedMatchForm) return hardcodedMatchForm
+  try {
+    const mod = await import("@/data/hardcodedMatchForm.json")
+    hardcodedMatchForm = mod.default as unknown as FormDefinition
+    return hardcodedMatchForm
+  } catch {
+    return null
+  }
+}
+
 type FormsListResponse = {
   forms: FormSummary[]
 }
@@ -191,6 +203,10 @@ export const listForms = async (year?: string): Promise<FormSummary[]> => {
 }
 
 export const getForm = async (id: string): Promise<FormDefinition> => {
+  // Always serve the hardcoded form when its ID is requested
+  const hardcoded = await loadHardcodedForm()
+  if (hardcoded && hardcoded.id === id) return hardcoded
+
   try {
     const resp = await apiGet<FormResponse>(`/forms/${encodeURIComponent(id)}`)
     upsertLocalForm(resp.form)
@@ -198,8 +214,8 @@ export const getForm = async (id: string): Promise<FormDefinition> => {
   } catch (error) {
     if (!shouldFallback(error)) throw error
     const local = readLocalForms().find((form) => form.id === id)
-    if (!local) throw error
-    return local
+    if (local) return local
+    throw error
   }
 }
 

@@ -3,7 +3,7 @@ import { toast } from "sonner";
 export interface DriveTeamEntry {
   id: string;
   teamNumber: string;
-  matchNumber: number;
+  matchNumber?: number;
   scoutName: string;
   formId: string;
   formName: string;
@@ -13,7 +13,6 @@ export interface DriveTeamEntry {
 
 type DriveTeamEntryInput = {
   teamNumber: string;
-  matchNumber: number;
   scoutName: string;
   formId: string;
   formName: string;

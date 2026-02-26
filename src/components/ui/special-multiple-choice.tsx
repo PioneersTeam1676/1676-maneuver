@@ -33,7 +33,7 @@ export function SpecialMultipleChoice({
   if (multiSelect) {
     const selected = values ?? []
     return (
-      <div role="group" aria-label={ariaLabel} className="space-y-3">
+      <div role="group" aria-label={ariaLabel} className="space-y-1">
         {parsedOptions.map((option, index) => {
           const isSelected = selected.includes(option.value)
           return (
@@ -49,7 +49,7 @@ export function SpecialMultipleChoice({
               }}
               disabled={disabled}
               className={cn(
-                "w-full rounded-xl border px-4 py-4 text-center transition-all sm:px-5 sm:py-5",
+                "w-full rounded-md border px-2 py-1.5 text-center text-white transition-all touch-manipulation select-none",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
                 "disabled:cursor-not-allowed disabled:opacity-60",
                 isSelected
@@ -57,9 +57,9 @@ export function SpecialMultipleChoice({
                   : "bg-card border-border/70 hover:border-border hover:bg-muted/30"
               )}
             >
-              <p className="text-balance text-lg font-semibold leading-tight sm:text-xl">{option.title}</p>
+              <p className="text-balance text-sm font-semibold leading-tight">{option.title}</p>
               {option.description ? (
-                <p className="mt-1.5 text-balance text-[11px] text-muted-foreground sm:text-xs">{option.description}</p>
+                <p className="mt-1 text-balance text-[10px] text-white/70">{option.description}</p>
               ) : null}
             </button>
           )
@@ -69,8 +69,8 @@ export function SpecialMultipleChoice({
   }
 
   return (
-    <div className="space-y-2">
-      <div role="radiogroup" aria-label={ariaLabel} className="space-y-3">
+    <div className="space-y-1">
+      <div role="radiogroup" aria-label={ariaLabel} className="space-y-1">
         {parsedOptions.map((option, index) => {
           const isSelected = value === option.value
 
@@ -83,7 +83,7 @@ export function SpecialMultipleChoice({
               onClick={() => onValueChange(isSelected && allowDeselect ? "" : option.value)}
               disabled={disabled}
               className={cn(
-                "w-full rounded-xl border px-4 py-4 text-center transition-all sm:px-5 sm:py-5",
+                "w-full rounded-md border px-2 py-1.5 text-center text-white transition-all touch-manipulation select-none",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
                 "disabled:cursor-not-allowed disabled:opacity-60",
                 isSelected
@@ -91,9 +91,9 @@ export function SpecialMultipleChoice({
                   : "bg-card border-border/70 hover:border-border hover:bg-muted/30"
               )}
             >
-              <p className="text-balance text-lg font-semibold leading-tight sm:text-xl">{option.title}</p>
+              <p className="text-balance text-sm font-semibold leading-tight">{option.title}</p>
               {option.description ? (
-                <p className="mt-1.5 text-balance text-[11px] text-muted-foreground sm:text-xs">{option.description}</p>
+                <p className="mt-1 text-balance text-[10px] text-white/70">{option.description}</p>
               ) : null}
             </button>
           )

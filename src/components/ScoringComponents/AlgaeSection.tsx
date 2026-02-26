@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+/* QE: compact algae section for better mobile fit */
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -69,40 +70,40 @@ const AlgaeSection = ({ onAlgaeAction, phase, showFlashing, currentAlgae, lastAl
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">Algae</CardTitle>
+          <CardTitle className="text-xs">Algae</CardTitle>
           <div className="flex items-center gap-2">
-            <Badge variant="outline">
+            <Badge variant="outline" className="text-[10px]">
             {currentAlgae}/1 Algae Held
           </Badge>
           {currentAlgae === 0 && (
-            <Badge variant="outline" className="text-amber-600">
+            <Badge variant="outline" className="text-[10px] text-amber-600">
               Pick up algae first
             </Badge>
           )}
           {currentAlgae >= 1 && (
-            <Badge variant="outline" className="text-green-600">
+            <Badge variant="outline" className="text-[10px] text-green-600">
               Ready to score
             </Badge>
           )}
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-2">
         {/* Main Algae Interface - Side by Side Layout */}
-        <div className="flex gap-4 h-80">
+        <div className="flex gap-2 h-52">
           {/* Algae Pickup Section - Left Side */}
-          <div className="flex flex-col gap-2 w-32 lg:w-40">
+          <div className="flex flex-col gap-1 w-20 lg:w-24">
             <div className="flex flex-col gap-2 flex-1">
               {algaeActions.pickup.map((action) => (
                 <Button
                   key={action.action}
                   onClick={() => handleAlgaeAction(action.type, action.action)}
                   variant={currentAlgae > 0 && lastAlgaePickupLocation === action.action ? "default" : "outline"}
-                  className={`h-12 text-xs lg:text-sm font-medium flex-1 ${
+                  className={`h-8 text-xs lg:text-sm font-medium flex-1 ${
                     currentAlgae > 0 && lastAlgaePickupLocation === action.action ? 'bg-primary text-primary-foreground' : ''
-                  }`}
+                  } h-6 px-1 py-1 text-[10px] leading-tight lg:text-xs`}
                 >
                   {action.label}
                 </Button>
@@ -119,9 +120,9 @@ const AlgaeSection = ({ onAlgaeAction, phase, showFlashing, currentAlgae, lastAl
                   onClick={() => handleAlgaeAction(action.type, action.action)}
                   variant={action.action === "miss" ? "destructive" : "outline"}
                   disabled={(action.type === "score" || action.type === "action") && currentAlgae <= 0}
-                  className={`h-16 text-sm font-medium flex-1 ${
+                  className={`h-10 text-xs font-medium flex-1 ${
                     phase === "auto" && showFlashing ? 'animate-pulse' : ''
-                  } ${(action.type === "score" || action.type === "action") && currentAlgae <= 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  } ${(action.type === "score" || action.type === "action") && currentAlgae <= 0 ? 'opacity-50 cursor-not-allowed' : ''} h-8 text-[11px]`}
                 >
                   {action.label}
                 </Button>
