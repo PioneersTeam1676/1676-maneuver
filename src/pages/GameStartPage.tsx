@@ -8,10 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import GameStartSelectTeam from "@/components/GameStartComponents/GameStartSelectTeam";
 import { EventNameSelector } from "@/components/GameStartComponents/EventNameSelector";
-import { createMatchPrediction, getPredictionForMatch } from "@/lib/scoutGameUtils";
+// import { createMatchPrediction, getPredictionForMatch } from "@/lib/scoutGameUtils";
 import { AlertTriangle } from "lucide-react";
 import { fetchQualificationSchedule, resolveTbaApiKey, MATCH_DATA_UPDATED_EVENT } from "@/lib/tbaUtils";
-import { ACTIVE_FORM_UPDATED_EVENT, getActiveFormId, syncActiveFormConfig } from "@/lib/activeForm";
+// import { ACTIVE_FORM_UPDATED_EVENT, getActiveFormId, syncActiveFormConfig } from "@/lib/activeForm";
 
 const GameStartPage = () => {
   const location = useLocation();
@@ -56,7 +56,7 @@ const GameStartPage = () => {
   const [eventName, setEventName] = useState(
     states?.inputs?.eventName || localStorage.getItem("eventName") || ""
   );
-  const [predictedWinner, setPredictedWinner] = useState<"red" | "blue" | "none">("none");
+  // const [predictedWinner, setPredictedWinner] = useState<"red" | "blue" | "none">("none");
   const [autoSyncingMatchData, setAutoSyncingMatchData] = useState(false);
   const lastAutoFetchRef = useRef<{ event: string; timestamp: number } | null>(null);
   const [matchDataVersion, setMatchDataVersion] = useState(() => {
@@ -67,24 +67,6 @@ const GameStartPage = () => {
       return "";
     }
   });
-  const [activeFormId, setActiveFormIdState] = useState(() => getActiveFormId("match"));
-
-  useEffect(() => {
-    let cancelled = false;
-    syncActiveFormConfig()
-      .then((config) => {
-        if (!cancelled) {
-          setActiveFormIdState(config.match || "");
-        }
-      })
-      .catch((error) => {
-        console.warn("Failed to sync active form config", error);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   // Debounce matchNumber for team selection
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -208,7 +190,7 @@ const GameStartPage = () => {
     };
   }, [eventName, debouncedMatchNumber, autoSyncingMatchData]);
 
-  // Effect to load existing prediction when match/event changes
+  /* Predictions commented out for now
   useEffect(() => {
     const loadExistingPrediction = async () => {
       const currentScout = getCurrentScout();
@@ -240,10 +222,9 @@ const GameStartPage = () => {
     localStorage.setItem('predictionWager', String(wager))
   }, [wager])
 
-  // Function to handle prediction changes and save them immediately
   const handlePredictionChange = async (newPrediction: "red" | "blue" | "none") => {
     setPredictedWinner(newPrediction);
-    
+
     const currentScout = getCurrentScout();
     if (newPrediction !== "none" && currentScout && eventName && matchNumber) {
       try {
@@ -255,6 +236,7 @@ const GameStartPage = () => {
       }
     }
   };
+  */
 
   const getCurrentScout = () => {
     return (
@@ -297,7 +279,7 @@ const GameStartPage = () => {
 
     const currentScout = getCurrentScout();
 
-    // Save prediction if one was made
+    /* Predictions commented out for now
     if (predictedWinner !== "none" && currentScout && eventName && matchNumber) {
       try {
   await createMatchPrediction(currentScout, eventName, matchNumber, predictedWinner, wager);
@@ -307,6 +289,7 @@ const GameStartPage = () => {
         toast.error("Failed to save prediction");
       }
     }
+    */
 
     // Save inputs to localStorage (similar to ProceedBackButton logic)
     localStorage.setItem("matchNumber", matchNumber);
@@ -316,7 +299,7 @@ const GameStartPage = () => {
     localStorage.setItem("autoStateStack", JSON.stringify([]));
     localStorage.setItem("teleopStateStack", JSON.stringify([]));
 
-    const nextRoute = activeFormId ? "/scout-form" : "/auto-start";
+    const nextRoute = "/scout-form";
     navigate(nextRoute, {
       state: {
         inputs: {
@@ -346,16 +329,6 @@ const GameStartPage = () => {
     }, 500);
     return () => clearTimeout(timeout);
   }, [matchNumber]);
-
-  useEffect(() => {
-    const handleActiveFormUpdate = () => {
-      setActiveFormIdState(getActiveFormId("match"));
-    };
-    window.addEventListener(ACTIVE_FORM_UPDATED_EVENT, handleActiveFormUpdate);
-    return () => {
-      window.removeEventListener(ACTIVE_FORM_UPDATED_EVENT, handleActiveFormUpdate);
-    };
-  }, []);
 
   const currentScout = getCurrentScout();
 
@@ -458,7 +431,7 @@ const GameStartPage = () => {
               </div>
             </div>
 
-            {/* Alliance Prediction Selection */}
+            {/* Alliance Prediction Selection - commented out for now
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label>Alliance Prediction (Optional)</Label>
@@ -471,8 +444,8 @@ const GameStartPage = () => {
                   variant={predictedWinner === "red" ? "default" : "outline"}
                   onClick={() => handlePredictionChange("red")}
                   className={`h-10 text-sm font-medium ${
-                    predictedWinner === "red" 
-                      ? "bg-red-500 hover:bg-red-600 text-white" 
+                    predictedWinner === "red"
+                      ? "bg-red-500 hover:bg-red-600 text-white"
                       : "hover:bg-red-50 hover:text-red-600 hover:border-red-300"
                   }`}
                 >
@@ -482,8 +455,8 @@ const GameStartPage = () => {
                   variant={predictedWinner === "blue" ? "default" : "outline"}
                   onClick={() => handlePredictionChange("blue")}
                   className={`h-10 text-sm font-medium ${
-                    predictedWinner === "blue" 
-                      ? "bg-blue-500 hover:bg-blue-600 text-white" 
+                    predictedWinner === "blue"
+                      ? "bg-blue-500 hover:bg-blue-600 text-white"
                       : "hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300"
                   }`}
                 >
@@ -530,6 +503,7 @@ const GameStartPage = () => {
                 </div>
               )}
             </div>
+            */}
 
             {/* Team Selection */}
             <div className="space-y-2">
@@ -561,7 +535,7 @@ const GameStartPage = () => {
             className="flex-2 h-12 text-lg font-semibold"
             disabled={!matchNumber || !alliance || !selectTeam || !currentScout || !eventName}
           >
-            {activeFormId ? "Start Scouting (Dynamic)" : "Start Scouting"}
+            Start Scouting
           </Button>
         </div>
 

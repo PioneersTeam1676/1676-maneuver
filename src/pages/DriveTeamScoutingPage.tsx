@@ -755,6 +755,9 @@ const DriveTeamScoutingPage = () => {
                           value={numericValue}
                           onChange={(event) => handleValueChange(field.id, event.target.value)}
                           className="w-full"
+                          style={{ touchAction: "none" }}
+                          onTouchStart={(e) => e.stopPropagation()}
+                          onTouchMove={(e) => e.stopPropagation()}
                         />
                         <span className="text-sm font-medium w-10 text-right">{numericValue}</span>
                       </div>

@@ -1,5 +1,5 @@
 import * as React from "react"
-import { BarChart3, ClipboardList, Settings, Users2, UserCog, Activity, ClipboardSignature } from "lucide-react"
+import { BarChart3, ClipboardList, Settings, Users2, UserCog, Activity } from "lucide-react"
 
 // import { NavDocuments } from "@/components/DashboardComponents/nav-documents"
 import { NavMain } from "@/components/DashboardComponents/nav-main"
@@ -128,12 +128,6 @@ const data = {
       icon: Settings,
       minRole: "lead" as UserRole,
       items: [
-        {
-          title: "Form Maker",
-          url: "/form-maker",
-          icon: ClipboardSignature,
-          minRole: "lead" as UserRole,
-        },
         {
           title: "Data Management",
           url: "/data-management",

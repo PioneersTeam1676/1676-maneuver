@@ -2,6 +2,7 @@ const express = require("express")
 const router = express.Router()
 const { prisma } = require("../db")
 const asyncHandler = require("../utils/asyncHandler")
+const { sendManualNotification } = require("../services/scheduleNotifications")
 
 const MAX_RECENT_USERS = 200
 
@@ -72,6 +73,30 @@ router.put(
           photoUrl: trimmedPhoto || null,
         }
       })
+
+      // Notify admins of new unacknowledged users
+      if (!ackValue) {
+        try {
+          const adminRoles = await prisma.role.findMany({
+            where: { role: { in: ["lead", "tech_lead"] } },
+          })
+          const label = trimmedName || normalizedEmail
+          await Promise.allSettled(
+            adminRoles.map((r) =>
+              sendManualNotification({
+                email: r.email,
+                title: "New Account Request",
+                body: `${label} is requesting access`,
+                url: "/verification-center",
+                tag: `new-user-${normalizedEmail}`,
+              })
+            )
+          )
+        } catch (pushError) {
+          console.warn("Failed to notify admins of new user:", pushError.message)
+        }
+      }
+
       return res.json({ recentUser: mapRowToRecord(created) })
     }
 

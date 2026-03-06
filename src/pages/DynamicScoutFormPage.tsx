@@ -13,8 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { SpecialMultipleChoice } from "@/components/ui/special-multiple-choice"
 
-import { getForm } from "@/lib/formBuilderApi"
-import { ACTIVE_FORM_UPDATED_EVENT, getActiveFormId, syncActiveFormConfig } from "@/lib/activeForm"
+import hardcodedMatchFormData from "@/data/hardcodedMatchForm.json"
 import { addIdsToScoutingData } from "@/lib/scoutingDataUtils"
 import { saveScoutingEntry } from "@/lib/dexieDB"
 import { splitSpecialChoiceOption } from "@/lib/specialChoiceOptions"
@@ -461,6 +460,36 @@ const normalizeFloatingImage = (image: FormFloatingImage): FormFloatingImage => 
   showOnMobile: image.showOnMobile !== false,
 })
 
+const HARDCODED_MATCH_FORM = (() => {
+  const raw = hardcodedMatchFormData as unknown as FormDefinition
+  const pages = normalizeStratDefenseLabels(
+    mergeStratRolesForPages(
+      normalizePagesOptionLabels(
+        coercePages(raw.schema)
+      )
+    )
+  )
+  return {
+    ...raw,
+    schema: {
+      ...raw.schema,
+      pages,
+    },
+  }
+})()
+
+const buildInitialMatchValues = () => {
+  const nextValues: Record<string, unknown> = {}
+  HARDCODED_MATCH_FORM.schema.pages.forEach((page) => {
+    page.sections.forEach((section) => {
+      section.fields.forEach((field) => {
+        nextValues[field.id] = getInitialValue(field)
+      })
+    })
+  })
+  return nextValues
+}
+
 const toggleOptionValue = (current: unknown, option: string) => {
   const selected = Array.isArray(current) ? current.filter((value): value is string => typeof value === "string") : []
   return selected.includes(option)
@@ -473,12 +502,10 @@ export default function DynamicScoutFormPage() {
   const location = useLocation()
   const state = location.state as LocationState | null
   const inputs = state?.inputs
-  const [activeFormId, setActiveFormIdState] = useState(() => getActiveFormId("match"))
-
-  const [form, setForm] = useState<FormDefinition | null>(null)
-  const [values, setValues] = useState<Record<string, unknown>>({})
+  const form = HARDCODED_MATCH_FORM
+  const [values, setValues] = useState<Record<string, unknown>>(buildInitialMatchValues)
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [loading, setLoading] = useState(true)
+  const [loading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [pageIndex, setPageIndex] = useState(0)
 
@@ -488,69 +515,6 @@ export default function DynamicScoutFormPage() {
       return
     }
   }, [inputs, navigate])
-
-  useEffect(() => {
-    let cancelled = false
-    syncActiveFormConfig()
-      .then((config) => {
-        if (!cancelled) {
-          setActiveFormIdState(config.match || "")
-        }
-      })
-      .catch((error) => {
-        console.warn("Failed to sync active form config", error)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  useEffect(() => {
-    const handleActiveUpdate = () => {
-      setActiveFormIdState(getActiveFormId("match"))
-    }
-    window.addEventListener(ACTIVE_FORM_UPDATED_EVENT, handleActiveUpdate)
-    return () => {
-      window.removeEventListener(ACTIVE_FORM_UPDATED_EVENT, handleActiveUpdate)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!activeFormId) {
-      toast.error("No active scout form is set.")
-      navigate("/game-start", { replace: true })
-      return
-    }
-
-    setLoading(true)
-    getForm(activeFormId)
-      .then((data) => {
-        const pages = normalizeStratDefenseLabels(mergeStratRolesForPages(normalizePagesOptionLabels(coercePages(data.schema))))
-        setForm({
-          ...data,
-          schema: {
-            ...data.schema,
-            pages,
-          },
-        })
-        const nextValues: Record<string, unknown> = {}
-        pages.forEach((page) => {
-          page.sections.forEach((section) => {
-            section.fields.forEach((field) => {
-              nextValues[field.id] = getInitialValue(field)
-            })
-          })
-        })
-        setValues(nextValues)
-        setPageIndex(0)
-      })
-      .catch((error) => {
-        console.error("Failed to load scout form", error)
-        toast.error("Could not load the active scout form.")
-        navigate("/game-start", { replace: true })
-      })
-      .finally(() => setLoading(false))
-  }, [activeFormId, navigate])
 
   const pages = useMemo(() => coercePages(form?.schema), [form])
   const uiConfig = useMemo(() => normalizeUiConfig(form?.schema?.ui), [form])
@@ -1774,6 +1738,9 @@ export default function DynamicScoutFormPage() {
                         value={numericValue}
                         onChange={(event) => handleValueChange(field.id, event.target.value)}
                         className="w-full"
+                        style={{ touchAction: "none" }}
+                        onTouchStart={(e) => e.stopPropagation()}
+                        onTouchMove={(e) => e.stopPropagation()}
                       />
                       <div className="text-right text-xs font-medium">{numericValue}</div>
                     </div>

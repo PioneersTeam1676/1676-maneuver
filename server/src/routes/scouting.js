@@ -742,8 +742,12 @@ const sanitizeTsvCell = (value) =>
 
 const sanitizeCsvCell = (value) => {
   const normalized = String(value ?? "").replace(/\r?\n/g, " ")
-  const escaped = normalized.replace(/"/g, '""')
-  return `"${escaped}"`
+  // Only quote cells that contain commas, quotes, or formula-trigger characters
+  if (/[,"\r\n]/.test(normalized) || /^[=+\-@]/.test(normalized)) {
+    const escaped = normalized.replace(/"/g, '""')
+    return `"${escaped}"`
+  }
+  return normalized
 }
 
 const toRebuiltTsv = (rows) => {
