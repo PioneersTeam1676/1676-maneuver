@@ -282,7 +282,8 @@ const DriveTeamScoutingPage = () => {
 
     flattenFields(currentForm.schema).forEach((field) => {
       const baseLabel = field.label || field.id;
-      const customKey = typeof field.key === "string" ? normalizeKey(field.key) : "";
+      const rawCustomKey = typeof field.key === "string" ? field.key.trim() : "";
+      const customKey = rawCustomKey ? normalizeKey(rawCustomKey) : "";
       const baseKey = customKey || `field_${normalizeKey(baseLabel)}`;
       let key = baseKey;
       if (usedKeys.has(key)) {

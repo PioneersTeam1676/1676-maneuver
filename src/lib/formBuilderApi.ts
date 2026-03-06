@@ -2,7 +2,9 @@ import { apiDelete, apiGet, apiPost, apiPut, ApiError } from "@/lib/apiClient"
 import type { FormDbConfig, FormDefinition, FormField, FormSummary } from "@/types/formBuilder"
 
 let hardcodedMatchForm: FormDefinition | null = null
-const loadHardcodedForm = async (): Promise<FormDefinition | null> => {
+let hardcodedPitForm: FormDefinition | null = null
+
+const loadHardcodedMatchForm = async (): Promise<FormDefinition | null> => {
   if (hardcodedMatchForm) return hardcodedMatchForm
   try {
     const mod = await import("@/data/hardcodedMatchForm.json")
@@ -11,6 +13,21 @@ const loadHardcodedForm = async (): Promise<FormDefinition | null> => {
   } catch {
     return null
   }
+}
+
+const loadHardcodedPitForm = async (): Promise<FormDefinition | null> => {
+  if (hardcodedPitForm) return hardcodedPitForm
+  try {
+    const mod = await import("@/data/hardcodedPitForm.json")
+    hardcodedPitForm = mod.default as unknown as FormDefinition
+    return hardcodedPitForm
+  } catch {
+    return null
+  }
+}
+
+export const getHardcodedPitForm = async (): Promise<FormDefinition | null> => {
+  return loadHardcodedPitForm()
 }
 
 type FormsListResponse = {
@@ -203,9 +220,12 @@ export const listForms = async (year?: string): Promise<FormSummary[]> => {
 }
 
 export const getForm = async (id: string): Promise<FormDefinition> => {
-  // Always serve the hardcoded form when its ID is requested
-  const hardcoded = await loadHardcodedForm()
-  if (hardcoded && hardcoded.id === id) return hardcoded
+  // Always serve hardcoded forms when their IDs are requested.
+  const hardcodedMatch = await loadHardcodedMatchForm()
+  if (hardcodedMatch && hardcodedMatch.id === id) return hardcodedMatch
+
+  const hardcodedPit = await loadHardcodedPitForm()
+  if (hardcodedPit && hardcodedPit.id === id) return hardcodedPit
 
   try {
     const resp = await apiGet<FormResponse>(`/forms/${encodeURIComponent(id)}`)

@@ -12,8 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SpecialMultipleChoice } from "@/components/ui/special-multiple-choice";
 
-import { getForm } from "@/lib/formBuilderApi";
-import { ACTIVE_FORM_UPDATED_EVENT, getActiveFormId, syncActiveFormConfig } from "@/lib/activeForm";
+import hardcodedPitFormData from "@/data/hardcodedPitForm.json";
 import { EVENT_UPDATED_EVENT } from "@/lib/eventSettingsClient";
 import { savePitScoutingEntry } from "@/lib/pitScoutingUtils";
 import { cn } from "@/lib/utils";
@@ -37,6 +36,7 @@ const isEmptyValue = (value: unknown, field: FormField) => {
 const getInitialValue = (field: FormField) => {
   if (field.type === "checkbox") return false;
   if (field.type === "multi_select") return [] as string[];
+  if ((field.type === "radio" || field.type === "radio_cards") && field.multiSelect) return [] as string[];
   if (field.type === "image") return "";
   return "";
 };
@@ -104,13 +104,23 @@ const readScoutName = () =>
 
 const readEventName = () => localStorage.getItem("eventName") || "";
 
+const HARDCODED_PIT_FORM = (() => {
+  const raw = hardcodedPitFormData as unknown as FormDefinition;
+  const pages = coercePages(raw.schema);
+  return {
+    ...raw,
+    schema: {
+      ...raw.schema,
+      pages,
+    },
+  };
+})();
+
 const PitScoutingPage = () => {
-  const [activeFormId, setActiveFormIdState] = useState(() => getActiveFormId("pit"));
-  const [form, setForm] = useState<FormDefinition | null>(null);
-  const [values, setValues] = useState<Record<string, unknown>>({});
+  const form = HARDCODED_PIT_FORM;
+  const [values, setValues] = useState<Record<string, unknown>>(() => buildInitialValues(form));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [baseErrors, setBaseErrors] = useState<BaseErrors>({});
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [pageIndex, setPageIndex] = useState(0);
 
@@ -148,65 +158,8 @@ const PitScoutingPage = () => {
     };
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    syncActiveFormConfig()
-      .then((config) => {
-        if (!cancelled) {
-          setActiveFormIdState(config.pit || "");
-        }
-      })
-      .catch((error) => {
-        console.warn("Failed to sync active pit form config", error);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    const handleActiveUpdate = () => {
-      setActiveFormIdState(getActiveFormId("pit"));
-    };
-    window.addEventListener(ACTIVE_FORM_UPDATED_EVENT, handleActiveUpdate);
-    return () => {
-      window.removeEventListener(ACTIVE_FORM_UPDATED_EVENT, handleActiveUpdate);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!activeFormId) {
-      setForm(null);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    getForm(activeFormId)
-      .then((data) => {
-        const pages = coercePages(data.schema);
-        const nextForm = {
-          ...data,
-          schema: {
-            ...data.schema,
-            pages,
-          },
-        };
-        setForm(nextForm);
-        setValues(buildInitialValues(nextForm));
-        setErrors({});
-        setPageIndex(0);
-      })
-      .catch((error) => {
-        console.error("Failed to load pit scouting form", error);
-        toast.error("Could not load the active pit scouting form.");
-        setForm(null);
-      })
-      .finally(() => setLoading(false));
-  }, [activeFormId]);
-
-  const pages = useMemo(() => coercePages(form?.schema), [form]);
-  const uiConfig = useMemo(() => normalizeUiConfig(form?.schema?.ui), [form]);
+  const pages = useMemo(() => coercePages(form.schema), [form]);
+  const uiConfig = useMemo(() => normalizeUiConfig(form.schema.ui), [form]);
   const layoutMode = uiConfig.layout || "auto";
   const isPaged = layoutMode === "paged" || (layoutMode === "auto" && pages.length > 1);
   const displayPages = useMemo(() => {
@@ -226,7 +179,7 @@ const PitScoutingPage = () => {
   const displayPageCount = displayPages.length;
   const currentPage = displayPages[Math.min(pageIndex, displayPageCount - 1)] || displayPages[0];
   const currentPageFields = useMemo(() => getPageFields(currentPage), [currentPage]);
-  const allFields = useMemo(() => flattenFields(form?.schema), [form]);
+  const allFields = useMemo(() => flattenFields(form.schema), [form]);
   const fieldMap = useMemo(
     () => Object.fromEntries(allFields.map((field) => [field.id, field])),
     [allFields]
@@ -310,7 +263,8 @@ const PitScoutingPage = () => {
 
     flattenFields(currentForm.schema).forEach((field) => {
       const baseLabel = field.label || field.id;
-      const customKey = typeof field.key === "string" ? normalizeKey(field.key) : "";
+      const rawCustomKey = typeof field.key === "string" ? field.key.trim() : "";
+      const customKey = rawCustomKey ? normalizeKey(rawCustomKey) : "";
       const baseKey = customKey || `field_${normalizeKey(baseLabel)}`;
       let key = baseKey;
       if (usedKeys.has(key)) {
@@ -410,8 +364,6 @@ const PitScoutingPage = () => {
   };
 
   const handleSubmit = async () => {
-    if (!form) return;
-
     const nextBaseErrors: BaseErrors = {};
     if (!teamNumber.trim()) nextBaseErrors.teamNumber = "Required";
 
@@ -463,34 +415,6 @@ const PitScoutingPage = () => {
       setSaving(false);
     }
   };
-
-  if (loading) {
-    return (
-      <div className="container mx-auto max-w-4xl py-10">
-        <Card>
-          <CardHeader>
-            <CardTitle>Loading pit scouting form…</CardTitle>
-            <CardDescription>Preparing the active pit scouting form.</CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    );
-  }
-
-  if (!form) {
-    return (
-      <div className="container mx-auto max-w-4xl py-10">
-        <Card>
-          <CardHeader>
-            <CardTitle>No active pit scouting form</CardTitle>
-            <CardDescription>
-              Set an active pit scouting form in Form Maker, then refresh this page.
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    );
-  }
 
   return (
     <div
@@ -683,14 +607,19 @@ const PitScoutingPage = () => {
               }
 
               if (field.type === "radio_cards") {
+                const isMulti = Boolean(field.multiSelect);
+                const selectedValues = Array.isArray(fieldValue) ? (fieldValue as string[]) : [];
                 return (
                   <div key={field.id} className={cn("space-y-2", isGrayedOut && "opacity-50")}>
                     <FieldLabel field={field} isRequired={isRequired} />
                     <SpecialMultipleChoice
                       ariaLabel={field.label}
                       options={field.options}
-                      value={String(fieldValue ?? "")}
+                      multiSelect={isMulti}
+                      value={isMulti ? "" : String(fieldValue ?? "")}
+                      values={isMulti ? selectedValues : undefined}
                       onValueChange={(value) => handleValueChange(field.id, value)}
+                      onValuesChange={(vals) => handleValueChange(field.id, vals)}
                       allowDeselect={Boolean(field.allowDeselect)}
                       disabled={isGrayedOut}
                     />

@@ -1,0 +1,459 @@
+{
+  "id": "3586371d-adc6-4009-9dca-e083ce8b9280",
+  "name": "2026 Pit Scouting",
+  "year": "2026",
+  "description": null,
+  "type": "pit",
+  "status": "published",
+  "schema": {
+    "pages": [
+      {
+        "id": "page_1",
+        "title": "Page 1",
+        "description": "",
+        "floatingImages": [],
+        "sections": [
+          {
+            "id": "f39edb39-763d-4475-8166-5ddebce397c1",
+            "title": "Pit Scouting",
+            "description": "",
+            "imageUrl": "",
+            "fields": [
+              {
+                "id": "90b9e19f-fee2-4cbd-bc54-587cb4c4a2ea",
+                "type": "image",
+                "label": "Robot Photo",
+                "key": "",
+                "helpText": "",
+                "required": true,
+                "placeholder": "",
+                "options": [],
+                "min": 1,
+                "max": 5,
+                "step": 1
+              },
+              {
+                "id": "d75700a2-0d5d-415b-a763-d619e147f843",
+                "type": "number",
+                "label": "How much fuel can you hold?",
+                "key": "",
+                "helpText": "",
+                "exclusiveGroup": "",
+                "required": false,
+                "placeholder": "",
+                "options": [],
+                "min": 1,
+                "max": 100,
+                "step": 1
+              },
+              {
+                "id": "20ab8728-8f49-4d76-8f42-2f2dab8ad0b2",
+                "type": "checkbox",
+                "label": "Expanding hopper",
+                "key": "",
+                "helpText": "",
+                "exclusiveGroup": "",
+                "required": false,
+                "placeholder": "",
+                "options": [],
+                "min": 1,
+                "max": 5,
+                "step": 1
+              },
+              {
+                "id": "d7dbdf39-ef35-4cf7-b358-b76d6e199383",
+                "type": "checkbox",
+                "label": "Able to collect while shooting",
+                "key": "",
+                "helpText": "",
+                "exclusiveGroup": "",
+                "required": false,
+                "placeholder": "",
+                "options": [],
+                "min": 1,
+                "max": 5,
+                "step": 1
+              },
+              {
+                "id": "e6147f98-213d-43b1-9b26-35ed2a598b5d",
+                "type": "radio",
+                "label": "Shooter type",
+                "key": "",
+                "helpText": "",
+                "exclusiveGroup": "",
+                "allowDeselect": false,
+                "required": false,
+                "placeholder": "",
+                "options": [
+                  "Turret",
+                  "Single fixed",
+                  "Multi stream"
+                ],
+                "min": 1,
+                "max": 5,
+                "step": 1
+              },
+              {
+                "id": "4bbf8c15-6a5b-4cb5-9e97-7f7d6f0abb09",
+                "type": "short_text",
+                "label": "Drive type (Specific module?)",
+                "key": "",
+                "helpText": "",
+                "exclusiveGroup": "",
+                "required": false,
+                "placeholder": "",
+                "options": [],
+                "min": 1,
+                "max": 5,
+                "step": 1
+              },
+              {
+                "id": "2d3c8544-a009-4280-9837-61a34a2010f8",
+                "type": "radio",
+                "label": "Over (OTB) or Through (TTB) Bumper Collection",
+                "key": "",
+                "helpText": "",
+                "exclusiveGroup": "",
+                "allowDeselect": false,
+                "required": false,
+                "placeholder": "",
+                "options": [
+                  "OTB",
+                  "TTB"
+                ],
+                "min": 1,
+                "max": 5,
+                "step": 1
+              }
+            ]
+          },
+          {
+            "id": "9a37307c-a319-45f8-b90e-b64edbc5380d",
+            "title": "Technical Details",
+            "description": "",
+            "imageUrl": "",
+            "fields": [
+              {
+                "id": "1da00696-9286-4979-b3b8-dceb4bbd6027",
+                "type": "select",
+                "label": "Programming Language",
+                "key": "",
+                "helpText": "",
+                "exclusiveGroup": "",
+                "required": false,
+                "placeholder": "",
+                "options": [
+                  "Not Specified",
+                  "Java",
+                  "C++",
+                  "Python",
+                  "LabVIEW",
+                  "Other"
+                ],
+                "min": 1,
+                "max": 5,
+                "step": 1
+              },
+              {
+                "id": "9c1d08ed-7761-48a0-acfc-c856c232c729",
+                "type": "number",
+                "label": "Estimated Robot Max Height (inches)",
+                "key": "",
+                "helpText": "",
+                "exclusiveGroup": "",
+                "required": false,
+                "placeholder": "",
+                "options": [],
+                "min": 1,
+                "max": 300,
+                "step": 1
+              },
+              {
+                "id": "ce26c074-f6bf-4586-8dba-9a5b45e2fee9",
+                "type": "number",
+                "label": "Estimated Robot Max Width (inches)",
+                "key": "",
+                "helpText": "",
+                "exclusiveGroup": "",
+                "required": false,
+                "placeholder": "",
+                "options": [],
+                "min": 1,
+                "max": 300,
+                "step": 1
+              },
+              {
+                "id": "d44a6bd9-e338-40b4-8c08-c553a4526862",
+                "type": "number",
+                "label": "Estimated Robot Max Height (inches, WITHOUT any extension)",
+                "key": "",
+                "helpText": "",
+                "exclusiveGroup": "",
+                "required": false,
+                "placeholder": "",
+                "options": [],
+                "min": 1,
+                "max": 300,
+                "step": 1
+              }
+            ]
+          },
+          {
+            "id": "74120102-db70-407a-97a1-9c93de6949cf",
+            "title": "Auto",
+            "description": "",
+            "imageUrl": "",
+            "fields": [
+              {
+                "id": "657c3aec-6465-4fcf-8e73-fec540d1d0c4",
+                "type": "checkbox",
+                "label": "Can collect from depot",
+                "key": "",
+                "helpText": "",
+                "exclusiveGroup": "",
+                "required": false,
+                "placeholder": "",
+                "options": [],
+                "min": 1,
+                "max": 5,
+                "step": 1
+              },
+              {
+                "id": "77c3758d-9b4a-4292-99e0-7662020a1a59",
+                "type": "checkbox",
+                "label": "Can collect from human player",
+                "key": "",
+                "helpText": "",
+                "exclusiveGroup": "",
+                "required": false,
+                "placeholder": "",
+                "options": [],
+                "min": 1,
+                "max": 5,
+                "step": 1
+              },
+              {
+                "id": "53bf3309-9aba-495d-b006-59f1aca64d30",
+                "type": "checkbox",
+                "label": "Can collect from Neutral Zone",
+                "key": "",
+                "helpText": "",
+                "exclusiveGroup": "",
+                "required": false,
+                "placeholder": "",
+                "options": [],
+                "min": 1,
+                "max": 5,
+                "step": 1
+              },
+              {
+                "id": "42baba27-6eff-4d90-a4f1-8379de5b9044",
+                "type": "checkbox",
+                "label": "Can climb in Auto?",
+                "key": "",
+                "helpText": "",
+                "exclusiveGroup": "",
+                "required": false,
+                "placeholder": "",
+                "options": [],
+                "min": 1,
+                "max": 5,
+                "step": 1
+              },
+              {
+                "id": "95fb3d90-2c19-438c-b791-1297512b3bf9",
+                "type": "radio_cards",
+                "label": "Side pref",
+                "key": "",
+                "helpText": "",
+                "exclusiveGroup": "",
+                "allowDeselect": false,
+                "required": false,
+                "placeholder": "",
+                "options": [
+                  "Right trench ",
+                  "Right bump",
+                  "Hub",
+                  "Bump left   ",
+                  "Trench"
+                ],
+                "min": 1,
+                "max": 5,
+                "step": 1,
+                "multiSelect": true
+              }
+            ]
+          },
+          {
+            "id": "c621e642-4a1e-42df-a204-03259bba84bc",
+            "title": "General",
+            "description": "",
+            "imageUrl": "",
+            "fields": [
+              {
+                "id": "a1eccf7d-b7da-4714-9f77-83af5f13e160",
+                "type": "checkbox",
+                "label": "Over bump?",
+                "key": "",
+                "helpText": "",
+                "exclusiveGroup": "",
+                "required": false,
+                "placeholder": "",
+                "options": [],
+                "min": 0,
+                "max": 5,
+                "step": 1
+              },
+              {
+                "id": "37dd6403-510b-4792-bf92-16ab5526e68b",
+                "type": "checkbox",
+                "label": "Under trench?",
+                "key": "",
+                "helpText": "",
+                "exclusiveGroup": "",
+                "required": false,
+                "placeholder": "",
+                "options": [],
+                "min": 0,
+                "max": 5,
+                "step": 1
+              },
+              {
+                "id": "1b0b0184-2341-4d07-b70d-5dd53f29bb1a",
+                "type": "radio_cards",
+                "label": "Shooting Locations",
+                "key": "",
+                "helpText": "",
+                "exclusiveGroup": "",
+                "allowDeselect": false,
+                "multiSelect": true,
+                "required": false,
+                "placeholder": "",
+                "options": [
+                  "Up against hub",
+                  "Mid range",
+                  "Deep"
+                ],
+                "min": 0,
+                "max": 5,
+                "step": 1
+              },
+              {
+                "id": "82250c62-13cd-4608-ad2c-2c484747fb3b",
+                "type": "radio_cards",
+                "label": "Passing range",
+                "key": "",
+                "helpText": "",
+                "exclusiveGroup": "",
+                "allowDeselect": false,
+                "multiSelect": false,
+                "required": false,
+                "placeholder": "",
+                "options": [
+                  "One zone",
+                  "2 Zones"
+                ],
+                "min": 0,
+                "max": 5,
+                "step": 1
+              }
+            ]
+          },
+          {
+            "id": "869388fb-f8ef-42a1-b527-c09ed3755ab3",
+            "title": "Endgame",
+            "description": "",
+            "imageUrl": "",
+            "fields": [
+              {
+                "id": "7669ce64-a9f5-4cdd-8634-664cf9a31a98",
+                "type": "select",
+                "label": "Endgame Climb Level",
+                "key": "",
+                "helpText": "",
+                "exclusiveGroup": "",
+                "required": false,
+                "placeholder": "",
+                "options": [
+                  "L3",
+                  "L2",
+                  "L1"
+                ],
+                "min": 0,
+                "max": 5,
+                "step": 1
+              },
+              {
+                "id": "1315c97e-2c65-4c92-9dc1-42252e021872",
+                "type": "radio_cards",
+                "label": "Where climb?",
+                "key": "",
+                "helpText": "",
+                "exclusiveGroup": "",
+                "allowDeselect": false,
+                "multiSelect": true,
+                "required": false,
+                "placeholder": "",
+                "options": [
+                  "Left side",
+                  "Middle",
+                  "Right side"
+                ],
+                "min": 0,
+                "max": 5,
+                "step": 1
+              }
+            ]
+          },
+          {
+            "id": "318b535d-eccd-44f0-98ee-65696ca908d5",
+            "title": "Misc",
+            "description": "",
+            "imageUrl": "",
+            "fields": [
+              {
+                "id": "e0be3942-530b-4ca6-af1c-e56b26c648d0",
+                "type": "long_text",
+                "label": "Notes",
+                "key": "",
+                "helpText": "",
+                "exclusiveGroup": "",
+                "required": false,
+                "placeholder": "",
+                "options": [],
+                "min": 0,
+                "max": 5,
+                "step": 1
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "ui": {
+      "layout": "auto",
+      "pagePaddingClass": "py-8",
+      "pageSpacingClass": "space-y-6",
+      "sectionSpacingClass": "space-y-6",
+      "fieldSpacingClass": "space-y-4",
+      "sectionCardClassName": "",
+      "sectionHeaderClassName": "space-y-2",
+      "pageHeaderClassName": "",
+      "nav": {
+        "showProgress": true,
+        "backLabel": "Back",
+        "nextLabel": "Next",
+        "submitLabel": "Submit",
+        "backVariant": "outline",
+        "nextVariant": "default",
+        "submitVariant": "default",
+        "backClassName": "",
+        "nextClassName": "",
+        "submitClassName": ""
+      }
+    },
+    "sections": []
+  },
+  "createdAt": "2026-02-05T22:19:35.000Z",
+  "updatedAt": "2026-03-03T22:34:11.000Z"
+}

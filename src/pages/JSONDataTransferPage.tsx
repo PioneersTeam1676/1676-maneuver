@@ -2,12 +2,14 @@
 import { useState } from "react";
 import Button from "@/components/ui/button";
 import JSONUploader from "@/components/DataTransferComponents/JSONUploader";
-import { convertArrayOfArraysToCSV, SCOUTING_DATA_HEADER } from "@/lib/utils";
+import { convertArrayOfArraysToCSV } from "@/lib/utils";
 import { loadScoutingData } from "@/lib/scoutingDataUtils";
 import { loadPitScoutingData, exportPitScoutingToCSV, downloadPitScoutingImagesOnly } from "@/lib/pitScoutingUtils";
 import { gameDB } from "@/lib/dexieDB";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { apiGet } from "@/lib/apiClient";
+import { withScoutingSeasonParams } from "@/lib/scoutingSeason";
 
 
 const JSONDataTransferPage = () => {
@@ -24,38 +26,38 @@ const JSONDataTransferPage = () => {
 
   const handleDownloadCSV = async () => {
     try {
-      let csv: string;
+      let fileContent: string;
       let filename: string;
+      const mimeType = "text/csv;charset=utf-8";
 
       switch (dataType) {
         case 'scouting': {
-          const scoutingDataWithIds = await loadScoutingData();
-          
-          if (scoutingDataWithIds.entries.length === 0) {
+          const seasonParams = withScoutingSeasonParams({});
+          const query = new URLSearchParams();
+          Object.entries(seasonParams).forEach(([key, value]) => {
+            if (value) query.append(key, value);
+          });
+          const queryString = query.toString() ? `?${query.toString()}` : "";
+          const rebuiltExport = await apiGet<{
+            headers?: string[];
+            rows?: Record<string, unknown>[];
+          }>(`/scouting/export/rebuilt${queryString}`);
+          const headers = Array.isArray(rebuiltExport.headers) ? rebuiltExport.headers : [];
+          const rows = Array.isArray(rebuiltExport.rows) ? rebuiltExport.rows : [];
+
+          if (!headers.length || !rows.length) {
             alert("No scouting data found.");
             return;
           }
 
-          // Convert data entries (with IDs) to arrays using the header order
-          const dataArrays = scoutingDataWithIds.entries.map(entry => 
-            SCOUTING_DATA_HEADER.map(header => {
-              if (header === 'id') {
-                return entry.id;
-              }
-              const value = (entry.data as Record<string, unknown>)[header];
-              return value ?? '';
-            })
-          );
-          
-          const finalDataArr = [SCOUTING_DATA_HEADER, ...dataArrays];
-          
-          csv = convertArrayOfArraysToCSV(finalDataArr as (string | number)[][]);
+          const dataRows = rows.map((row) => headers.map((header) => row[header] ?? ""));
+          fileContent = convertArrayOfArraysToCSV([headers, ...dataRows] as (string | number)[][]);
           filename = `PioneerScoutingData-${new Date().toLocaleTimeString()}-local.csv`;
           break;
         }
         case 'pitScouting': {
-          csv = await exportPitScoutingToCSV();
-          if (!csv || csv.split('\n').length <= 1) {
+          fileContent = await exportPitScoutingToCSV();
+          if (!fileContent || fileContent.split('\n').length <= 1) {
             alert("No pit scouting data found.");
             return;
           }
@@ -92,7 +94,7 @@ const JSONDataTransferPage = () => {
           ]);
           
           const scoutCsvData = [scoutHeaders, ...scoutRows];
-          csv = convertArrayOfArraysToCSV(scoutCsvData as (string | number)[][]);
+          fileContent = convertArrayOfArraysToCSV(scoutCsvData as (string | number)[][]);
           filename = `PioneerScoutProfiles-${new Date().toLocaleTimeString()}-local.csv`;
           break;
         }
@@ -104,7 +106,7 @@ const JSONDataTransferPage = () => {
       const element = document.createElement("a");
       element.setAttribute(
         "href",
-        "data:text/csv;charset=utf-8," + encodeURIComponent(csv)
+        `data:${mimeType},` + encodeURIComponent(fileContent)
       );
       element.setAttribute("download", filename);
       element.style.display = "none";
