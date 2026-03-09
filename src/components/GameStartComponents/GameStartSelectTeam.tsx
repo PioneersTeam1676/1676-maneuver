@@ -116,6 +116,8 @@ const InitialSelectTeam = ({
     initialSelection.custom && defaultSelectTeam ? defaultSelectTeam : ""
   );
 
+  const isFirstRender = useRef(true);
+
   // Function to handle team selection
   const clickTeam = (currentTeamType: string, currentTeamStatus: boolean) => {
     if (currentTeamType === "1") {
@@ -185,8 +187,6 @@ const InitialSelectTeam = ({
       }
     }
   }, [baseTeams, preferredTeamPosition, team1Status, team2Status, team3Status, customTeamStatus]);
-
-  const isFirstRender = useRef(true);
 
   // Reset when the user changes to a different match or alliance
   // (skip first render so getInitialTeamSelection() result is respected on mount)
