@@ -79,35 +79,28 @@ const InitialSelectTeam = ({
 
   // Helper function to determine if a team should be auto-selected based on position
   const getInitialTeamSelection = () => {
-    // If there's already a defaultSelectTeam, use that
-    if (defaultSelectTeam) {
-      return {
-        team1: defaultSelectTeam === baseTeams[0],
-        team2: defaultSelectTeam === baseTeams[1], 
-        team3: defaultSelectTeam === baseTeams[2],
-        custom: defaultSelectTeam !== baseTeams[0] && 
-                defaultSelectTeam !== baseTeams[1] && 
-                defaultSelectTeam !== baseTeams[2]
-      };
-    }
-    
-    // If there's a preferred team position, auto-select that team
+    // Preferred position from schedule assignment wins over any persisted value
     if (preferredTeamPosition >= 1 && preferredTeamPosition <= 3) {
       return {
         team1: preferredTeamPosition === 1,
         team2: preferredTeamPosition === 2,
         team3: preferredTeamPosition === 3,
-        custom: false
+        custom: false,
       };
     }
-    
-    // Default - no selection
-    return {
-      team1: false,
-      team2: false,
-      team3: false,
-      custom: false
-    };
+
+    // Fall back to a previously-selected team (e.g. restored session state),
+    // but only if that team is actually in the current alliance list.
+    if (defaultSelectTeam && baseTeams.includes(defaultSelectTeam)) {
+      return {
+        team1: defaultSelectTeam === baseTeams[0],
+        team2: defaultSelectTeam === baseTeams[1],
+        team3: defaultSelectTeam === baseTeams[2],
+        custom: false,
+      };
+    }
+
+    return { team1: false, team2: false, team3: false, custom: false };
   };
 
   const initialSelection = getInitialTeamSelection();
@@ -131,18 +124,21 @@ const InitialSelectTeam = ({
       setTeam2Status(false);
       setTeam3Status(false);
       setCustomTeamStatus(false);
+      setCustomTeamValue("");
     } else if (currentTeamType === "2") {
       setTeam2Status(!currentTeamStatus);
 
       setTeam1Status(false);
       setTeam3Status(false);
       setCustomTeamStatus(false);
+      setCustomTeamValue("");
     } else if (currentTeamType === "3") {
       setTeam3Status(!currentTeamStatus);
 
       setTeam1Status(false);
       setTeam2Status(false);
       setCustomTeamStatus(false);
+      setCustomTeamValue("");
     } else if (currentTeamType === "custom") {
       setCustomTeamStatus(true);
 
@@ -189,6 +185,15 @@ const InitialSelectTeam = ({
       }
     }
   }, [baseTeams, preferredTeamPosition, team1Status, team2Status, team3Status, customTeamStatus]);
+
+  // Reset when the user changes to a different match or alliance
+  useEffect(() => {
+    setTeam1Status(false);
+    setTeam2Status(false);
+    setTeam3Status(false);
+    setCustomTeamStatus(false);
+    setCustomTeamValue("");
+  }, [selectedMatch, selectedAlliance]);
 
   const [textSelected, setTextSelected] = useState(false);
 
