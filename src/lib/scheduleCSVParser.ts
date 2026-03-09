@@ -29,6 +29,10 @@ export function parseScheduleCSV(csvText: string): ParsedSchedule {
     if (pos) positionCols.push({ position: pos, colIndex: i })
   })
 
+  if (positionCols.length === 0) {
+    return { assignments: [], aliases: {}, errors: ['No position columns found (expected red_1…blue_3)'] }
+  }
+
   const assignments: ParsedSchedule['assignments'] = []
   const errors: string[] = []
   const namesSeen = new Set<string>()
