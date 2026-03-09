@@ -297,6 +297,7 @@ const routePermissions: Array<{ pattern: RegExp; minRole: UserRole | null }> = [
   { pattern: /^\/user-management$/, minRole: 'tech_lead' },
   { pattern: /^\/scout-activity$/, minRole: 'lead' },
   { pattern: /^\/schedule$/, minRole: 'scout' },
+  { pattern: /^\/outliers$/, minRole: 'lead' },
   { pattern: /^\/alliance-onboarding$/, minRole: null }, // Accessible to anyone, including pending/unverified
   { pattern: /^\/auth\/google\/callback$/, minRole: null }, // Accessible to anyone for OAuth flow
 ]

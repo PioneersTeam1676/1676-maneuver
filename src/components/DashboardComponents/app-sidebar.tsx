@@ -92,6 +92,11 @@ const data = {
           url: "/match-data-qr",
           minRole: "lead" as UserRole,
         },
+        {
+          title: "Match Outliers",
+          url: "/outliers",
+          minRole: "lead" as UserRole,
+        },
       ],
     },
     {

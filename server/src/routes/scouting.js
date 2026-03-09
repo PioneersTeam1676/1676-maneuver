@@ -3,8 +3,20 @@ const { getSeasonPrisma, resolveSeasonSelector } = require("../seasonDb")
 const asyncHandler = require("../utils/asyncHandler")
 const { parseJsonValue, stringifyJsonValue, toMsBigInt, fromBigInt } = require("../utils/dbUtils")
 const { updateMatchProgress } = require("../services/scheduleNotifications")
+const { detectOutliers } = require("../services/outlierDetection")
 
 const router = express.Router()
+
+const loadDisplayNames = async (prisma) => {
+  try {
+    const row = await prisma.eventSetting.findUnique({ where: { id: 1 } })
+    if (!row || !row.eventDisplayNamesJson) return {}
+    const parsed = JSON.parse(row.eventDisplayNamesJson)
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {}
+  } catch {
+    return {}
+  }
+}
 
 const schemaReady = new WeakMap()
 
@@ -344,11 +356,12 @@ const formatRebuiltTimestamp = (value) => {
 const normalizeClimbLevel = (value) => {
   const title = splitChoiceTitle(value).toLowerCase()
   if (!title) return ""
-  if (title.includes("did not attempt")) return "Did not attempt"
+  if (title.includes("did not attempt") || title === "no") return "Did not attempt"
   if (title.includes("failed")) return "Failed Attempt"
   if (title.includes("l3") || title.includes("level 3")) return "Level 3"
   if (title.includes("l2") || title.includes("level 2")) return "Level 2"
   if (title.includes("l1") || title.includes("level 1")) return "Level 1"
+  if (title === "yes" || title === "successful") return "Level 1"
   return splitChoiceTitle(value)
 }
 
@@ -363,7 +376,7 @@ const normalizeClimb = (climbValue, climbSuccessValue) => {
     return { climbed: "No", climb: "Did not attempt" }
   }
   if (success.includes("successful") || success === "yes") {
-    return { climbed: "Yes", climb: level || "" }
+    return { climbed: "Yes", climb: level || "Level 1" }
   }
 
   if (level === "Failed Attempt") {
@@ -637,12 +650,14 @@ const buildRebuiltRecord = (sourceData, fallback = {}) => {
 
   const climbValues = normalizeClimb(
     pickDefined(sourceData, [
+      "endgame_climb",
       "Climb",
       "field_climb",
       "climb",
       ...MATCH_FIELD_ID_ALIASES.climb,
     ]),
     pickDefined(sourceData, [
+      "endgame_climb_success",
       "field_climb_success",
       "climb_success",
       "Climb Success",
@@ -668,9 +683,9 @@ const buildRebuiltRecord = (sourceData, fallback = {}) => {
     ),
     "Team Number": teamNumber,
     Climbed: asString(climbed),
-    "Auto Strat": autoStrat,
+    "Auto Strat": autoStrat || firstActive.strat,
     "Auto Rating": autoRating,
-    "Transition Strat": transitionStrat,
+    "Transition Strat": transitionStrat || firstInactive.strat,
     "Transition Rating": transitionRating,
     "Were they Defended? (Transition Period)": transitionDefended,
     "First Active Phase Strat": firstActive.strat,
@@ -685,7 +700,7 @@ const buildRebuiltRecord = (sourceData, fallback = {}) => {
     "Second Inactive Phase Strat": secondInactive.strat,
     "Second Inactive Phase Rating": secondInactive.rating,
     "Were they Defended? (Second Inactive Phase)": secondInactive.defended,
-    "Endgame Strat": endgameStrat,
+    "Endgame Strat": endgameStrat || secondActive.strat,
     "Endgame Rating": endgameRating,
     "Were they Defended? (Endgame)": endgameDefended,
     Climb: asString(climbValues.climb) || "Did not attempt",
@@ -1039,30 +1054,29 @@ router.get(
 
     await ensureScoutingIdSchema(prisma)
 
-    const rows = await prisma.scoutingEntry.findMany({
-      where,
-      orderBy: { timestamp: "asc" }
+    const [rows, displayNames] = await Promise.all([
+      prisma.scoutingEntry.findMany({ where, orderBy: { timestamp: "asc" } }),
+      loadDisplayNames(prisma),
+    ])
+    const rebuiltRows = rows.map((row) => {
+      const record = rowToRebuiltExport(row)
+      record["Scout Team"] = "Pascack"
+      if (record.Event && displayNames[record.Event]) {
+        record.Event = displayNames[record.Event]
+      }
+      return record
     })
-    const rebuiltRows = rows.map(rowToRebuiltExport)
     const rebuiltTsv = toRebuiltTsv(rebuiltRows)
     const rebuiltCsv = toRebuiltCsv(rebuiltRows)
     const format = String(req.query.format || "").toLowerCase()
 
     if (format === "csv") {
       res.setHeader("Content-Type", "text/csv; charset=utf-8")
-      res.setHeader(
-        "Content-Disposition",
-        'attachment; filename="Rebuilt Test Data - Test Data.csv"'
-      )
       return res.send(rebuiltCsv)
     }
 
     if (format === "tsv") {
       res.setHeader("Content-Type", "text/tab-separated-values; charset=utf-8")
-      res.setHeader(
-        "Content-Disposition",
-        `attachment; filename="${REBUILT_TSV_FILENAME}"`
-      )
       return res.send(rebuiltTsv)
     }
 
@@ -1083,19 +1097,23 @@ router.get(
     const { prisma } = await getSeasonPrisma()
     await ensureScoutingIdSchema(prisma)
 
-    const rows = await prisma.scoutingEntry.findMany({
-      orderBy: { timestamp: "asc" }
+    const [rows, displayNames] = await Promise.all([
+      prisma.scoutingEntry.findMany({ orderBy: { timestamp: "asc" } }),
+      loadDisplayNames(prisma),
+    ])
+    const rebuiltRows = rows.map((row) => {
+      const record = rowToRebuiltExport(row)
+      record["Scout Team"] = "Pascack"
+      if (record.Event && displayNames[record.Event]) {
+        record.Event = displayNames[record.Event]
+      }
+      return record
     })
-    const rebuiltRows = rows.map(rowToRebuiltExport)
     const rebuiltCsv = toRebuiltCsv(rebuiltRows)
     const format = String(req.query.format || "").toLowerCase()
 
     if (format === "csv") {
       res.setHeader("Content-Type", "text/csv; charset=utf-8")
-      res.setHeader(
-        "Content-Disposition",
-        'attachment; filename="Rebuilt Test Data - Test Data.csv"'
-      )
       return res.send(rebuiltCsv)
     }
 
@@ -1233,6 +1251,36 @@ router.post(
       eventName: eventNameFilter || null,
       version: "2.0-mysql-rebuilt",
     })
+  })
+)
+
+const { prisma: mainPrisma } = require("../db")
+
+const LEAD_ROLE_WEIGHTS = { lead: 3, tech_lead: 4 }
+
+const requireLeadRole = asyncHandler(async (req, res, next) => {
+  const email = req.user?.email
+  if (!email) return res.status(403).json({ error: "insufficient permissions" })
+  try {
+    const row = await mainPrisma.role.findUnique({ where: { email: email.toLowerCase() } })
+    const roleWeight = row?.role ? (LEAD_ROLE_WEIGHTS[row.role] ?? 0) : 0
+    if (roleWeight < LEAD_ROLE_WEIGHTS.lead) {
+      return res.status(403).json({ error: "insufficient permissions" })
+    }
+  } catch {
+    return res.status(403).json({ error: "insufficient permissions" })
+  }
+  next()
+})
+
+router.get(
+  "/outliers",
+  requireLeadRole,
+  asyncHandler(async (req, res) => {
+    const { eventKey } = req.query
+    if (!eventKey) return res.status(400).json({ error: "eventKey required" })
+    const outliers = await detectOutliers({ eventKey })
+    res.json({ outliers })
   })
 )
 
