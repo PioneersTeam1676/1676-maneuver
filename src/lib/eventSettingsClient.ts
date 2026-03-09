@@ -2,16 +2,19 @@ import { apiGet, apiPut } from "./apiClient"
 
 export const STORAGE_EVENTS_KEY = "eventsList"
 export const STORAGE_EVENT_NAME_KEY = "eventName"
+export const STORAGE_EVENT_DISPLAY_NAMES_KEY = "eventDisplayNames"
 export const EVENT_UPDATED_EVENT = "eventNameUpdated"
 
 export interface EventSettingsPayload {
   currentEvent?: string | null
   events?: string[]
+  eventDisplayNames?: Record<string, string>
 }
 
 export interface EventSettingsResponse {
   currentEvent: string
   events: string[]
+  eventDisplayNames: Record<string, string>
   updatedAt: number
 }
 
@@ -59,6 +62,9 @@ export const applyEventSettingsToStorage = (settings: EventSettingsResponse) => 
     } else {
       localStorage.removeItem(STORAGE_EVENT_NAME_KEY)
     }
+
+    const displayNames = settings.eventDisplayNames ?? {}
+    localStorage.setItem(STORAGE_EVENT_DISPLAY_NAMES_KEY, JSON.stringify(displayNames))
   } catch (error) {
     console.warn("Failed to persist event settings", error)
   }
@@ -71,6 +77,7 @@ export const fetchEventSettings = async (): Promise<EventSettingsResponse> => {
   return {
     currentEvent: sanitizeEventName(response.currentEvent),
     events: sanitizeEventList(response.events),
+    eventDisplayNames: response.eventDisplayNames ?? {},
     updatedAt: response.updatedAt ?? 0,
   }
 }
@@ -86,8 +93,21 @@ export const updateEventSettings = async (payload: EventSettingsPayload): Promis
   const sanitized = {
     currentEvent: sanitizeEventName(response.currentEvent),
     events: sanitizeEventList(response.events),
+    eventDisplayNames: response.eventDisplayNames ?? {},
     updatedAt: response.updatedAt ?? 0,
   }
   applyEventSettingsToStorage(sanitized)
   return sanitized
+}
+
+export const getEventDisplayName = (eventCode: string): string => {
+  if (typeof window === "undefined") return eventCode
+  try {
+    const stored = localStorage.getItem(STORAGE_EVENT_DISPLAY_NAMES_KEY)
+    if (!stored) return eventCode
+    const map = JSON.parse(stored) as Record<string, string>
+    return map[eventCode] || eventCode
+  } catch {
+    return eventCode
+  }
 }
