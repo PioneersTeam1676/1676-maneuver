@@ -36,12 +36,13 @@ router.post(
 )
 
 router.get(
-  '/my-assignments',
+  "/my-assignments",
   asyncHandler(async (req, res) => {
     const { eventKey } = req.query
-    if (!eventKey) return res.status(400).json({ error: 'eventKey required' })
+    if (!eventKey) return res.status(400).json({ error: "eventKey required" })
+    // req.user is only set when Google OAuth is configured; token-auth callers cannot use this endpoint
     const email = req.user?.email
-    if (!email) return res.status(401).json({ error: 'not authenticated' })
+    if (!email) return res.status(401).json({ error: "not authenticated" })
     const assignments = await getMyAssignments({ eventKey, email })
     res.json({ assignments })
   })

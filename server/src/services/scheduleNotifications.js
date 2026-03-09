@@ -587,6 +587,7 @@ const getScheduleState = async (requestedEventKey) => {
 
 /**
  * Returns all assignments for a specific scout email on an event.
+ * Each entry includes matchNumber, matchOrder, position, alliance, and slotIndex.
  */
 const getMyAssignments = async ({ eventKey, email }) => {
   const normalizedEmail = normalizeEmail(email)
