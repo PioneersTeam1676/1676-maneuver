@@ -1,16 +1,33 @@
 import { useEffect, useState } from "react"
 import { fetchMyAssignments, type MyAssignment } from "@/lib/scheduleApi"
+import { STORAGE_EVENT_NAME_KEY, EVENT_UPDATED_EVENT } from "@/lib/eventSettingsClient"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 
 export default function SchedulePage() {
   const [assignments, setAssignments] = useState<MyAssignment[]>([])
   const [loading, setLoading] = useState(true)
-
-  const eventName = localStorage.getItem("eventName") ?? ""
+  const [eventName, setEventName] = useState(() => localStorage.getItem(STORAGE_EVENT_NAME_KEY) ?? "")
 
   useEffect(() => {
-    if (!eventName) return setLoading(false)
+    const handleEventUpdate = () => {
+      setEventName(localStorage.getItem(STORAGE_EVENT_NAME_KEY) ?? "")
+    }
+    window.addEventListener(EVENT_UPDATED_EVENT, handleEventUpdate)
+    window.addEventListener("storage", handleEventUpdate)
+    return () => {
+      window.removeEventListener(EVENT_UPDATED_EVENT, handleEventUpdate)
+      window.removeEventListener("storage", handleEventUpdate)
+    }
+  }, [])
+
+  useEffect(() => {
+    setAssignments([])
+    setLoading(true)
+    if (!eventName) {
+      setLoading(false)
+      return
+    }
     fetchMyAssignments(eventName)
       .then(setAssignments)
       .catch((err: unknown) => console.warn("Failed to load schedule:", err))
@@ -32,7 +49,7 @@ export default function SchedulePage() {
       <h1 className="text-2xl font-bold">My Schedule — {eventName}</h1>
       <div className="space-y-2">
         {assignments.map((a) => (
-          <Card key={a.matchNumber}>
+          <Card key={`${a.matchNumber}-${a.position}`}>
             <CardHeader className="pb-1">
               <CardTitle className="text-base">Match {a.matchNumber}</CardTitle>
             </CardHeader>
