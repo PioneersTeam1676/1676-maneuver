@@ -1,6 +1,21 @@
 import { apiGet, apiPost } from "./apiClient"
 import type { MatchAssignment, ParsedMatch } from "@/types/schedule"
 
+export interface MyAssignment {
+  matchNumber: string
+  matchOrder: number | null
+  position: string       // "red-1", "blue-3", etc.
+  alliance: string | null  // "red" | "blue"
+  slotIndex: number | null // 0, 1, or 2 (add 1 to get teamPosition)
+}
+
+export async function fetchMyAssignments(eventKey: string): Promise<MyAssignment[]> {
+  const data = await apiGet<{ assignments: MyAssignment[] }>(
+    `/schedule/my-assignments?eventKey=${encodeURIComponent(eventKey)}`
+  )
+  return data.assignments
+}
+
 export interface RemoteScheduleState {
   eventKey: string | null
   assignments: MatchAssignment[]

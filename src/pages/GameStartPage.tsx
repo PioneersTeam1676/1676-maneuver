@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { EventNameSelector } from "@/components/GameStartComponents/EventNameSel
 // import { createMatchPrediction, getPredictionForMatch } from "@/lib/scoutGameUtils";
 import { AlertTriangle } from "lucide-react";
 import { fetchQualificationSchedule, resolveTbaApiKey, MATCH_DATA_UPDATED_EVENT } from "@/lib/tbaUtils";
+import { fetchMyAssignments, type MyAssignment } from "@/lib/scheduleApi";
 // import { ACTIVE_FORM_UPDATED_EVENT, getActiveFormId, syncActiveFormConfig } from "@/lib/activeForm";
 
 const GameStartPage = () => {
@@ -67,6 +68,7 @@ const GameStartPage = () => {
       return "";
     }
   });
+  const [myAssignments, setMyAssignments] = useState<MyAssignment[]>([]);
   // Debounce matchNumber for team selection
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -74,6 +76,36 @@ const GameStartPage = () => {
     }, 500);
     return () => clearTimeout(timeout);
   }, [matchNumber]);
+
+  // Fetch scout's assignments for the current event
+  useEffect(() => {
+    if (!eventName) return;
+    fetchMyAssignments(eventName)
+      .then(setMyAssignments)
+      .catch(() => {}); // silently fail — not every event has a schedule
+  }, [eventName]);
+
+  // Derive the assignment for the currently selected match number
+  const currentAssignment = useMemo(() => {
+    const parsed = parseInt(matchNumber, 10);
+    if (Number.isNaN(parsed) || parsed <= 0) return null;
+    return (
+      myAssignments.find((a) => {
+        // Prefer matchOrder (numeric) for comparison when available
+        if (a.matchOrder != null) return a.matchOrder === parsed;
+        // Fallback: extract trailing digits from matchNumber string (e.g., "qm5" → 5)
+        const digits = a.matchNumber.match(/\d+/g);
+        if (!digits || digits.length === 0) return false;
+        return parseInt(digits[digits.length - 1], 10) === parsed;
+      }) ?? null
+    );
+  }, [myAssignments, matchNumber]);
+
+  // Auto-set alliance when an assignment is found
+  useEffect(() => {
+    if (!currentAssignment?.alliance) return;
+    setAlliance(currentAssignment.alliance);
+  }, [currentAssignment]);
 
   // Effect to save match number to localStorage when it changes
   useEffect(() => {
@@ -392,6 +424,11 @@ const GameStartPage = () => {
                 onChange={(e) => handleMatchNumberChange(e.target.value)}
                 className="text-lg"
               />
+              {currentAssignment && (
+                <p className="text-sm text-muted-foreground">
+                  Assigned: {currentAssignment.position.replace("-", " ").toUpperCase()}
+                </p>
+              )}
             </div>
 
             {/* Alliance Selection with Buttons */}
@@ -515,7 +552,11 @@ const GameStartPage = () => {
                 selectedAlliance={alliance}
                 eventKey={eventName}
                 matchDataVersion={matchDataVersion}
-                preferredTeamPosition={stationInfo.teamPosition}
+                preferredTeamPosition={
+                  currentAssignment?.slotIndex != null
+                    ? currentAssignment.slotIndex + 1
+                    : stationInfo.teamPosition
+                }
               />
             </div>
           </CardContent>
