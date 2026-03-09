@@ -82,23 +82,27 @@ const GameStartPage = () => {
     if (!eventName) return;
     fetchMyAssignments(eventName)
       .then(setMyAssignments)
-      .catch(() => {}); // silently fail — not every event has a schedule
+      .catch((err: unknown) => {
+        console.warn("Failed to fetch schedule assignments:", err);
+      });
   }, [eventName]);
 
   // Derive the assignment for the currently selected match number
   const currentAssignment = useMemo(() => {
+    if (!myAssignments.length || !matchNumber) return null;
     const parsed = parseInt(matchNumber, 10);
-    if (Number.isNaN(parsed) || parsed <= 0) return null;
-    return (
-      myAssignments.find((a) => {
-        // Prefer matchOrder (numeric) for comparison when available
-        if (a.matchOrder != null) return a.matchOrder === parsed;
-        // Fallback: extract trailing digits from matchNumber string (e.g., "qm5" → 5)
-        const digits = a.matchNumber.match(/\d+/g);
-        if (!digits || digits.length === 0) return false;
-        return parseInt(digits[digits.length - 1], 10) === parsed;
-      }) ?? null
-    );
+    if (isNaN(parsed)) return null;
+
+    // Primary: extract trailing digits from TBA matchNumber ("qm5" → 5)
+    // This matches the user-typed match number to the qualification match number
+    const byMatchKey = myAssignments.find((a) => {
+      const digits = a.matchNumber.match(/(\d+)$/);
+      return digits ? parseInt(digits[1], 10) === parsed : false;
+    });
+    if (byMatchKey) return byMatchKey;
+
+    // Fallback: matchOrder if matchNumber is null or digit extraction failed
+    return myAssignments.find((a) => a.matchOrder === parsed) ?? null;
   }, [myAssignments, matchNumber]);
 
   // Auto-set alliance when an assignment is found

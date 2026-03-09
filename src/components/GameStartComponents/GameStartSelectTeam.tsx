@@ -169,8 +169,11 @@ const InitialSelectTeam = ({
   useEffect(() => {
     if (baseTeams.length === 0) return;
     if (team1Status || team2Status || team3Status || customTeamStatus) return;
+    // Don't auto-select team 1 if a preferred position is being provided
+    // (assignment may arrive async after mount and should take precedence)
+    if (preferredTeamPosition > 0) return;
     setTeam1Status(true);
-  }, [baseTeams, team1Status, team2Status, team3Status, customTeamStatus]);
+  }, [baseTeams, team1Status, team2Status, team3Status, customTeamStatus, preferredTeamPosition]);
 
   // Effect to update team selection when baseTeams or preferredTeamPosition changes
   useEffect(() => {
