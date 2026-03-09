@@ -618,25 +618,15 @@ const notifyScheduleReleased = async ({ eventKey, isUpdate = false }) => {
 
   const title = isUpdate ? "Scouting Schedule Updated" : "Scouting Schedule Released"
   const body = `The scouting schedule for ${eventKey} has been ${isUpdate ? "updated" : "published"}. Check your assignments.`
+  const tag = `schedule-${eventKey}-${isUpdate ? "update" : "release"}`
 
-  const payload = JSON.stringify({
-    title,
-    body,
-    tag: `schedule-${eventKey}-${isUpdate ? "update" : "release"}`,
-    data: { url: "/schedule" },
-  })
-
-  const results = await Promise.allSettled(
-    subscriptions.map((sub) => {
-      const pushSub = {
-        endpoint: sub.endpoint,
-        keys: { p256dh: sub.p256dh, auth: sub.auth },
-      }
-      return webpush.sendNotification(pushSub, payload)
-    })
+  const results = await Promise.all(
+    subscriptions.map((sub) =>
+      sendNotificationToSubscription(sub, { title, body, tag, data: { url: "/schedule" } })
+    )
   )
 
-  const failed = results.filter((r) => r.status === "rejected").length
+  const failed = results.filter((r) => !r).length
   if (failed > 0) {
     console.warn(`notifyScheduleReleased: ${failed}/${subscriptions.length} pushes failed`)
   }
