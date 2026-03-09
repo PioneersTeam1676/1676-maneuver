@@ -13,7 +13,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { useTBAData } from "@/hooks/useTBAData"
 import { ensureAllianceDataCached, ALLIANCE_DATA_UPDATED_EVENT } from "@/lib/tbaUtils"
-import { ApiError } from "@/lib/apiClient"
+import { ApiError, apiPost } from "@/lib/apiClient"
+import { parseScheduleCSV, type ParsedSchedule } from "@/lib/scheduleCSVParser"
 import { ACTIVE_FORM_UPDATED_EVENT, readActiveFormConfig, syncActiveFormConfig } from "@/lib/activeForm"
 import { getForm } from "@/lib/formBuilderApi"
 import type { FormDefinition } from "@/types/formBuilder"
@@ -28,6 +29,7 @@ import {
   EVENT_UPDATED_EVENT,
   STORAGE_EVENTS_KEY,
   STORAGE_EVENT_NAME_KEY,
+  STORAGE_EVENT_DISPLAY_NAMES_KEY,
   type EventSettingsPayload,
   type EventSettingsResponse,
   syncEventSettings,
@@ -64,6 +66,18 @@ const readStoredCurrentEvent = (): string => {
   }
 }
 
+const readStoredDisplayNames = (): Record<string, string> => {
+  if (typeof window === "undefined") return {}
+  try {
+    const stored = localStorage.getItem(STORAGE_EVENT_DISPLAY_NAMES_KEY)
+    if (!stored) return {}
+    const parsed = JSON.parse(stored)
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
 const readSessionTbaApiKey = (): string => {
   if (typeof window === "undefined") return ""
   try {
@@ -81,6 +95,7 @@ const EventSettingsPage = () => {
   const navigate = useNavigate()
   const [events, setEvents] = useState<string[]>(readStoredEvents)
   const [currentEvent, setCurrentEvent] = useState(readStoredCurrentEvent)
+  const [eventDisplayNames, setEventDisplayNames] = useState<Record<string, string>>(readStoredDisplayNames)
   const [newEvent, setNewEvent] = useState("")
   const [eventKeyInput, setEventKeyInput] = useState("")
   const [isEditingEventKey, setIsEditingEventKey] = useState(false)
@@ -143,6 +158,8 @@ const EventSettingsPage = () => {
     error: "",
   })
   const webhookFormIdRef = useRef<string | null>(null)
+  const [schedulePreview, setSchedulePreview] = useState<ParsedSchedule | null>(null)
+  const [uploadingSchedule, setUploadingSchedule] = useState(false)
 
   const refreshMatchSummary = useCallback(() => {
     try {
@@ -167,6 +184,7 @@ const EventSettingsPage = () => {
   const applySettingsResponse = useCallback((settings: EventSettingsResponse) => {
     setEvents(settings.events)
     setCurrentEvent(settings.currentEvent)
+    setEventDisplayNames(settings.eventDisplayNames ?? {})
     setEventKeyInput((previous) => {
       if (isEditingEventKey) {
         return previous
@@ -608,6 +626,54 @@ const EventSettingsPage = () => {
     }
   }
 
+  const handleUpdateDisplayName = async (eventCode: string, displayName: string) => {
+    const trimmed = displayName.trim()
+    const nextDisplayNames = { ...eventDisplayNames, [eventCode]: trimmed }
+    if (!trimmed) {
+      delete nextDisplayNames[eventCode]
+    }
+    try {
+      await performSettingsUpdate(
+        { eventDisplayNames: nextDisplayNames },
+        trimmed ? `Display name set: ${trimmed}` : `Display name cleared for ${eventCode}`
+      )
+    } catch {
+      // Error handled by performSettingsUpdate
+    }
+  }
+
+  const handleScheduleCSVChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const text = event.target?.result
+      if (typeof text === 'string') {
+        setSchedulePreview(parseScheduleCSV(text))
+      }
+    }
+    reader.readAsText(file)
+  }
+
+  const handleScheduleUpload = async () => {
+    if (!schedulePreview || !currentEvent) return
+    setUploadingSchedule(true)
+    try {
+      await apiPost('/schedule/assignments', {
+        eventKey: currentEvent,
+        assignments: schedulePreview.assignments,
+        matches: [],
+        aliases: schedulePreview.aliases,
+      })
+      toast.success('Schedule uploaded successfully')
+      setSchedulePreview(null)
+    } catch {
+      toast.error('Failed to upload schedule')
+    } finally {
+      setUploadingSchedule(false)
+    }
+  }
+
   const webhookUrl = webhookForm?.webhook?.url?.trim() || ""
   const webhookMethod = webhookForm?.webhook?.method || "GET"
   const webhookFormName = webhookForm?.name || ""
@@ -640,7 +706,7 @@ const EventSettingsPage = () => {
             <Calendar className="h-5 w-5 text-muted-foreground" />
             {currentEvent ? (
               <Badge variant="secondary" className="text-base font-semibold">
-                {currentEvent}
+                {eventDisplayNames[currentEvent] || currentEvent}
               </Badge>
             ) : (
               <span className="text-sm text-muted-foreground">No event selected yet</span>
@@ -663,9 +729,9 @@ const EventSettingsPage = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Manage Event Codes</CardTitle>
+          <CardTitle>Manage Events</CardTitle>
           <CardDescription>
-            Add each official event your team participates in. When you set one as active, scouts see it instantly in Game Start.
+            Add events and set display names. When you set one as active, scouts see the display name instantly in Game Start.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -673,7 +739,7 @@ const EventSettingsPage = () => {
             <Input
               value={newEvent}
               onChange={(event) => setNewEvent(event.target.value)}
-              placeholder="Enter event code (e.g., NJBR, 2025njfla)"
+              placeholder="Enter event code (e.g., 2025njfla)"
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
                   event.preventDefault()
@@ -702,14 +768,35 @@ const EventSettingsPage = () => {
                     key={eventName}
                     className="flex flex-col gap-2 rounded-md border border-border/70 bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between"
                   >
-                    <div className="flex items-center gap-3">
-                      <Calendar className="h-5 w-5 text-muted-foreground" />
-                      <div>
-                        <p className="text-sm font-semibold leading-tight">{eventName}</p>
-                        {isActive && (
-                          <p className="text-xs text-muted-foreground">This event is currently active for all scouts.</p>
-                        )}
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center gap-3">
+                        <Calendar className="h-5 w-5 text-muted-foreground" />
+                        <div>
+                          <p className="text-sm font-semibold leading-tight">{eventName}</p>
+                          {isActive && (
+                            <p className="text-xs text-muted-foreground">This event is currently active for all scouts.</p>
+                          )}
+                        </div>
                       </div>
+                      <Input
+                        placeholder="Display name (e.g., 1 Warren Hills)"
+                        defaultValue={eventDisplayNames[eventName] || ""}
+                        key={`dn-${eventName}-${eventDisplayNames[eventName] || ""}`}
+                        className="h-8 text-sm"
+                        onBlur={(e) => {
+                          const newValue = e.target.value.trim()
+                          const oldValue = eventDisplayNames[eventName] || ""
+                          if (newValue !== oldValue) {
+                            void handleUpdateDisplayName(eventName, e.target.value)
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault()
+                            ;(e.target as HTMLInputElement).blur()
+                          }
+                        }}
+                      />
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {!isActive && (
@@ -986,6 +1073,33 @@ const EventSettingsPage = () => {
               {matchDataLoading ? "Syncing…" : "Sync match schedule"}
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Upload Scouting Schedule</CardTitle>
+          <CardDescription>
+            CSV: match_number, red_1, red_2, red_3, blue_1, blue_2, blue_3 (emails or names)
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Input type="file" accept=".csv" onChange={handleScheduleCSVChange} />
+          {schedulePreview && (
+            <p className="text-sm text-muted-foreground">
+              Parsed {schedulePreview.assignments.length} assignments across{' '}
+              {new Set(schedulePreview.assignments.map((a) => a.matchNumber)).size} matches.
+              {schedulePreview.errors.length > 0 && (
+                <span className="text-destructive"> Errors: {schedulePreview.errors.join('; ')}</span>
+              )}
+            </p>
+          )}
+          <Button
+            disabled={!schedulePreview || schedulePreview.errors.length > 0 || uploadingSchedule}
+            onClick={() => { void handleScheduleUpload() }}
+          >
+            {uploadingSchedule ? 'Uploading…' : 'Upload Schedule'}
+          </Button>
         </CardContent>
       </Card>
     </div>
