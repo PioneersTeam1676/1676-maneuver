@@ -2,6 +2,7 @@ const express = require("express")
 const {
   replaceScheduleAssignments,
   getScheduleState,
+  getMyAssignments,
 } = require("../services/scheduleNotifications")
 const asyncHandler = require("../utils/asyncHandler")
 
@@ -31,6 +32,18 @@ router.post(
       aliases: aliases && typeof aliases === "object" ? aliases : {},
     })
     res.json({ success: true })
+  })
+)
+
+router.get(
+  '/my-assignments',
+  asyncHandler(async (req, res) => {
+    const { eventKey } = req.query
+    if (!eventKey) return res.status(400).json({ error: 'eventKey required' })
+    const email = req.user?.email
+    if (!email) return res.status(401).json({ error: 'not authenticated' })
+    const assignments = await getMyAssignments({ eventKey, email })
+    res.json({ assignments })
   })
 )
 

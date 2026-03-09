@@ -585,6 +585,30 @@ const getScheduleState = async (requestedEventKey) => {
   }
 }
 
+/**
+ * Returns all assignments for a specific scout email on an event.
+ */
+const getMyAssignments = async ({ eventKey, email }) => {
+  const normalizedEmail = normalizeEmail(email)
+  const seasonPrisma = await getSeasonPrismaForEvent(eventKey)
+
+  const assignments = await seasonPrisma.scoutScheduleAssignment.findMany({
+    where: { eventKey, scoutEmail: normalizedEmail },
+    orderBy: { matchOrder: 'asc' },
+  })
+
+  return assignments.map((a) => {
+    const positionDetails = POSITION_DETAILS[a.position] || {}
+    return {
+      matchNumber: a.matchNumber,
+      matchOrder: a.matchOrder,
+      position: a.position,
+      alliance: positionDetails.alliance ?? null,
+      slotIndex: positionDetails.slotIndex ?? null, // 0-based; +1 = teamPosition (1,2,3)
+    }
+  })
+}
+
 module.exports = {
   storeSubscription,
   removeSubscription,
@@ -593,4 +617,5 @@ module.exports = {
   getScheduleState,
   processUpcomingNotifications,
   sendManualNotification,
+  getMyAssignments,
 }
