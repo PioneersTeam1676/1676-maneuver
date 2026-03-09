@@ -1,4 +1,4 @@
-import { Binoculars, ChevronRight, Wrench, Gamepad2, type LucideIcon } from "lucide-react"
+import { Binoculars, Calendar, ChevronRight, Wrench, Gamepad2, type LucideIcon } from "lucide-react"
 import { useAuth, type UserRole } from "@/contexts/AuthContext"
 import {
   Collapsible,
@@ -124,6 +124,14 @@ export function NavMain({
               <SidebarMenuButton tooltip={"Drive Team Scouting"} onClick={() => proceedClick("/drive-scouting")}>
                 <Gamepad2 />
                 <span>Drive Team Scouting</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
+          {roleWeights[role] >= roleWeights['scout'] && (
+            <SidebarMenuItem className="flex items-center gap-2">
+              <SidebarMenuButton tooltip={"Schedule"} onClick={() => proceedClick("/schedule")}>
+                <Calendar />
+                <span>Schedule</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           )}

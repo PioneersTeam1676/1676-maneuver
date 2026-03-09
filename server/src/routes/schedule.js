@@ -3,6 +3,7 @@ const {
   replaceScheduleAssignments,
   getScheduleState,
   getMyAssignments,
+  notifyScheduleReleased,
 } = require("../services/scheduleNotifications")
 const asyncHandler = require("../utils/asyncHandler")
 
@@ -25,12 +26,21 @@ router.post(
       return res.status(400).json({ error: "eventKey is required" })
     }
 
+    const existingState = await getScheduleState(eventKey)
+    const isUpdate = Array.isArray(existingState?.assignments) && existingState.assignments.length > 0
+
     await replaceScheduleAssignments({
       eventKey,
       assignments: Array.isArray(assignments) ? assignments : [],
       matches: Array.isArray(matches) ? matches : [],
       aliases: aliases && typeof aliases === "object" ? aliases : {},
     })
+
+    // Fire-and-forget — do not block the response
+    notifyScheduleReleased({ eventKey, isUpdate }).catch((err) =>
+      console.error("Failed to send schedule notification", err)
+    )
+
     res.json({ success: true })
   })
 )

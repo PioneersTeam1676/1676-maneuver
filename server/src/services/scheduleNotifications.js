@@ -610,6 +610,38 @@ const getMyAssignments = async ({ eventKey, email }) => {
   })
 }
 
+const notifyScheduleReleased = async ({ eventKey, isUpdate = false }) => {
+  if (!pushEnabled) return
+
+  const subscriptions = await mainPrisma.pushSubscription.findMany()
+  if (!subscriptions.length) return
+
+  const title = isUpdate ? "Scouting Schedule Updated" : "Scouting Schedule Released"
+  const body = `The scouting schedule for ${eventKey} has been ${isUpdate ? "updated" : "published"}. Check your assignments.`
+
+  const payload = JSON.stringify({
+    title,
+    body,
+    tag: `schedule-${eventKey}-${isUpdate ? "update" : "release"}`,
+    data: { url: "/schedule" },
+  })
+
+  const results = await Promise.allSettled(
+    subscriptions.map((sub) => {
+      const pushSub = {
+        endpoint: sub.endpoint,
+        keys: { p256dh: sub.p256dh, auth: sub.auth },
+      }
+      return webpush.sendNotification(pushSub, payload)
+    })
+  )
+
+  const failed = results.filter((r) => r.status === "rejected").length
+  if (failed > 0) {
+    console.warn(`notifyScheduleReleased: ${failed}/${subscriptions.length} pushes failed`)
+  }
+}
+
 module.exports = {
   storeSubscription,
   removeSubscription,
@@ -619,4 +651,5 @@ module.exports = {
   processUpcomingNotifications,
   sendManualNotification,
   getMyAssignments,
+  notifyScheduleReleased,
 }

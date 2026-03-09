@@ -51,6 +51,7 @@ import AllianceOnboardingPage from "./pages/AllianceOnboardingPage";
 import FormMakerPage from "./pages/FormMakerPage";
 import FormBuilderPage from "./pages/FormBuilderPage";
 import DynamicScoutFormPage from "./pages/DynamicScoutFormPage";
+import SchedulePage from "@/pages/SchedulePage";
 import { InstallPrompt } from '@/components/InstallPrompt';
 import { PWAUpdatePrompt } from '@/components/PWAUpdatePrompt';
 // import { StatusBarSpacer } from '@/components/StatusBarSpacer';
@@ -103,6 +104,7 @@ function App() {
         <Route path="/terms" element={<TOSPage />} />
         <Route path="/privacy" element={<PrivacyPolicyPage />} />
         <Route path="/alliance-onboarding" element={<AllianceOnboardingPage />} />
+        <Route path="/schedule" element={<SchedulePage />} />
         <Route path="/auth/google/callback" element={<AuthCallbackPage />} />
         {/* Add more routes as needed */}
         <Route path="*" element={<NotFoundPage />} />
