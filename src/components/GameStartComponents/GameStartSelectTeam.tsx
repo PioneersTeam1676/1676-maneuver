@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, type JSX } from "react";
+import { useEffect, useState, useMemo, useRef, type JSX } from "react";
 import SelectTeamButton from "./GameStartSelectTeamButton";
 import { Input } from "../ui/input";
 /**
@@ -186,8 +186,15 @@ const InitialSelectTeam = ({
     }
   }, [baseTeams, preferredTeamPosition, team1Status, team2Status, team3Status, customTeamStatus]);
 
+  const isFirstRender = useRef(true);
+
   // Reset when the user changes to a different match or alliance
+  // (skip first render so getInitialTeamSelection() result is respected on mount)
   useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
     setTeam1Status(false);
     setTeam2Status(false);
     setTeam3Status(false);
