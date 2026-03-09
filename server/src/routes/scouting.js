@@ -4,6 +4,7 @@ const asyncHandler = require("../utils/asyncHandler")
 const { parseJsonValue, stringifyJsonValue, toMsBigInt, fromBigInt } = require("../utils/dbUtils")
 const { updateMatchProgress } = require("../services/scheduleNotifications")
 const { detectOutliers } = require("../services/outlierDetection")
+const { prisma: mainPrisma } = require("../db")
 
 const router = express.Router()
 
@@ -1253,8 +1254,6 @@ router.post(
     })
   })
 )
-
-const { prisma: mainPrisma } = require("../db")
 
 const LEAD_ROLE_WEIGHTS = { lead: 3, tech_lead: 4 }
 

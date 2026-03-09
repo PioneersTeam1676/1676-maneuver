@@ -28,11 +28,11 @@ const detectOutliers = async ({ eventKey }) => {
     select: { scoutEmail: true, matchNumber: true, matchOrder: true },
   })
 
-  // Build map: scoutEmail/name → list of assigned matchNumbers
+  // Build map: scoutEmail → array of { matchNumber, matchOrder }
   const assignmentMap = new Map()
   for (const a of assignments) {
     if (!assignmentMap.has(a.scoutEmail)) assignmentMap.set(a.scoutEmail, [])
-    assignmentMap.get(a.scoutEmail).push(a.matchNumber)
+    assignmentMap.get(a.scoutEmail).push({ matchNumber: a.matchNumber, matchOrder: a.matchOrder ?? Infinity })
   }
 
   const flagged = []
@@ -41,7 +41,7 @@ const detectOutliers = async ({ eventKey }) => {
     // scoutName in entries may be email or display name — try both
     const assignedMatches =
       assignmentMap.get(entry.scoutName) ||
-      assignmentMap.get((entry.scoutName || "").toLowerCase()) ||
+      assignmentMap.get((entry.scoutName || '').toLowerCase()) ||
       []
 
     if (!assignedMatches.length) continue // no schedule for this scout, skip
@@ -51,22 +51,23 @@ const detectOutliers = async ({ eventKey }) => {
     const reportedDigits = String(entry.matchNumber).match(/(\d+)$/)
     const reportedNum = reportedDigits ? parseInt(reportedDigits[1], 10) : null
 
-    const isAssigned = assignedMatches.some((m) => {
-      const digits = String(m).match(/(\d+)$/)
+    const isAssigned = assignedMatches.some((a) => {
+      const digits = String(a.matchNumber).match(/(\d+)$/)
       const num = digits ? parseInt(digits[1], 10) : null
       return num !== null && num === reportedNum
     })
 
     if (isAssigned) continue // matches assignment, good
 
-    // Find the most likely correct match (one they were assigned to)
-    const likelyCorrectMatch = assignedMatches[0] ?? null
+    // Sort by matchOrder to pick the chronologically first assigned match
+    const sorted = [...assignedMatches].sort((x, y) => x.matchOrder - y.matchOrder)
+    const likelyCorrectMatch = sorted[0]?.matchNumber ?? null
 
     flagged.push({
       entryId: entry.id,
       scoutEmail: entry.scoutName,
       reportedMatch: entry.matchNumber,
-      expectedMatches: assignedMatches,
+      expectedMatches: assignedMatches.map((a) => a.matchNumber),
       likelyCorrectMatch,
       timestamp: entry.timestamp,
     })
