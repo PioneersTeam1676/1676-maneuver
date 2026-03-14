@@ -69,8 +69,11 @@ CREATE TABLE IF NOT EXISTS event_settings (
   id INT PRIMARY KEY,
   current_event VARCHAR(255),
   events_json LONGTEXT NOT NULL DEFAULT '[]',
+  event_display_names_json LONGTEXT NOT NULL DEFAULT '{}',
   updated_at INT NOT NULL
 );
+
+ALTER TABLE event_settings ADD COLUMN IF NOT EXISTS event_display_names_json LONGTEXT NOT NULL DEFAULT '{}';
 
 CREATE TABLE IF NOT EXISTS scout_schedule_matches (
   event_key VARCHAR(255) NOT NULL,

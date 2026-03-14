@@ -136,14 +136,6 @@ export default function UserManagementPage() {
         apiGet<RecentUsersResponse>("/recent-users").catch(() => ({ recentUsers: [] })),
         apiGet<{ entries: ScoutingEntry[] }>(buildSeasonUrl("/scouting")).catch(() => ({ entries: [] })),
       ])
-      
-      // Convert roleAssignments object to array
-      const userList: User[] = Object.entries(rolesData.roleAssignments).map(
-        ([email, role]) => ({
-          email,
-          role: role as string,
-        })
-      )
 
       // Enhance with recent users data (handle API response shape)
       const recentUsersArray = Array.isArray(recentUsersResp)
@@ -152,8 +144,36 @@ export default function UserManagementPage() {
           ? recentUsersResp.recentUsers
           : []
 
+      const roleAssignments = Object.entries(rolesData.roleAssignments || {}).reduce<Record<string, string>>(
+        (acc, [email, role]) => {
+          const normalizedEmail = String(email || "").trim().toLowerCase()
+          if (!normalizedEmail) return acc
+          acc[normalizedEmail] = role
+          return acc
+        },
+        {}
+      )
+
+      const allUserEmails = Array.from(
+        new Set([
+          ...Object.keys(roleAssignments),
+          ...recentUsersArray
+            .map((u) => String(u.email || "").trim().toLowerCase())
+            .filter(Boolean),
+        ])
+      )
+
+      // Include everyone we know: explicit role assignments + recent sign-ins.
+      // Missing role assignments are shown as pending.
+      const userList: User[] = allUserEmails.map((email) => ({
+        email,
+        role: roleAssignments[email] || "pending",
+      }))
+
       const recentUsersMap = new Map<string, RecentUserApiRecord>(
-        recentUsersArray.map((u) => [u.email?.toLowerCase() || "", u])
+        recentUsersArray
+          .filter((u) => typeof u.email === "string" && u.email.trim().length > 0)
+          .map((u) => [u.email!.trim().toLowerCase(), u])
       )
 
       // Build unique scout names set for fallback guessing
@@ -208,14 +228,13 @@ export default function UserManagementPage() {
               displayName ||
               (firstName && lastName ? `${firstName} ${lastName}`.trim() : null) ||
               guessDisplayName(user.email)
-            
-            // Only fetch scouting data if we have a display name to query with
-            const [scoutingData, pitData] = scoutDisplayName 
-              ? await Promise.all([
-                  apiGet<{ entries: ScoutingEntry[] }>(buildSeasonUrl("/scouting", { scout_name: scoutDisplayName })).catch(() => ({ entries: [] })),
-                  apiGet<{ entries: PitEntry[] }>(buildSeasonUrl("/pit", { scout_name: scoutDisplayName })).catch(() => ({ entries: [] })),
-                ])
-              : [{ entries: [] }, { entries: [] }]
+
+            // Most entries use display names, but fallback to email for older datasets.
+            const scoutQueryName = scoutDisplayName || user.email
+            const [scoutingData, pitData] = await Promise.all([
+              apiGet<{ entries: ScoutingEntry[] }>(buildSeasonUrl("/scouting", { scoutName: scoutQueryName })).catch(() => ({ entries: [] })),
+              apiGet<{ entries: PitEntry[] }>(buildSeasonUrl("/pit", { scoutName: scoutQueryName })).catch(() => ({ entries: [] })),
+            ])
 
             const scoutingEntries = scoutingData.entries?.length || 0
             const pitEntries = pitData.entries?.length || 0
@@ -231,12 +250,12 @@ export default function UserManagementPage() {
               activityCount: scoutingEntries + pitEntries,
               scoutingEntries,
               pitEntries,
-              displayName: recentUser?.displayName,
-              firstName: recentUser?.firstName,
-              lastName: recentUser?.lastName,
-              teamNumber: recentUser?.teamNumber,
-              lastSeenAt: recentUser?.lastSeenAt,
-              createdAt: recentUser?.firstSeenAt,
+              displayName: recentUser?.displayName || recentUser?.display_name,
+              firstName: recentUser?.firstName || recentUser?.first_name,
+              lastName: recentUser?.lastName || recentUser?.last_name,
+              teamNumber: recentUser?.teamNumber || recentUser?.team_number,
+              lastSeenAt: recentUser?.lastSeenAt || recentUser?.last_seen_at,
+              createdAt: recentUser?.firstSeenAt || recentUser?.first_seen_at,
               lastActivity: allTimestamps.length > 0 ? Math.max(...allTimestamps) : undefined,
               aliases: [], // TODO: fetch from schedule aliases
             }

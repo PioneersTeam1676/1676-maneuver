@@ -23,6 +23,8 @@ import {
   EVENT_UPDATED_EVENT,
   STORAGE_EVENT_NAME_KEY,
   STORAGE_EVENTS_KEY,
+  STORAGE_EVENT_DISPLAY_NAMES_KEY,
+  getEventDisplayName,
   syncEventSettings,
   updateEventSettings,
 } from "@/lib/eventSettingsClient"
@@ -83,7 +85,7 @@ export function EventNameSelector({ currentEventName, onEventNameChange }: Event
         const value = event.newValue || ""
         onEventNameChange(value)
       }
-      if (event.key === STORAGE_EVENTS_KEY) {
+      if (event.key === STORAGE_EVENTS_KEY || event.key === STORAGE_EVENT_DISPLAY_NAMES_KEY) {
         setEventsList(loadEventsFromStorage())
       }
     }
@@ -149,7 +151,7 @@ export function EventNameSelector({ currentEventName, onEventNameChange }: Event
       await updateEventSettings({ currentEvent: trimmedName })
       onEventNameChange(trimmedName)
       setOpen(false)
-      toast.success(`Event set to: ${trimmedName}`)
+      toast.success(`Event set to: ${getEventDisplayName(trimmedName)}`)
     } catch (error) {
       const message = error instanceof ApiError ? error.message : "Failed to update the event"
       toast.error(message)
@@ -164,7 +166,7 @@ export function EventNameSelector({ currentEventName, onEventNameChange }: Event
         <div className="flex items-center gap-2 text-sm">
           <Calendar className="h-4 w-4 text-muted-foreground" />
           <span className="font-medium text-foreground">
-            {currentEventName || "Awaiting event assignment"}
+            {currentEventName ? getEventDisplayName(currentEventName) : "Awaiting event assignment"}
           </span>
         </div>
         <span className="text-xs text-muted-foreground">Set by alliance leads</span>
@@ -184,7 +186,7 @@ export function EventNameSelector({ currentEventName, onEventNameChange }: Event
         >
           <div className="flex items-center gap-2">
             <Calendar className="h-4 w-4" />
-            {currentEventName || "Select event..."}
+            {currentEventName ? getEventDisplayName(currentEventName) : "Select event..."}
           </div>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
@@ -205,30 +207,33 @@ export function EventNameSelector({ currentEventName, onEventNameChange }: Event
           </CommandEmpty>
           <CommandList>
             <CommandGroup>
-              {eventsList.map((event) => (
-                <CommandItem
-                  key={event}
-                  value={event}
-                  disabled={isUpdating}
-                  onSelect={() => {
-                    void saveEvent(event)
-                  }}
-                  className="flex items-center justify-between"
-                >
-                  <div className="flex items-center">
-                    <Check
-                      className={cn(
-                        "mr-2 h-4 w-4",
-                        currentEventName === event ? "opacity-100" : "opacity-0"
-                      )}
-                    />
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
-                      {event}
+              {eventsList.map((event) => {
+                const displayName = getEventDisplayName(event)
+                return (
+                  <CommandItem
+                    key={event}
+                    value={displayName}
+                    disabled={isUpdating}
+                    onSelect={() => {
+                      void saveEvent(event)
+                    }}
+                    className="flex items-center justify-between"
+                  >
+                    <div className="flex items-center">
+                      <Check
+                        className={cn(
+                          "mr-2 h-4 w-4",
+                          currentEventName === event ? "opacity-100" : "opacity-0"
+                        )}
+                      />
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                        {displayName}
+                      </div>
                     </div>
-                  </div>
-                </CommandItem>
-              ))}
+                  </CommandItem>
+                )
+              })}
               {eventsList.length === 0 && (
                 <CommandItem disabled>
                   Events will appear here after you add them in Event Settings.

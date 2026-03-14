@@ -49,6 +49,29 @@ const sanitizeEventName = (value) => {
   return value.trim()
 }
 
+const parseDisplayNames = (raw) => {
+  if (!raw) return {}
+  try {
+    const parsed = JSON.parse(raw)
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const result = {}
+      for (const [key, value] of Object.entries(parsed)) {
+        if (typeof key === "string" && typeof value === "string") {
+          const trimmedKey = key.trim()
+          const trimmedValue = value.trim()
+          if (trimmedKey && trimmedValue) {
+            result[trimmedKey] = trimmedValue
+          }
+        }
+      }
+      return result
+    }
+    return {}
+  } catch {
+    return {}
+  }
+}
+
 const formatResponse = (row) => {
   const currentEvent = sanitizeEventName(row.currentEvent)
   let events = sanitizeEvents(parseEvents(row.eventsJson))
@@ -58,6 +81,7 @@ const formatResponse = (row) => {
   return {
     currentEvent,
     events,
+    eventDisplayNames: parseDisplayNames(row.eventDisplayNamesJson),
     updatedAt: Number(row.updatedAt) || 0,
   }
 }
@@ -74,10 +98,14 @@ router.get(
 router.put(
   "/settings",
   asyncHandler(async (req, res) => {
-    const { currentEvent, events } = req.body || {}
+    const { currentEvent, events, eventDisplayNames } = req.body || {}
 
     if (events !== undefined && !Array.isArray(events)) {
       return res.status(400).json({ error: "events must be an array of strings" })
+    }
+
+    if (eventDisplayNames !== undefined && (typeof eventDisplayNames !== "object" || Array.isArray(eventDisplayNames) || eventDisplayNames === null)) {
+      return res.status(400).json({ error: "eventDisplayNames must be an object mapping event codes to display names" })
     }
 
     const { prisma } = await getSeasonPrisma(resolveSeasonSelector({ year: req.body?.year, eventName: currentEvent }))
@@ -92,17 +120,31 @@ router.put(
       normalizedEvents.sort((a, b) => a.localeCompare(b))
     }
 
+    const existingDisplayNames = parseDisplayNames(existing.eventDisplayNamesJson)
+    const nextDisplayNames = eventDisplayNames !== undefined
+      ? { ...existingDisplayNames, ...eventDisplayNames }
+      : existingDisplayNames
+
+    const prunedDisplayNames = {}
+    for (const eventCode of normalizedEvents) {
+      if (nextDisplayNames[eventCode]) {
+        prunedDisplayNames[eventCode] = nextDisplayNames[eventCode]
+      }
+    }
+
     await prisma.eventSetting.upsert({
       where: { id: 1 },
       create: {
         id: 1,
         currentEvent: nextCurrent || null,
         eventsJson: JSON.stringify(normalizedEvents),
+        eventDisplayNamesJson: JSON.stringify(prunedDisplayNames),
         updatedAt: nowSeconds(),
       },
       update: {
         currentEvent: nextCurrent || null,
         eventsJson: JSON.stringify(normalizedEvents),
+        eventDisplayNamesJson: JSON.stringify(prunedDisplayNames),
         updatedAt: nowSeconds(),
       }
     })

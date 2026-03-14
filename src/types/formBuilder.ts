@@ -31,6 +31,7 @@ export type FormField = {
   min?: number
   max?: number
   step?: number
+  stepperButtons?: number[]
   conditionalNavigation?: Record<string, string> // Maps option value to target page ID
 }
 

@@ -2,7 +2,7 @@ services:
   api:
     build: ./server
     ports:
-      - "4000:4000"
+      - "4001:4000"
     volumes:
       - ./server/data:/app/data
     environment:

@@ -208,6 +208,7 @@ const buildLocalEventSettings = (currentEvent: string): EventSettingsResponse =>
   return {
     currentEvent: trimmed,
     events: normalized,
+    eventDisplayNames: {},
     updatedAt: Date.now(),
   };
 };

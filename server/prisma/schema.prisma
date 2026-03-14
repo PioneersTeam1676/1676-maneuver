@@ -97,10 +97,11 @@ model ScoutAchievement {
 }
 
 model EventSetting {
-  id           Int     @id
-  currentEvent String? @map("current_event") @db.VarChar(255)
-  eventsJson   String  @map("events_json") @db.LongText
-  updatedAt    Int     @map("updated_at")
+  id                    Int     @id
+  currentEvent          String? @map("current_event") @db.VarChar(255)
+  eventsJson            String  @map("events_json") @db.LongText
+  eventDisplayNamesJson String  @default("{}") @map("event_display_names_json") @db.LongText
+  updatedAt             Int     @map("updated_at")
 
   @@map("event_settings")
 }

@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { NumberStepper } from "@/components/ui/number-stepper"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 
@@ -52,6 +53,13 @@ const getInitialValue = (field: FormField) => {
   if (field.type === "multi_select") return [] as string[]
   if ((field.type === "radio" || field.type === "radio_cards") && field.multiSelect) return [] as string[]
   if (field.type === "image") return ""
+  if (field.type === "rating" || field.type === "number" || field.type === "slider") return field.min ?? 0
+  if (isStratChoiceField(field)) {
+    const nonFuncOption = (field.options || []).find((opt) =>
+      hasKeyword(splitSpecialChoiceOption(opt).title, NON_FUNCTIONING_KEYWORDS)
+    )
+    return nonFuncOption ?? ""
+  }
   return ""
 }
 
@@ -188,14 +196,39 @@ const isAllianceWonAutoField = (field: FormField) => {
   return field.type === "checkbox" && label.includes("alliance") && label.includes("won") && label.includes("auto")
 }
 
+const hasEstimateOrRatingValue = (field: FormField) => {
+  const label = (field.label || "").trim().toLowerCase()
+  const key = (field.key || "").trim().toLowerCase()
+  return (
+    label.includes("rate") ||
+    label.includes("rating") ||
+    label.includes("estimate") ||
+    key.includes("rating") ||
+    key.includes("estimate")
+  )
+}
+
 const isStratRateField = (field: FormField) => {
   const label = (field.label || "").trim().toLowerCase()
-  return (label.includes("strat") || label.includes("strategy")) && (label.includes("rate") || label.includes("rating"))
+  const key = (field.key || "").trim().toLowerCase()
+  return (
+    hasEstimateOrRatingValue(field) &&
+    (
+      label.includes("strat") ||
+      label.includes("strategy") ||
+      label.includes("shift") ||
+      label.includes("auto") ||
+      label.includes("endgame") ||
+      key.includes("rating") ||
+      key.includes("estimate")
+    )
+  )
 }
 
 const isTransitionRatingField = (field: FormField) => {
   const label = (field.label || "").trim().toLowerCase()
-  return label.includes("transition") && (label.includes("rate") || label.includes("rating"))
+  const key = (field.key || "").trim().toLowerCase()
+  return hasEstimateOrRatingValue(field) && (label.includes("transition") || key.includes("transition"))
 }
 
 const isWideRatingField = (field: FormField) =>
@@ -665,10 +698,8 @@ export default function DynamicScoutFormPage() {
 
       let value = effectiveValues[field.id]
       if (field.type === "number" || field.type === "rating" || field.type === "slider") {
-        if (value !== "" && value !== undefined && value !== null) {
-          const num = Number(value)
-          value = Number.isNaN(num) ? value : num
-        }
+        const num = Number(value)
+        value = Number.isFinite(num) ? num : 0
       }
       responseData[key] = value
     })
@@ -851,6 +882,7 @@ export default function DynamicScoutFormPage() {
           inputs: {
             ...inputs,
             matchNumber: Number.isNaN(nextMatchNumber) ? inputs.matchNumber : String(nextMatchNumber),
+            selectTeam: "",
           },
         },
       })
@@ -1709,6 +1741,34 @@ export default function DynamicScoutFormPage() {
                         />
                       </div>
                     ) : null}
+                    {isGrayedOut ? (
+                      <p className="text-xs text-muted-foreground">Mutual exclusion active: {activeFieldLabel}</p>
+                    ) : null}
+                    {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
+                  </div>
+                )
+              }
+
+              if (field.type === "number" && Array.isArray(field.stepperButtons) && field.stepperButtons.length > 0) {
+                const min = field.min ?? 0
+                const max = typeof field.max === "number" ? field.max : undefined
+                const step = field.step ?? 1
+                const numericValue = toFiniteNumber(fieldValue, min)
+                return (
+                  <div
+                    key={field.id}
+                    className={cn("space-y-1", isWideRatingField(field) && "col-span-2", isGrayedOut && "opacity-50")}
+                  >
+                    <FieldLabel field={field} isRequired={isRequired} />
+                    <NumberStepper
+                      value={numericValue}
+                      onChange={(value) => handleValueChange(field.id, value)}
+                      adjustments={field.stepperButtons}
+                      min={min}
+                      max={max}
+                      step={step}
+                      disabled={isGrayedOut}
+                    />
                     {isGrayedOut ? (
                       <p className="text-xs text-muted-foreground">Mutual exclusion active: {activeFieldLabel}</p>
                     ) : null}

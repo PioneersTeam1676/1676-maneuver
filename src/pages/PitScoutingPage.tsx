@@ -38,6 +38,7 @@ const getInitialValue = (field: FormField) => {
   if (field.type === "multi_select") return [] as string[];
   if ((field.type === "radio" || field.type === "radio_cards") && field.multiSelect) return [] as string[];
   if (field.type === "image") return "";
+  if (field.type === "rating" || field.type === "number" || field.type === "slider") return field.min ?? 0;
   return "";
 };
 
@@ -275,10 +276,8 @@ const PitScoutingPage = () => {
 
       let value = values[field.id];
       if (field.type === "number" || field.type === "rating" || field.type === "slider") {
-        if (value !== "" && value !== undefined && value !== null) {
-          const num = Number(value);
-          value = Number.isNaN(num) ? value : num;
-        }
+        const num = Number(value);
+        value = Number.isFinite(num) ? num : 0;
       }
       responseData[key] = value;
     });

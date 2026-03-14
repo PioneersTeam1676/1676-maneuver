@@ -786,6 +786,7 @@ router.get(
   "/",
   asyncHandler(async (req, res) => {
     const { teamNumber, matchNumber, eventName, scoutName, alliance } = req.query
+    const scoutFilter = scoutName || req.query.scout_name
     const selector = resolveSeasonSelector({
       year: req.query.year,
       formId: req.query.formId,
@@ -797,7 +798,7 @@ router.get(
     if (teamNumber) where.teamNumber = String(teamNumber)
     if (matchNumber) where.matchNumber = String(matchNumber)
     if (eventName) where.eventName = String(eventName)
-    if (scoutName) where.scoutName = String(scoutName)
+    if (scoutFilter) where.scoutName = String(scoutFilter)
     if (alliance) where.alliance = String(alliance)
 
     await ensureScoutingIdSchema(prisma)
@@ -1039,6 +1040,7 @@ router.get(
   "/export/rebuilt",
   asyncHandler(async (req, res) => {
     const { teamNumber, matchNumber, eventName, scoutName, alliance } = req.query
+    const scoutFilter = scoutName || req.query.scout_name
     const selector = resolveSeasonSelector({
       year: req.query.year,
       formId: req.query.formId,
@@ -1050,7 +1052,7 @@ router.get(
     if (teamNumber) where.teamNumber = String(teamNumber)
     if (matchNumber) where.matchNumber = String(matchNumber)
     if (eventName) where.eventName = String(eventName)
-    if (scoutName) where.scoutName = String(scoutName)
+    if (scoutFilter) where.scoutName = String(scoutFilter)
     if (alliance) where.alliance = String(alliance)
 
     await ensureScoutingIdSchema(prisma)
