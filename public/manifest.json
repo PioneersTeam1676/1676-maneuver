@@ -7,7 +7,7 @@
   "display": "standalone",
   "scope": "/",
   "start_url": "/",
-  "categories": ["sports", "utilities", "productivity"],
+  "categories": ["robotics", "utilities", "productivity"],
   "shortcuts": [
     {
       "name": "Quick Scout",

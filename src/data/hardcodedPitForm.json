@@ -402,6 +402,58 @@
                 "min": 0,
                 "max": 5,
                 "step": 1
+              },
+              {
+                "id": "b2f4c891-3d7a-4e1b-a5c6-8f9d2e0b1a3c",
+                "type": "checkbox",
+                "label": "Do you make space for others?",
+                "key": "",
+                "helpText": "",
+                "exclusiveGroup": "",
+                "required": false,
+                "placeholder": "",
+                "options": [],
+                "min": 0,
+                "max": 5,
+                "step": 1
+              },
+              {
+                "id": "c7e8d912-4f2b-4a3c-b6d7-9e0f1a2b3c4d",
+                "type": "radio",
+                "label": "Left or right pref?",
+                "key": "",
+                "helpText": "",
+                "exclusiveGroup": "",
+                "allowDeselect": true,
+                "required": false,
+                "placeholder": "",
+                "options": [
+                  "Left",
+                  "Right"
+                ],
+                "min": 0,
+                "max": 5,
+                "step": 1
+              },
+              {
+                "id": "d8f9e023-5a3c-4b4d-c7e8-0f1a2b3c4d5e",
+                "type": "radio_cards",
+                "label": "Height at edge",
+                "key": "",
+                "helpText": "",
+                "exclusiveGroup": "",
+                "allowDeselect": true,
+                "multiSelect": false,
+                "required": false,
+                "placeholder": "",
+                "options": [
+                  "Low (<22)",
+                  "Mid (22-26)",
+                  "High (26-30)"
+                ],
+                "min": 0,
+                "max": 5,
+                "step": 1
               }
             ]
           },

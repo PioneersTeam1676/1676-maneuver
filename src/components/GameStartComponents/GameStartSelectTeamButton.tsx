@@ -24,18 +24,21 @@ const InitialSelectTeamButton = ({
         type="button"
         className={cn(
           "w-full h-full flex flex-row items-center text-xl pl-2 active:bg-accent",
-          isPreferred && "ring-2 ring-blue-500 ring-offset-2",
-          currentTeamStatus && "bg-gray-200 dark:bg-neutral-600",
+          currentTeamStatus && "ring-2 ring-blue-500 ring-offset-2 bg-gray-200 dark:bg-neutral-600",
         )}
         onClick={() => clickTeam(currentTeamType, currentTeamStatus)}
       >
         <div className="flex items-center justify-between w-full">
           <span>{teamName}</span>
-          {isPreferred && (
+          {currentTeamStatus ? (
             <span className="text-blue-500 text-sm font-semibold px-2">
               (Your Position)
             </span>
-          )}
+          ) : isPreferred ? (
+            <span className="text-muted-foreground text-sm px-2">
+              (Suggested)
+            </span>
+          ) : null}
         </div>
       </Button>
     </>
