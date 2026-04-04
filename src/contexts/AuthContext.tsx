@@ -1,5 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '@/lib/apiClient'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { API_AUTH_FAILURE_EVENT, apiDelete, apiGet, apiPatch, apiPost, apiPut, hasUsableAuthToken } from '@/lib/apiClient'
 
 type User = {
   name: string
@@ -84,6 +84,8 @@ const OAUTH_STATE_TTL_MS = 10 * 60 * 1000
 const AUTH_ID_TOKEN_KEY = 'auth_id_token'
 const ALLIANCE_PROFILE_STORAGE_KEY = 'auth_alliance_profiles'
 const MAX_RECENT_USERS = 150
+const AUTH_CALLBACK_PATH = '/auth/google/callback'
+const AUTH_TOKEN_EXPIRY_SKEW_MS = 60_000
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase()
 
@@ -149,6 +151,8 @@ const SCOUT_POSITIONS = ['red-1', 'red-2', 'red-3', 'blue-1', 'blue-2', 'blue-3'
 type StoredOAuthState = {
   nonce: string
   createdAt: number
+  returnTo?: string
+  mode?: 'interactive' | 'silent'
 }
 
 type GoogleIdTokenPayload = {
@@ -157,6 +161,14 @@ type GoogleIdTokenPayload = {
   picture?: string
   sub?: string
   nonce?: string
+  exp?: number
+}
+
+type OAuthProcessResult = {
+  success: boolean
+  message: string
+  returnTo?: string
+  mode?: 'interactive' | 'silent'
 }
 
 const coerceRecentUserRecord = (entry: Partial<RecentUserRecord>): RecentUserRecord | null => {
@@ -244,6 +256,31 @@ const decodeIdToken = (token: string): GoogleIdTokenPayload => {
   return JSON.parse(payload) as GoogleIdTokenPayload
 }
 
+const readStoredIdToken = (): string | null => {
+  if (typeof window === 'undefined') return null
+  const stored = localStorage.getItem(AUTH_ID_TOKEN_KEY)
+  const trimmed = stored?.trim()
+  return trimmed || null
+}
+
+const isIdTokenFresh = (token: string | null, minRemainingMs = AUTH_TOKEN_EXPIRY_SKEW_MS): boolean => {
+  if (!token) return false
+  try {
+    const payload = decodeIdToken(token)
+    if (typeof payload.exp !== 'number') {
+      return true
+    }
+    return payload.exp * 1000 > Date.now() + minRemainingMs
+  } catch {
+    return false
+  }
+}
+
+const readCurrentAppPath = () => {
+  if (typeof window === 'undefined') return '/'
+  return `${window.location.pathname}${window.location.search}${window.location.hash}`
+}
+
 const generateOpaqueString = () => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID()
@@ -265,7 +302,6 @@ const routePermissions: Array<{ pattern: RegExp; minRole: UserRole | null }> = [
   { pattern: /^\/$/, minRole: 'scout' }, // Home page for verified users only
   { pattern: /^\/game-start$/, minRole: 'scout' },
   { pattern: /^\/auto-start$/, minRole: 'scout' },
-  { pattern: /^\/scout-form$/, minRole: 'scout' },
   { pattern: /^\/auto-scoring$/, minRole: 'scout' },
   { pattern: /^\/teleop-scoring$/, minRole: 'scout' },
   { pattern: /^\/endgame$/, minRole: 'scout' },
@@ -287,7 +323,6 @@ const routePermissions: Array<{ pattern: RegExp; minRole: UserRole | null }> = [
   { pattern: /^\/scout-management$/, minRole: 'lead' },
   { pattern: /^\/admin$/, minRole: 'tech_lead' },
   { pattern: /^\/pi-panel$/, minRole: 'lead' },
-  { pattern: /^\/form-maker/, minRole: 'lead' },
   { pattern: /^\/data-management$/, minRole: 'tech_lead' },
   { pattern: /^\/clear-data$/, minRole: 'tech_lead' },
   { pattern: /^\/json-transfer$/, minRole: 'lead' },
@@ -413,6 +448,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   })
   const [requiresAllianceConfirmation, setRequiresAllianceConfirmation] = useState(false)
+  const silentRefreshStartedRef = useRef(false)
 
   const cleanupExpiredOAuthState = useCallback(() => {
     const now = Date.now()
@@ -447,10 +483,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  const storeOAuthState = useCallback((stateValue: string, nonce: string) => {
+  const storeOAuthState = useCallback((
+    stateValue: string,
+    nonce: string,
+    options?: { returnTo?: string; mode?: 'interactive' | 'silent' }
+  ) => {
     const payload: StoredOAuthState = {
       nonce,
       createdAt: Date.now(),
+      returnTo: options?.returnTo,
+      mode: options?.mode,
     }
     localStorage.setItem(`${OAUTH_STATE_PREFIX}${stateValue}`, JSON.stringify(payload))
   }, [])
@@ -484,6 +526,101 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return next
   }, [user])
 
+  const clearStoredAuthSession = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('auth_user')
+      localStorage.removeItem(AUTH_ID_TOKEN_KEY)
+    }
+    silentRefreshStartedRef.current = false
+    setUser(null)
+    setRequiresAllianceConfirmation(false)
+    setAuthorizationReady(true)
+  }, [])
+
+  const startGoogleAuth = useCallback((options?: {
+    prompt?: 'consent select_account' | 'none'
+    mode?: 'interactive' | 'silent'
+    returnTo?: string
+    loginHint?: string
+    replace?: boolean
+  }) => {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
+    if (!clientId) {
+      console.warn('Cannot start Google login without VITE_GOOGLE_CLIENT_ID')
+      return false
+    }
+
+    const configuredRedirect = import.meta.env.VITE_GOOGLE_REDIRECT_URI
+    const currentOrigin = window.location.origin
+    let redirectUri = `${currentOrigin}${AUTH_CALLBACK_PATH}`
+
+    if (configuredRedirect) {
+      try {
+        const parsed = new URL(configuredRedirect)
+        if (parsed.origin === currentOrigin) {
+          redirectUri = parsed.toString()
+        } else {
+          console.warn(
+            `Configured Google redirect (${parsed.origin}) does not match current origin (${currentOrigin}); using current origin callback instead. ` +
+            `Add ${redirectUri} to the OAuth client in Google Cloud to avoid this fallback.`,
+          )
+        }
+      } catch (error) {
+        console.warn('Invalid VITE_GOOGLE_REDIRECT_URI; falling back to current origin callback.', error)
+      }
+    }
+
+    const stateValue = generateOpaqueString()
+    const nonce = generateOpaqueString()
+    storeOAuthState(stateValue, nonce, {
+      returnTo: options?.returnTo || readCurrentAppPath(),
+      mode: options?.mode || 'interactive',
+    })
+
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      response_type: 'id_token',
+      scope: 'openid email profile',
+      prompt: options?.prompt || 'consent select_account',
+      state: stateValue,
+      nonce,
+    })
+
+    if (options?.loginHint) {
+      params.set('login_hint', normalizeEmail(options.loginHint))
+    }
+
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`
+    if (options?.replace) {
+      window.location.replace(authUrl)
+    } else {
+      window.location.assign(authUrl)
+    }
+    return true
+  }, [storeOAuthState])
+
+  const attemptSilentReauth = useCallback((loginHint?: string | null) => {
+    if (typeof window === 'undefined') return false
+    if (window.location.pathname === AUTH_CALLBACK_PATH) return false
+    if (silentRefreshStartedRef.current) return false
+
+    const normalizedHint = loginHint ? normalizeEmail(loginHint) : undefined
+    const started = startGoogleAuth({
+      prompt: 'none',
+      mode: 'silent',
+      returnTo: readCurrentAppPath(),
+      loginHint: normalizedHint,
+      replace: true,
+    })
+
+    if (started) {
+      silentRefreshStartedRef.current = true
+    }
+
+    return started
+  }, [startGoogleAuth])
+
   useEffect(() => {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
     if (!clientId) {
@@ -491,11 +628,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     cleanupExpiredOAuthState()
 
+    if (window.location.pathname === AUTH_CALLBACK_PATH) {
+      setReady(true)
+      return
+    }
+
     const saved = localStorage.getItem('auth_user')
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as User
         const normalized = normalizeEmail(parsed.email)
+        const storedToken = readStoredIdToken()
+
+        if (!isIdTokenFresh(storedToken)) {
+          if (!attemptSilentReauth(normalized)) {
+            clearStoredAuthSession()
+            setReady(true)
+          }
+          return
+        }
 
         setUser((current) => {
           if (current && normalizeEmail(current.email) === normalized) {
@@ -511,14 +662,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           acknowledged: true,
         })
 
-        // Self-register in backend roles table if allowed-domain user.
         // Covers the "returning user" path where processOAuthResponse is never called.
-        // Safe: the endpoint is a no-op if they already have a role.
-        if (emailMatchesAllowedDomain(normalized)) {
-          void apiPost('/roles/self-register', {}).catch(() => {
-            // Silently ignore — token may be expired; they'll self-register on next fresh login.
-          })
-        }
+        // Safe: the endpoint is a no-op when they already have a non-pending role.
+        void apiPost('/recent-users/self-register-role', {}).catch(() => {
+          // Silent refresh listener handles token expiry/re-auth.
+        })
 
         setRoleAssignments((prev) => {
           const next = { ...prev }
@@ -543,6 +691,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           } else if (isConfiguredAdmin && existingRole !== 'lead') {
             next[normalized] = 'lead'
             changed = true
+          } else if (existingRole === 'pending') {
+            next[normalized] = 'scout'
+            changed = true
           }
 
           const hasAdmin = Object.values(next).some((roleValue) => roleValue === 'lead' || roleValue === 'tech_lead')
@@ -554,11 +705,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         })
       } catch (error) {
         console.warn('Failed to restore saved user', error)
+        clearStoredAuthSession()
       }
     }
 
     setReady(true)
-  }, [cleanupExpiredOAuthState])
+  }, [attemptSilentReauth, cleanupExpiredOAuthState, clearStoredAuthSession])
 
   useEffect(() => {
     // Clean up any invalid roles from localStorage on mount
@@ -594,6 +746,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [roleAssignments])
 
   const fetchRoleAssignmentsFromApi = useCallback(async () => {
+    if (!hasUsableAuthToken()) {
+      throw new Error('No usable auth token')
+    }
     try {
       const response = await apiGet<{ roleAssignments?: Record<string, string> }>('/roles')
 
@@ -607,8 +762,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }, {})
 
       setRoleAssignments((prev) => {
-        const merged = ensureAdminPresence({ ...prev, ...remoteAssignments })
-        return areRoleAssignmentsEqual(prev, merged) ? prev : merged
+        const next = ensureAdminPresence(remoteAssignments)
+        return areRoleAssignmentsEqual(prev, next) ? prev : next
       })
     } catch (error) {
       console.error('Failed to fetch role assignments from API', error)
@@ -617,6 +772,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [ensureAdminPresence, user])
 
   const fetchRecentUsersFromApi = useCallback(async () => {
+    if (!hasUsableAuthToken()) {
+      throw new Error('No usable auth token')
+    }
     try {
       const response = await apiGet<{ recentUsers?: RecentUserApiRecord[] }>("/recent-users")
       const sanitized = (response.recentUsers || [])
@@ -731,9 +889,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       email: user.email,
       name: user.name,
       picture: user.picture,
-      acknowledged: emailMatchesAllowedDomain(normalizeEmail(user.email)) || ADMIN_EMAILS.includes(normalizeEmail(user.email)),
+      acknowledged: true,
     })
   }, [ready, user, upsertRecentUser])
+
+  useEffect(() => {
+    if (!ready || !user?.email) return
+
+    let cancelled = false
+
+    const ensureBackendUser = async () => {
+      if (!hasUsableAuthToken()) {
+        return
+      }
+      try {
+        await apiPost('/recent-users/self-register-role', {})
+        if (!cancelled) {
+          await fetchRoleAssignmentsFromApi()
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.warn('Failed to ensure backend scout role on app open', error)
+        }
+      }
+    }
+
+    void ensureBackendUser()
+
+    return () => {
+      cancelled = true
+    }
+  }, [ready, user, fetchRoleAssignmentsFromApi])
 
   useEffect(() => {
     localStorage.setItem(RECENT_STORAGE_KEY, JSON.stringify(recentUsers))
@@ -743,7 +929,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(ALLIANCE_PROFILE_STORAGE_KEY, JSON.stringify(allianceProfiles))
   }, [allianceProfiles])
 
-  const processOAuthResponse = useCallback((idToken: string, stateValue: string | undefined) => {
+  const processOAuthResponse = useCallback((idToken: string, stateValue: string | undefined): OAuthProcessResult => {
     if (!idToken) {
       return { success: false, message: 'Missing ID token in OAuth response.' }
     }
@@ -768,7 +954,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const normalizedEmail = normalizeEmail(payload.email)
       const resolvedName = payload.name?.trim() || payload.email
-      const isAllowedDomainUser = emailMatchesAllowedDomain(normalizedEmail)
       const isConfiguredAdmin = ADMIN_EMAILS.includes(normalizedEmail)
       const existingProfile = allianceProfiles[normalizedEmail]
 
@@ -779,6 +964,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         sub: payload.sub || normalizedEmail,
       }
 
+      silentRefreshStartedRef.current = false
       setUser(nextUser)
       localStorage.setItem('auth_user', JSON.stringify(nextUser))
       localStorage.setItem(AUTH_ID_TOKEN_KEY, idToken)
@@ -787,7 +973,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email: normalizedEmail,
         name: resolvedName,
         picture: payload.picture,
-        acknowledged: isAllowedDomainUser || isConfiguredAdmin,
+        acknowledged: true,
       })
 
       setRoleAssignments((prev) => {
@@ -797,13 +983,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (existingRole) {
           if (isConfiguredAdmin && existingRole !== 'lead') {
             next[normalizedEmail] = 'lead'
+          } else if (existingRole === 'pending') {
+            next[normalizedEmail] = 'scout'
           }
         } else if (isConfiguredAdmin) {
           next[normalizedEmail] = 'lead'
-        } else if (isAllowedDomainUser) {
-          next[normalizedEmail] = 'scout'
         } else {
-          next[normalizedEmail] = 'pending'
+          next[normalizedEmail] = 'scout'
         }
 
         return ensureAdminPresence(next, normalizedEmail)
@@ -825,28 +1011,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         })
       }
 
-      if (!isConfiguredAdmin && !isAllowedDomainUser) {
-        setRequiresAllianceConfirmation(!(existingProfile?.confirmedAlliance))
-      } else {
-        setRequiresAllianceConfirmation(false)
-      }
+      setRequiresAllianceConfirmation(false)
 
-      // Auto-register allowed-domain users in the backend roles table.
-      // The endpoint only inserts if no role exists, so it never downgrades a lead/admin.
-      if (isAllowedDomainUser) {
-        void apiPost('/roles/self-register', {}).catch((error) => {
-          console.warn('Failed to self-register scout role', error)
-        })
-      }
+      void apiPost('/recent-users/self-register-role', {}).catch((error) => {
+        console.warn('Failed to ensure scout role after login', error)
+      })
 
       void fetchRoleAssignmentsFromApi().catch((error) => {
         console.error('Failed to refresh roles after login', error)
       })
 
-      return { success: true as const, message: `Signed in as ${resolvedName}` }
+      return {
+        success: true as const,
+        message: `Signed in as ${resolvedName}`,
+        returnTo: storedState.returnTo || '/',
+        mode: storedState.mode || 'interactive',
+      }
     } catch (error) {
+      silentRefreshStartedRef.current = false
       console.error('Failed to process OAuth response', error)
-      return { success: false as const, message: error instanceof Error ? error.message : 'Unknown OAuth error.' }
+      return {
+        success: false as const,
+        message: error instanceof Error ? error.message : 'Unknown OAuth error.',
+        returnTo: storedState.returnTo || '/',
+        mode: storedState.mode || 'interactive',
+      }
     }
   }, [allianceProfiles, consumeOAuthState, ensureAdminPresence, fetchRoleAssignmentsFromApi, setAllianceProfiles, setRecentUsers, setRoleAssignments])
 
@@ -855,10 +1044,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (event.origin !== window.location.origin) return
       const data = event.data
       if (!data || typeof data !== 'object') return
-      if (data.type !== 'google-oauth-token') return
+      if (data.type !== 'google-oauth-token' && data.type !== 'google-oauth-error') return
 
-      const { idToken, state } = data as { idToken?: string; state?: string }
-      const result = processOAuthResponse(idToken || '', state)
+      let result: OAuthProcessResult
+      if (data.type === 'google-oauth-token') {
+        const { idToken, state } = data as { idToken?: string; state?: string }
+        result = processOAuthResponse(idToken || '', state)
+      } else {
+        const { error, errorDescription, state } = data as {
+          error?: string
+          errorDescription?: string
+          state?: string
+        }
+        const storedState = state ? consumeOAuthState(state) : null
+        const mode = storedState?.mode || 'interactive'
+        if (mode === 'silent') {
+          clearStoredAuthSession()
+        } else {
+          silentRefreshStartedRef.current = false
+        }
+        result = {
+          success: false,
+          message: errorDescription || error || 'Google sign-in failed.',
+          returnTo: mode === 'silent' ? '/' : (storedState?.returnTo || '/'),
+          mode,
+        }
+      }
+
       try {
         if (event.source && 'postMessage' in event.source) {
           ;(event.source as Window).postMessage(
@@ -866,6 +1078,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               type: 'google-auth-complete',
               success: result.success,
               message: result.message,
+              returnTo: result.returnTo,
+              mode: result.mode,
             },
             event.origin,
           )
@@ -879,25 +1093,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       window.removeEventListener('message', handleOAuthMessage)
     }
-  }, [processOAuthResponse])
+  }, [clearStoredAuthSession, consumeOAuthState, processOAuthResponse])
+
+  useEffect(() => {
+    const handleApiAuthFailure = () => {
+      if (window.location.pathname === AUTH_CALLBACK_PATH) return
+
+      const saved = localStorage.getItem('auth_user')
+      const currentEmail = user?.email || (saved ? (() => {
+        try {
+          const parsed = JSON.parse(saved) as User
+          return parsed.email
+        } catch {
+          return null
+        }
+      })() : null)
+
+      if (!currentEmail) return
+      if (isIdTokenFresh(readStoredIdToken())) return
+
+      if (!attemptSilentReauth(currentEmail)) {
+        clearStoredAuthSession()
+      }
+    }
+
+    window.addEventListener(API_AUTH_FAILURE_EVENT, handleApiAuthFailure as EventListener)
+    return () => {
+      window.removeEventListener(API_AUTH_FAILURE_EVENT, handleApiAuthFailure as EventListener)
+    }
+  }, [attemptSilentReauth, clearStoredAuthSession, user])
 
   useEffect(() => {
     if (!user) {
       setRequiresAllianceConfirmation(false)
       return
     }
-    const normalized = normalizeEmail(user.email)
-    if (ADMIN_EMAILS.includes(normalized)) {
-      setRequiresAllianceConfirmation(false)
-      return
-    }
-    if (emailMatchesAllowedDomain(normalized)) {
-      setRequiresAllianceConfirmation(false)
-      return
-    }
-    const profile = allianceProfiles[normalized]
-    setRequiresAllianceConfirmation(!(profile?.confirmedAlliance))
-  }, [user, allianceProfiles])
+    setRequiresAllianceConfirmation(false)
+  }, [user])
 
   const applyScoutProfile = useCallback((currentUser: User, currentRole: UserRole) => {
     if (currentRole === 'pending') {
@@ -963,55 +1195,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const login = useCallback(() => {
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
-    if (!clientId) {
-      console.warn('Cannot start Google login without VITE_GOOGLE_CLIENT_ID')
-      return
-    }
-
-    const configuredRedirect = import.meta.env.VITE_GOOGLE_REDIRECT_URI
-    const currentOrigin = window.location.origin
-    let redirectUri = `${currentOrigin}/auth/google/callback`
-
-    if (configuredRedirect) {
-      try {
-        const parsed = new URL(configuredRedirect)
-        if (parsed.origin === currentOrigin) {
-          redirectUri = parsed.toString()
-        } else {
-          console.warn(
-            `Configured Google redirect (${parsed.origin}) does not match current origin (${currentOrigin}); using current origin callback instead. ` +
-            `Add ${redirectUri} to the OAuth client in Google Cloud to avoid this fallback.`,
-          )
-        }
-      } catch (error) {
-        console.warn('Invalid VITE_GOOGLE_REDIRECT_URI; falling back to current origin callback.', error)
-      }
-    }
-    const stateValue = generateOpaqueString()
-    const nonce = generateOpaqueString()
-    storeOAuthState(stateValue, nonce)
-
-    const params = new URLSearchParams({
-      client_id: clientId,
-      redirect_uri: redirectUri,
-      response_type: 'id_token',
-      scope: 'openid email profile',
+    startGoogleAuth({
       prompt: 'consent select_account',
-      state: stateValue,
-      nonce,
+      mode: 'interactive',
+      returnTo: readCurrentAppPath(),
     })
-
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`
-    window.location.assign(authUrl)
-  }, [storeOAuthState])
+  }, [startGoogleAuth])
 
   const logout = useCallback(() => {
-    setUser(null)
-    localStorage.removeItem('auth_user')
-    localStorage.removeItem(AUTH_ID_TOKEN_KEY)
-    setRequiresAllianceConfirmation(false)
-  }, [])
+    clearStoredAuthSession()
+  }, [clearStoredAuthSession])
 
   const submitAllianceProfile = useCallback((input: AllianceProfileInput) => {
     if (!user) {
@@ -1214,14 +1407,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (assigned === 'pending') {
-      return emailMatchesAllowedDomain(normalized) ? 'scout' : 'pending'
+      return ADMIN_EMAILS.includes(normalized) ? 'lead' : 'scout'
     }
 
     if (ADMIN_EMAILS.includes(normalized)) {
       return 'lead'
     }
 
-    return emailMatchesAllowedDomain(normalized) ? 'scout' : 'pending'
+    return 'scout'
   }, [roleAssignments, user])
 
   const canAccessPath = useCallback((path: string) => {
@@ -1242,6 +1435,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!isLead) return
+    if (!hasUsableAuthToken()) return
     void fetchRecentUsersFromApi().catch((error) => {
       console.error('Failed to refresh recent users for lead', error)
     })
@@ -1249,6 +1443,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const handleVisibility = () => {
+      if (!hasUsableAuthToken()) return
       if (document.visibilityState === 'visible') {
         void fetchRoleAssignmentsFromApi().catch((error) => {
           console.error('Failed to refresh roles on visibility change', error)
@@ -1262,6 +1457,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const handleFocus = () => {
+      if (!hasUsableAuthToken()) return
       void fetchRoleAssignmentsFromApi().catch((error) => {
         console.error('Failed to refresh roles on window focus', error)
       })
@@ -1273,6 +1469,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const handleOnline = () => {
+      if (!hasUsableAuthToken()) return
       void fetchRoleAssignmentsFromApi().catch((error) => {
         console.error('Failed to refresh roles when back online', error)
       })

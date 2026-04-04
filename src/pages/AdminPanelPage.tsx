@@ -113,7 +113,8 @@ export default function AdminPanelPage() {
   const recentUsersWithRoles = useMemo(
     () =>
       recentUsers
-        .map((r) => ({ ...r, assignedRole: (roleAssignments[r.email] ?? "pending") as UserRole }))
+        .filter((r) => roleAssignments[r.email])
+        .map((r) => ({ ...r, assignedRole: roleAssignments[r.email] as UserRole }))
         .sort((a, b) => b.lastSeenAt.localeCompare(a.lastSeenAt)),
     [recentUsers, roleAssignments]
   )

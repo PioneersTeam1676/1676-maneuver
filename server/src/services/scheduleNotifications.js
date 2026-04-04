@@ -175,6 +175,51 @@ const loadAssignmentsForReturn = async (eventKey) => {
   })
 }
 
+const ensureAssignmentOverrideTable = async (seasonPrisma) => {
+  await seasonPrisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS schedule_assignment_overrides (
+      event_key VARCHAR(255) NOT NULL,
+      match_number VARCHAR(255) NOT NULL,
+      position VARCHAR(255) NOT NULL,
+      original_scout_email VARCHAR(255) NOT NULL,
+      override_scout_email VARCHAR(255) NOT NULL,
+      reason VARCHAR(255) NULL,
+      created_by_email VARCHAR(255) NULL,
+      created_at INT NOT NULL,
+      updated_at INT NOT NULL,
+      PRIMARY KEY (event_key, match_number, position),
+      KEY idx_schedule_override_email (event_key, override_scout_email),
+      KEY idx_schedule_override_match (event_key, match_number)
+    )
+  `)
+}
+
+const buildInClause = (values = []) => values.map(() => "?").join(", ")
+
+const loadAssignmentOverrides = async (eventKey) => {
+  const seasonPrisma = await getSeasonPrismaForEvent(eventKey)
+  await ensureAssignmentOverrideTable(seasonPrisma)
+  const rows = await seasonPrisma.$queryRawUnsafe(
+    `
+      SELECT
+        event_key AS eventKey,
+        match_number AS matchNumber,
+        position,
+        original_scout_email AS originalScoutEmail,
+        override_scout_email AS overrideScoutEmail,
+        reason,
+        created_by_email AS createdByEmail,
+        created_at AS createdAt,
+        updated_at AS updatedAt
+      FROM schedule_assignment_overrides
+      WHERE event_key = ?
+      ORDER BY match_number ASC, position ASC
+    `,
+    eventKey
+  )
+  return Array.isArray(rows) ? rows : []
+}
+
 const loadMatches = async (eventKey) => {
   const seasonPrisma = await getSeasonPrismaForEvent(eventKey)
   return seasonPrisma.scoutScheduleMatch.findMany({
@@ -190,6 +235,38 @@ const latestEventKey = async () => {
     select: { eventKey: true }
   })
   return latest?.eventKey || null
+}
+
+const buildAssignmentOverrideKey = (matchNumber, position) => `${matchNumber}::${position}`
+
+const mergeAssignmentsWithOverrides = (assignments, overrides = []) => {
+  const overrideMap = new Map(
+    overrides.map((override) => [buildAssignmentOverrideKey(override.matchNumber, override.position), override])
+  )
+
+  return assignments.map((assignment) => {
+    const override = overrideMap.get(buildAssignmentOverrideKey(assignment.matchNumber, assignment.position))
+    if (!override?.overrideScoutEmail) {
+      return {
+        ...assignment,
+        overrideOriginalScoutEmail: null,
+        overrideScoutEmail: null,
+        overrideReason: null,
+        overrideCreatedByEmail: null,
+        overrideCreatedAt: null,
+      }
+    }
+
+    return {
+      ...assignment,
+      scoutEmail: override.overrideScoutEmail,
+      overrideOriginalScoutEmail: override.originalScoutEmail || assignment.scoutEmail,
+      overrideScoutEmail: override.overrideScoutEmail,
+      overrideReason: override.reason || null,
+      overrideCreatedByEmail: override.createdByEmail || null,
+      overrideCreatedAt: override.createdAt || null,
+    }
+  })
 }
 
 const removeSubscriptionById = async (id) => {
@@ -314,8 +391,12 @@ const processUpcomingNotifications = async (eventKey) => {
   const progressRow = await fetchProgress(eventKey)
   const completed = progressRow?.lastCompletedMatch ?? 0
   const windowEnd = completed + MATCH_NOTIFICATION_LOOKAHEAD
-  const assignments = await loadAssignments(eventKey)
-  const eligible = findAssignmentsInRange(assignments, completed, windowEnd)
+  const [assignments, overrides] = await Promise.all([
+    loadAssignments(eventKey),
+    loadAssignmentOverrides(eventKey),
+  ])
+  const effectiveAssignments = mergeAssignmentsWithOverrides(assignments, overrides)
+  const eligible = findAssignmentsInRange(effectiveAssignments, completed, windowEnd)
   if (eligible.length === 0) {
     return
   }
@@ -500,6 +581,8 @@ const replaceScheduleAssignments = async ({ eventKey, matches = [], assignments 
   await seasonPrisma.$transaction(async (tx) => {
     await tx.scoutScheduleAssignment.deleteMany({ where: { eventKey: normalizedEvent } })
     await tx.scoutScheduleMatch.deleteMany({ where: { eventKey: normalizedEvent } })
+    await ensureAssignmentOverrideTable(tx)
+    await tx.$executeRawUnsafe("DELETE FROM schedule_assignment_overrides WHERE event_key = ?", normalizedEvent)
 
     if (matchRows.length) {
       await tx.scoutScheduleMatch.createMany({ data: matchRows })
@@ -523,20 +606,193 @@ const replaceScheduleAssignments = async ({ eventKey, matches = [], assignments 
   await processUpcomingNotifications(normalizedEvent)
 }
 
+const applyCoverageOverride = async ({
+  eventKey,
+  matchNumbers = [],
+  position,
+  overrideScoutEmail,
+  reason,
+  createdByEmail,
+}) => {
+  const normalizedEvent = eventKey?.trim()
+  const normalizedPosition = typeof position === "string" ? position.trim() : ""
+  const normalizedOverrideEmail = normalizeEmail(overrideScoutEmail || "")
+  const normalizedCreatedBy = createdByEmail ? normalizeEmail(createdByEmail) : null
+
+  if (!normalizedEvent) {
+    throw new Error("eventKey is required")
+  }
+  if (!normalizedPosition) {
+    throw new Error("position is required")
+  }
+  if (!normalizedOverrideEmail || !normalizedOverrideEmail.includes("@")) {
+    throw new Error("overrideScoutEmail is required")
+  }
+
+  const uniqueMatchNumbers = Array.from(
+    new Set(
+      matchNumbers
+        .map((value) => (typeof value === "string" ? value.trim() : ""))
+        .filter(Boolean)
+    )
+  )
+
+  if (uniqueMatchNumbers.length === 0) {
+    throw new Error("matchNumbers are required")
+  }
+
+  const seasonPrisma = await getSeasonPrismaForEvent(normalizedEvent)
+  await ensureAssignmentOverrideTable(seasonPrisma)
+  const timestamp = nowSeconds()
+  const normalizedReason = typeof reason === "string" ? reason.trim().slice(0, 255) : ""
+
+  const affected = await seasonPrisma.$transaction(async (tx) => {
+    const rows = await tx.scoutScheduleAssignment.findMany({
+      where: {
+        eventKey: normalizedEvent,
+        position: normalizedPosition,
+        matchNumber: { in: uniqueMatchNumbers },
+      },
+      orderBy: { matchOrder: "asc" },
+    })
+
+    if (!rows.length) {
+      return []
+    }
+
+    await Promise.all(
+      rows.map((row) =>
+        tx.$executeRawUnsafe(
+          `
+            INSERT INTO schedule_assignment_overrides (
+              event_key,
+              match_number,
+              position,
+              original_scout_email,
+              override_scout_email,
+              reason,
+              created_by_email,
+              created_at,
+              updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+              original_scout_email = VALUES(original_scout_email),
+              override_scout_email = VALUES(override_scout_email),
+              reason = VALUES(reason),
+              created_by_email = VALUES(created_by_email),
+              updated_at = VALUES(updated_at)
+          `,
+          normalizedEvent,
+          row.matchNumber,
+          normalizedPosition,
+          row.scoutEmail,
+          normalizedOverrideEmail,
+          normalizedReason || null,
+          normalizedCreatedBy,
+          timestamp,
+          timestamp
+        )
+      )
+    )
+
+    return rows
+  })
+
+  await processUpcomingNotifications(normalizedEvent)
+
+  if (affected.length > 0) {
+    const firstMatch = affected[0]?.matchNumber || uniqueMatchNumbers[0]
+    const lastMatch = affected[affected.length - 1]?.matchNumber || uniqueMatchNumbers[uniqueMatchNumbers.length - 1]
+    const rangeLabel =
+      firstMatch === lastMatch
+        ? `match ${firstMatch}`
+        : `matches ${firstMatch}-${lastMatch}`
+    const positionLabel = POSITION_DETAILS[normalizedPosition]?.label || normalizedPosition
+    const bodyParts = [`An admin tagged you into ${positionLabel} for ${rangeLabel} at ${normalizedEvent}.`]
+    if (normalizedReason) {
+      bodyParts.push(normalizedReason)
+    }
+
+    await sendManualNotification({
+      email: normalizedOverrideEmail,
+      title: "You were tagged into a scouting shift",
+      body: bodyParts.join(" "),
+      url: "/schedule",
+      tag: `coverage-${normalizedEvent}-${normalizedPosition}-${firstMatch}-${lastMatch}-${normalizedOverrideEmail}`,
+    })
+  }
+
+  return {
+    success: true,
+    affectedCount: affected.length,
+  }
+}
+
+const clearCoverageOverride = async ({ eventKey, matchNumbers = [], position }) => {
+  const normalizedEvent = eventKey?.trim()
+  const normalizedPosition = typeof position === "string" ? position.trim() : ""
+
+  if (!normalizedEvent) {
+    throw new Error("eventKey is required")
+  }
+  if (!normalizedPosition) {
+    throw new Error("position is required")
+  }
+
+  const uniqueMatchNumbers = Array.from(
+    new Set(
+      matchNumbers
+        .map((value) => (typeof value === "string" ? value.trim() : ""))
+        .filter(Boolean)
+    )
+  )
+
+  if (uniqueMatchNumbers.length === 0) {
+    throw new Error("matchNumbers are required")
+  }
+
+  const seasonPrisma = await getSeasonPrismaForEvent(normalizedEvent)
+  await ensureAssignmentOverrideTable(seasonPrisma)
+  const inClause = buildInClause(uniqueMatchNumbers)
+  const result = await seasonPrisma.$executeRawUnsafe(
+    `
+      DELETE FROM schedule_assignment_overrides
+      WHERE event_key = ?
+        AND position = ?
+        AND match_number IN (${inClause})
+    `,
+    normalizedEvent,
+    normalizedPosition,
+    ...uniqueMatchNumbers
+  )
+
+  await processUpcomingNotifications(normalizedEvent)
+
+  return {
+    success: true,
+    affectedCount: typeof result === "number" ? result : 0,
+  }
+}
+
 const getScheduleState = async (requestedEventKey) => {
   let targetEvent = requestedEventKey?.trim()
   if (!targetEvent) {
     targetEvent = await latestEventKey()
   }
   if (!targetEvent) {
-    return { eventKey: null, assignments: [], matches: [], updatedAt: null }
+    return { eventKey: null, assignments: [], matches: [], updatedAt: null, lastCompletedMatch: null }
   }
 
-  const assignments = await loadAssignmentsForReturn(targetEvent)
-  const matches = await loadMatches(targetEvent)
+  const [assignments, matches, progress, overrides] = await Promise.all([
+    loadAssignmentsForReturn(targetEvent),
+    loadMatches(targetEvent),
+    fetchProgress(targetEvent),
+    loadAssignmentOverrides(targetEvent),
+  ])
+  const effectiveAssignments = mergeAssignmentsWithOverrides(assignments, overrides)
 
   const assignmentMap = new Map()
-  assignments.forEach((row) => {
+  effectiveAssignments.forEach((row) => {
     if (!assignmentMap.has(row.matchNumber)) {
       assignmentMap.set(row.matchNumber, {
         matchNumber: row.matchNumber,
@@ -561,7 +817,7 @@ const getScheduleState = async (requestedEventKey) => {
     blue: parseTeams(row.blueTeams),
   }))
 
-  const updatedAt = assignments.reduce((latest, row) => {
+  const updatedAt = effectiveAssignments.reduce((latest, row) => {
     const order = parseMatchOrder(row.matchNumber) ?? 0
     return Math.max(latest, order)
   }, 0)
@@ -579,7 +835,17 @@ const getScheduleState = async (requestedEventKey) => {
     eventKey: targetEvent,
     assignments: assignmentList,
     matches: matchList,
+    overrides: overrides.map((override) => ({
+      matchNumber: override.matchNumber,
+      position: override.position,
+      originalScoutEmail: override.originalScoutEmail,
+      overrideScoutEmail: override.overrideScoutEmail,
+      reason: override.reason || undefined,
+      createdByEmail: override.createdByEmail || undefined,
+      createdAt: override.createdAt ?? null,
+    })),
     updatedAt,
+    lastCompletedMatch: progress?.lastCompletedMatch ?? null,
     aliases: {},
     mode,
   }
@@ -591,14 +857,15 @@ const getScheduleState = async (requestedEventKey) => {
  */
 const getMyAssignments = async ({ eventKey, email }) => {
   const normalizedEmail = normalizeEmail(email)
-  const seasonPrisma = await getSeasonPrismaForEvent(eventKey)
+  const [assignments, overrides] = await Promise.all([
+    loadAssignmentsForReturn(eventKey),
+    loadAssignmentOverrides(eventKey),
+  ])
+  const effectiveAssignments = mergeAssignmentsWithOverrides(assignments, overrides)
+    .filter((assignment) => normalizeEmail(assignment.scoutEmail || "") === normalizedEmail)
+    .sort((a, b) => (a.matchOrder ?? Number.MAX_SAFE_INTEGER) - (b.matchOrder ?? Number.MAX_SAFE_INTEGER))
 
-  const assignments = await seasonPrisma.scoutScheduleAssignment.findMany({
-    where: { eventKey, scoutEmail: normalizedEmail },
-    orderBy: { matchOrder: 'asc' },
-  })
-
-  return assignments.map((a) => {
+  return effectiveAssignments.map((a) => {
     const positionDetails = POSITION_DETAILS[a.position] || {}
     return {
       matchNumber: a.matchNumber,
@@ -642,4 +909,6 @@ module.exports = {
   sendManualNotification,
   getMyAssignments,
   notifyScheduleReleased,
+  applyCoverageOverride,
+  clearCoverageOverride,
 }

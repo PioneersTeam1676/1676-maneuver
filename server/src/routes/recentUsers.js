@@ -2,14 +2,10 @@ const express = require("express")
 const router = express.Router()
 const { prisma } = require("../db")
 const asyncHandler = require("../utils/asyncHandler")
-const { sendManualNotification } = require("../services/scheduleNotifications")
+const { sanitizeString, upsertRecentUser } = require("../utils/recentUserUtils")
+const { ensureScoutRegistration } = require("../utils/userRegistration")
 
 const MAX_RECENT_USERS = 200
-
-const sanitizeString = (value) => {
-  if (typeof value !== "string") return ""
-  return value.trim()
-}
 
 const mapRowToRecord = (row) => ({
   email: row.email,
@@ -19,11 +15,6 @@ const mapRowToRecord = (row) => ({
   displayName: row.displayName || null,
   photoUrl: row.photoUrl || null,
 })
-
-const parseIso = (value) => {
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? null : date
-}
 
 router.get(
   "/",
@@ -54,73 +45,68 @@ router.put(
       photoUrl,
     } = req.body || {}
 
-    const firstSeen = sanitizeString(firstSeenAt) || new Date().toISOString()
-    const lastSeen = sanitizeString(lastSeenAt) || firstSeen
-    const trimmedName = sanitizeString(displayName)
-    const trimmedPhoto = sanitizeString(photoUrl)
-    const ackValue = acknowledged === true || acknowledged === "true" || acknowledged === 1
-
     const existing = await prisma.recentUser.findUnique({ where: { email: normalizedEmail } })
 
     if (!existing) {
-      const created = await prisma.recentUser.create({
-        data: {
-          email: normalizedEmail,
-          firstSeenAt: firstSeen,
-          lastSeenAt: lastSeen,
-          acknowledged: ackValue,
-          displayName: trimmedName || null,
-          photoUrl: trimmedPhoto || null,
-        }
+      const created = await upsertRecentUser(prisma, {
+        email: normalizedEmail,
+        firstSeenAt,
+        lastSeenAt,
+        acknowledged,
+        displayName,
+        photoUrl,
       })
 
-      // Notify admins of new unacknowledged users
-      if (!ackValue) {
-        try {
-          const adminRoles = await prisma.role.findMany({
-            where: { role: { in: ["lead", "tech_lead"] } },
-          })
-          const label = trimmedName || normalizedEmail
-          await Promise.allSettled(
-            adminRoles.map((r) =>
-              sendManualNotification({
-                email: r.email,
-                title: "New Account Request",
-                body: `${label} is requesting access`,
-                url: "/verification-center",
-                tag: `new-user-${normalizedEmail}`,
-              })
-            )
-          )
-        } catch (pushError) {
-          console.warn("Failed to notify admins of new user:", pushError.message)
-        }
-      }
+      await ensureScoutRegistration({
+        email: normalizedEmail,
+        displayName,
+        photoUrl,
+      })
 
       return res.json({ recentUser: mapRowToRecord(created) })
     }
 
-    const existingFirst = parseIso(existing.firstSeenAt) || new Date(firstSeen)
-    const existingLast = parseIso(existing.lastSeenAt) || new Date(lastSeen)
-    const incomingFirst = parseIso(firstSeen) || existingFirst
-    const incomingLast = parseIso(lastSeen) || existingLast
+    const updated = await upsertRecentUser(prisma, {
+      email: normalizedEmail,
+      firstSeenAt,
+      lastSeenAt,
+      acknowledged,
+      displayName,
+      photoUrl,
+    })
 
-    const nextFirst = existingFirst <= incomingFirst ? existing.firstSeenAt : firstSeen
-    const nextLast = existingLast >= incomingLast ? existing.lastSeenAt : lastSeen
-    const nextAck = existing.acknowledged || ackValue
-
-    const updated = await prisma.recentUser.update({
-      where: { email: normalizedEmail },
-      data: {
-        firstSeenAt: nextFirst,
-        lastSeenAt: nextLast,
-        acknowledged: nextAck,
-        displayName: trimmedName ? trimmedName : existing.displayName,
-        photoUrl: trimmedPhoto ? trimmedPhoto : existing.photoUrl,
-      }
+    await ensureScoutRegistration({
+      email: normalizedEmail,
+      displayName,
+      photoUrl,
     })
 
     res.json({ recentUser: mapRowToRecord(updated) })
+  })
+)
+
+router.post(
+  "/self-register-role",
+  asyncHandler(async (req, res) => {
+    const normalizedEmail = sanitizeString(req.user?.email).toLowerCase()
+    if (!normalizedEmail) {
+      return res.status(401).json({ error: "Not authenticated" })
+    }
+
+    const existingRole = await prisma.role.findUnique({
+      where: { email: normalizedEmail },
+      select: { role: true },
+    })
+
+    const role = await ensureScoutRegistration({
+      email: normalizedEmail,
+      displayName: req.user?.name,
+      photoUrl: req.user?.picture,
+    })
+
+    const registered = !existingRole || existingRole.role === "pending"
+
+    res.json({ email: normalizedEmail, role, registered })
   })
 )
 
@@ -153,6 +139,23 @@ router.patch(
 
     const row = await prisma.recentUser.findUnique({ where: { email: normalizedEmail } })
     res.json({ recentUser: mapRowToRecord(row) })
+  })
+)
+
+router.delete(
+  "/:email",
+  asyncHandler(async (req, res) => {
+    const { email } = req.params
+    const normalizedEmail = sanitizeString(email).toLowerCase()
+    if (!normalizedEmail) {
+      return res.status(400).json({ error: "Email is required" })
+    }
+
+    const info = await prisma.recentUser.deleteMany({
+      where: { email: normalizedEmail },
+    })
+
+    res.json({ success: info.count > 0 })
   })
 )
 

@@ -1,4 +1,4 @@
-import { Binoculars, QrCode, TrendingUp, Settings } from 'lucide-react';
+import { Binoculars, Settings } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -23,18 +23,6 @@ const baseNavItems: BottomNavItem[] = [
     label: 'Scout',
     href: '/game-start',
     minRole: 'scout',
-  },
-  {
-    icon: QrCode,
-    label: 'QR Data',
-    href: '/qr-data-transfer',
-    minRole: 'lead',
-  },
-  {
-    icon: TrendingUp,
-    label: 'Strategy',
-    href: '/strategy-overview',
-    minRole: 'lead',
   },
 ];
 

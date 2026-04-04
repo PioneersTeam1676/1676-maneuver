@@ -90,6 +90,10 @@ export default function VerificationCenterPage() {
 
     recentUsers.forEach((record) => {
       const email = normalize(record.email)
+      const assignedRole = roleAssignments[email]
+      if (assignedRole !== "pending") {
+        return
+      }
       recordsByEmail.set(email, {
         email,
         firstSeenAt: record.firstSeenAt,
@@ -97,7 +101,7 @@ export default function VerificationCenterPage() {
         acknowledged: Boolean(record.acknowledged),
         displayName: record.displayName ?? null,
         photoUrl: record.photoUrl ?? null,
-        assignedRole: (roleAssignments[email] ?? "pending") as UserRole,
+        assignedRole: "pending",
       })
     })
 

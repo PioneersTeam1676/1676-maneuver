@@ -160,6 +160,23 @@ model ScoutScheduleAssignment {
   @@map("scout_schedule_assignments")
 }
 
+model ScheduleAssignmentOverride {
+  eventKey           String  @map("event_key") @db.VarChar(255)
+  matchNumber        String  @map("match_number") @db.VarChar(255)
+  position           String  @db.VarChar(255)
+  originalScoutEmail String  @map("original_scout_email") @db.VarChar(255)
+  overrideScoutEmail String  @map("override_scout_email") @db.VarChar(255)
+  reason             String? @db.VarChar(255)
+  createdByEmail     String? @map("created_by_email") @db.VarChar(255)
+  createdAt          Int     @map("created_at")
+  updatedAt          Int     @map("updated_at")
+
+  @@id([eventKey, matchNumber, position])
+  @@index([eventKey, overrideScoutEmail], map: "idx_schedule_override_email")
+  @@index([eventKey, matchNumber], map: "idx_schedule_override_match")
+  @@map("schedule_assignment_overrides")
+}
+
 model ScheduleProgress {
   eventKey           String @id @map("event_key") @db.VarChar(255)
   lastCompletedMatch Int    @map("last_completed_match")

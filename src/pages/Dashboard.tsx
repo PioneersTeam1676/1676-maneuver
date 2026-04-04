@@ -11,16 +11,13 @@ import { AllianceOnboardingDialog } from "@/components/AllianceOnboardingDialog"
 import { VerificationBanner } from "@/components/DashboardComponents/VerificationBanner"
 import { useAuth } from "@/contexts/AuthContext"
 
-import { Outlet, useLocation } from "react-router-dom"
+import { Outlet } from "react-router-dom"
 
 
 
 export default function Dashboard() {
     const { role } = useAuth()
-    const location = useLocation()
     const isPending = role === 'pending'
-    const isFormMakerRoute = location.pathname === "/form-maker" || location.pathname.startsWith("/form-maker/")
-    const isScoutFormRoute = location.pathname === "/scout-form"
     
     // For unverified (pending) users, show minimal layout without sidebar
     if (isPending) {
@@ -54,7 +51,7 @@ export default function Dashboard() {
             <AllianceOnboardingDialog />
             <div
                 data-scrollable
-                className={`flex-1 min-h-0 overflow-y-auto px-3 pb-[calc(6.5rem+env(safe-area-inset-bottom))] ${isFormMakerRoute ? "pt-0" : isScoutFormRoute ? "pt-2" : "pt-5"} sm:px-5 md:px-6 2xl:pb-12`}
+                className="flex-1 min-h-0 overflow-y-auto px-3 pb-[calc(6.5rem+env(safe-area-inset-bottom))] pt-5 sm:px-5 md:px-6 2xl:pb-12"
             >
                 <VerificationBanner />
                 <Outlet />

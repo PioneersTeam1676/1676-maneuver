@@ -874,7 +874,7 @@ const EventSettingsPage = () => {
                   </span>
                 ) : (
                   <span className="text-muted-foreground">
-                    No active match form. Push one from Form Builder first.
+                    No active match form is configured for webhook sync.
                   </span>
                 )}
               </div>

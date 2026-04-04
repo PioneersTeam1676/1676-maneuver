@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SpecialMultipleChoice } from "@/components/ui/special-multiple-choice";
 
-import hardcodedPitFormData from "@/data/hardcodedPitForm.json";
+import pitScoutFormData from "@/data/pitScoutForm.json";
 import { EVENT_UPDATED_EVENT } from "@/lib/eventSettingsClient";
 import { savePitScoutingEntry } from "@/lib/pitScoutingUtils";
 import { cn } from "@/lib/utils";
@@ -105,8 +105,8 @@ const readScoutName = () =>
 
 const readEventName = () => localStorage.getItem("eventName") || "";
 
-const HARDCODED_PIT_FORM = (() => {
-  const raw = hardcodedPitFormData as unknown as FormDefinition;
+const BUILT_IN_PIT_FORM = (() => {
+  const raw = pitScoutFormData as unknown as FormDefinition;
   const pages = coercePages(raw.schema);
   return {
     ...raw,
@@ -118,7 +118,7 @@ const HARDCODED_PIT_FORM = (() => {
 })();
 
 const PitScoutingPage = () => {
-  const form = HARDCODED_PIT_FORM;
+  const form = BUILT_IN_PIT_FORM;
   const [values, setValues] = useState<Record<string, unknown>>(() => buildInitialValues(form));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [baseErrors, setBaseErrors] = useState<BaseErrors>({});

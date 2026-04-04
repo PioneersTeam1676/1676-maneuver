@@ -14,7 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { SpecialMultipleChoice } from "@/components/ui/special-multiple-choice"
 
-import hardcodedMatchFormData from "@/data/hardcodedMatchForm.json"
+import matchScoutFormData from "@/data/matchScoutForm.json"
 import { addIdsToScoutingData } from "@/lib/scoutingDataUtils"
 import { saveScoutingEntry } from "@/lib/dexieDB"
 import { splitSpecialChoiceOption } from "@/lib/specialChoiceOptions"
@@ -494,7 +494,7 @@ const normalizeFloatingImage = (image: FormFloatingImage): FormFloatingImage => 
 })
 
 const HARDCODED_MATCH_FORM = (() => {
-  const raw = hardcodedMatchFormData as unknown as FormDefinition
+  const raw = matchScoutFormData as unknown as FormDefinition
   const pages = normalizeStratDefenseLabels(
     mergeStratRolesForPages(
       normalizePagesOptionLabels(

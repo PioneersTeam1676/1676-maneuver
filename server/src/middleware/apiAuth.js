@@ -1,4 +1,6 @@
 const { OAuth2Client } = require("google-auth-library")
+const { prisma } = require("../db")
+const { upsertRecentUser } = require("../utils/recentUserUtils")
 
 const normalizeToken = (value) => {
   if (!value) return null
@@ -104,7 +106,22 @@ const createApiAuthMiddleware = ({ skipDomainCheck = false } = {}) => {
             return res.status(403).json({ error: "Forbidden" })
           }
         }
-        req.user = { email }
+        req.user = {
+          email,
+          name: payload?.name ? String(payload.name) : null,
+          picture: payload?.picture ? String(payload.picture) : null,
+        }
+        try {
+          await upsertRecentUser(prisma, {
+            email,
+            lastSeenAt: new Date().toISOString(),
+            displayName: payload?.name ? String(payload.name) : undefined,
+            photoUrl: payload?.picture ? String(payload.picture) : undefined,
+            acknowledged: skipDomainCheck ? undefined : true,
+          })
+        } catch (error) {
+          console.warn("Failed to auto-upsert recent user from authenticated request", error?.message || error)
+        }
         return next()
       } catch (_error) {
         return res.status(401).json({ error: "Unauthorized" })

@@ -51,6 +51,13 @@ const resolveBaseUrlCandidates = (): string[] => {
 const BASE_URL_CANDIDATES = resolveBaseUrlCandidates()
 let activeBaseIndex = 0
 const reportedFailures = new Set<string>()
+const AUTH_TOKEN_EXPIRY_SKEW_MS = 60_000
+const API_AUTH_FAILURE_EVENT = "api-auth-failure"
+let lastAuthFailureEventAt = 0
+
+type JwtPayload = {
+  exp?: number
+}
 
 const fetchWithFallback = async (path: string, init: RequestInit): Promise<Response> => {
   let lastError: unknown
@@ -87,10 +94,35 @@ const defaultHeaders = {
   "Content-Type": "application/json",
 }
 
+const decodeJwtPayload = (token: string): JwtPayload | null => {
+  try {
+    const parts = token.split(".")
+    if (parts.length < 2) return null
+    const normalized = parts[1].replace(/-/g, "+").replace(/_/g, "/")
+    const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4)
+    const json = atob(padded)
+    return JSON.parse(json) as JwtPayload
+  } catch {
+    return null
+  }
+}
+
+const isJwtFresh = (token: string, minRemainingMs = AUTH_TOKEN_EXPIRY_SKEW_MS): boolean => {
+  const payload = decodeJwtPayload(token)
+  if (!payload || typeof payload.exp !== "number") {
+    return true
+  }
+  return payload.exp * 1000 > Date.now() + minRemainingMs
+}
+
 const resolveAuthToken = (): string | null => {
   if (typeof window !== "undefined") {
     const idToken = window.localStorage?.getItem("auth_id_token")
-    if (idToken && idToken.trim()) return idToken.trim()
+    if (idToken && idToken.trim()) {
+      const trimmed = idToken.trim()
+      if (isJwtFresh(trimmed)) return trimmed
+      window.localStorage?.removeItem("auth_id_token")
+    }
     const stored = window.localStorage?.getItem("api_auth_token")
     if (stored && stored.trim()) return stored.trim()
   }
@@ -100,6 +132,8 @@ const resolveAuthToken = (): string | null => {
   }
   return null
 }
+
+export const hasUsableAuthToken = (): boolean => Boolean(resolveAuthToken())
 
 const withAuthHeaders = (initHeaders?: HeadersInit): HeadersInit => {
   const token = resolveAuthToken()
@@ -148,6 +182,13 @@ async function handleResponse<T>(response: Response): Promise<T> {
   const isJson = contentType && contentType.includes("application/json")
   const body = isJson ? await response.json() : await response.text()
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== "undefined") {
+      const now = Date.now()
+      if (now - lastAuthFailureEventAt > 1500) {
+        lastAuthFailureEventAt = now
+        window.dispatchEvent(new CustomEvent(API_AUTH_FAILURE_EVENT, { detail: { status: 401 } }))
+      }
+    }
     const message = isJson && body?.error ? body.error : `Request failed with ${response.status}`
     throw new ApiError(message, response.status)
   }
@@ -227,6 +268,7 @@ export const setApiAuthToken = (token: string | null): void => {
 }
 
 export { ApiError }
+export { API_AUTH_FAILURE_EVENT }
 
 export type ApiHealth = {
   status?: string

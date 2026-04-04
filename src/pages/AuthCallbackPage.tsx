@@ -36,14 +36,27 @@ const AuthCallbackPage = () => {
 
   useEffect(() => {
     const error = params.get("error")
+    const state = params.get("state")
     if (error) {
-      setStatus("error")
-      setMessage(params.get("error_description") || "Google sign-in was cancelled.")
+      const payload = {
+        type: "google-oauth-error" as const,
+        error,
+        errorDescription: params.get("error_description") || "Google sign-in was cancelled.",
+        state,
+      }
+
+      if (hasOpener && window.opener) {
+        window.opener.postMessage(payload, window.location.origin)
+        setMessage("Finishing sign-in…")
+      } else {
+        window.postMessage(payload, window.location.origin)
+        setMessage("Returning to the app…")
+      }
+      setSent(true)
       return
     }
 
     const idToken = params.get("id_token")
-    const state = params.get("state")
 
     if (!idToken || !state) {
       setStatus("error")
@@ -88,11 +101,16 @@ const AuthCallbackPage = () => {
         if (hasOpener) {
           window.close()
         } else {
-          navigate("/", { replace: true })
+          navigate(data.returnTo || "/", { replace: true })
         }
       } else {
         setStatus("error")
         setMessage(data.message || "We couldn’t finish signing you in. Please retry from the app.")
+        if (!hasOpener) {
+          window.setTimeout(() => {
+            navigate(data.returnTo || "/", { replace: true })
+          }, 900)
+        }
       }
     }
 

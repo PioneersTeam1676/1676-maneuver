@@ -5,6 +5,8 @@ const { parseJsonValue, stringifyJsonValue, toMsBigInt, fromBigInt } = require("
 const { updateMatchProgress } = require("../services/scheduleNotifications")
 const { detectOutliers } = require("../services/outlierDetection")
 const { prisma: mainPrisma } = require("../db")
+const { ensureEntryIdentitySchema, updateScoutingEntryEmail } = require("../utils/entryIdentity")
+const { ensureScoutRegistration } = require("../utils/userRegistration")
 
 const router = express.Router()
 
@@ -53,6 +55,11 @@ const ensureScoutingIdSchema = async (prisma) => {
 
   schemaReady.set(prisma, promise)
   await promise
+}
+
+const ensureScoutingSchema = async (prisma) => {
+  await ensureScoutingIdSchema(prisma)
+  await ensureEntryIdentitySchema(prisma)
 }
 
 const resetAutoIncrementIfEmpty = async (prisma) => {
@@ -801,7 +808,7 @@ router.get(
     if (scoutFilter) where.scoutName = String(scoutFilter)
     if (alliance) where.alliance = String(alliance)
 
-    await ensureScoutingIdSchema(prisma)
+    await ensureScoutingSchema(prisma)
 
     const rows = await prisma.scoutingEntry.findMany({
       where,
@@ -816,7 +823,7 @@ router.get(
   "/stats",
   asyncHandler(async (_req, res) => {
     const { prisma } = await getSeasonPrisma()
-    await ensureScoutingIdSchema(prisma)
+    await ensureScoutingSchema(prisma)
 
     const rows = await prisma.scoutingEntry.findMany({
       select: {
@@ -872,7 +879,7 @@ router.post(
     })
     const { prisma } = await getSeasonPrisma(selector)
 
-    await ensureScoutingIdSchema(prisma)
+    await ensureScoutingSchema(prisma)
     await resetAutoIncrementIfEmpty(prisma)
 
     const payload = {
@@ -890,6 +897,12 @@ router.post(
       where: { clientId: payload.clientId },
       create: payload,
       update: payload,
+    })
+    await updateScoutingEntryEmail(prisma, payload.clientId, req.user?.email)
+    await ensureScoutRegistration({
+      email: req.user?.email,
+      displayName: req.user?.name,
+      photoUrl: req.user?.picture,
     })
 
     if (payload.eventName && payload.matchNumber) {
@@ -924,7 +937,7 @@ router.post(
     })
     const { prisma } = await getSeasonPrisma(selector)
 
-    await ensureScoutingIdSchema(prisma)
+    await ensureScoutingSchema(prisma)
     await resetAutoIncrementIfEmpty(prisma)
 
     const operations = normalizedEntries.map(({ id, normalized }) => {
@@ -948,6 +961,16 @@ router.post(
 
     if (operations.length) {
       await prisma.$transaction(operations)
+      if (req.user?.email) {
+        await Promise.all(
+          normalizedEntries.map(({ id }) => updateScoutingEntryEmail(prisma, id, req.user.email))
+        )
+        await ensureScoutRegistration({
+          email: req.user.email,
+          displayName: req.user?.name,
+          photoUrl: req.user?.picture,
+        })
+      }
     }
 
     normalizedEntries.forEach(({ normalized }) => {
@@ -975,7 +998,7 @@ router.delete(
     const where = Number.isFinite(parsedId)
       ? { OR: [{ clientId: id }, { id: parsedId }] }
       : { clientId: id }
-    await ensureScoutingIdSchema(prisma)
+    await ensureScoutingSchema(prisma)
     const info = await prisma.scoutingEntry.deleteMany({ where })
     res.json({ success: info.count > 0 })
   })
@@ -985,7 +1008,7 @@ router.delete(
   "/",
   asyncHandler(async (_req, res) => {
     const { prisma } = await getSeasonPrisma()
-    await ensureScoutingIdSchema(prisma)
+    await ensureScoutingSchema(prisma)
     await prisma.scoutingEntry.deleteMany({})
     res.json({ success: true })
   })
@@ -1025,7 +1048,7 @@ router.post(
       }
     }
 
-    await ensureScoutingIdSchema(prisma)
+    await ensureScoutingSchema(prisma)
 
     const rows = await prisma.scoutingEntry.findMany({
       where,
@@ -1055,7 +1078,7 @@ router.get(
     if (scoutFilter) where.scoutName = String(scoutFilter)
     if (alliance) where.alliance = String(alliance)
 
-    await ensureScoutingIdSchema(prisma)
+    await ensureScoutingSchema(prisma)
 
     const [rows, displayNames] = await Promise.all([
       prisma.scoutingEntry.findMany({ where, orderBy: { timestamp: "asc" } }),
@@ -1098,7 +1121,7 @@ router.get(
   "/export",
   asyncHandler(async (req, res) => {
     const { prisma } = await getSeasonPrisma()
-    await ensureScoutingIdSchema(prisma)
+    await ensureScoutingSchema(prisma)
 
     const [rows, displayNames] = await Promise.all([
       prisma.scoutingEntry.findMany({ orderBy: { timestamp: "asc" } }),
@@ -1152,7 +1175,7 @@ router.post(
       eventName: firstEvent,
     })
     const { prisma } = await getSeasonPrisma(selector)
-    await ensureScoutingIdSchema(prisma)
+    await ensureScoutingSchema(prisma)
 
     if (mode === "overwrite") {
       await prisma.scoutingEntry.deleteMany({})
@@ -1181,6 +1204,16 @@ router.post(
 
     if (operations.length) {
       await prisma.$transaction(operations)
+      if (req.user?.email) {
+        await Promise.all(
+          normalizedEntries.map(({ id }) => updateScoutingEntryEmail(prisma, id, req.user.email))
+        )
+        await ensureScoutRegistration({
+          email: req.user.email,
+          displayName: req.user?.name,
+          photoUrl: req.user?.picture,
+        })
+      }
     }
 
     res.json({ success: true, importedCount: entries.length })
@@ -1197,7 +1230,7 @@ router.post(
       eventName: eventNameFilter || undefined,
     })
     const { prisma } = await getSeasonPrisma(selector)
-    await ensureScoutingIdSchema(prisma)
+    await ensureScoutingSchema(prisma)
 
     const where = {}
     if (eventNameFilter) {

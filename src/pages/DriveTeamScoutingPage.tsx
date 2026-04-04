@@ -417,7 +417,7 @@ const DriveTeamScoutingPage = () => {
           <CardHeader>
             <CardTitle>No active drive team form</CardTitle>
             <CardDescription>
-              Set an active drive team form in Form Maker, then refresh this page.
+              Drive team scouting is unavailable until a drive team form is configured again.
             </CardDescription>
           </CardHeader>
         </Card>

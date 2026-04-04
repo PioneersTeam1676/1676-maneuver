@@ -12,6 +12,7 @@ import { ensureMatchScheduleCached } from '@/lib/tbaUtils'
 import { syncCachedPitScoutingEntries, syncCachedScoutingEntries } from '@/lib/dexieDB'
 import { getForm } from '@/lib/formBuilderApi'
 import { syncActiveFormConfig } from '@/lib/activeForm'
+import { hasUsableAuthToken } from '@/lib/apiClient'
 
 import MainLayout from "@/layouts/MainLayout";
 import NotFoundPage from "@/pages/NotFoundPage";
@@ -48,8 +49,6 @@ import UserManagementPage from "./pages/UserManagementPage";
 import ScoutActivityPage from "./pages/ScoutActivityPage";
 import AuthCallbackPage from "./pages/AuthCallbackPage";
 import AllianceOnboardingPage from "./pages/AllianceOnboardingPage";
-import FormMakerPage from "./pages/FormMakerPage";
-import FormBuilderPage from "./pages/FormBuilderPage";
 import DynamicScoutFormPage from "./pages/DynamicScoutFormPage";
 import OutlierDetectionPage from "./pages/OutlierDetectionPage";
 import SchedulePage from "@/pages/SchedulePage";
@@ -89,9 +88,6 @@ function App() {
         <Route path="/strategy-overview" element={<StrategyOverviewPage />} />
         <Route path="/pick-list" element={<PickListPage />} />
         <Route path="/shift-generator" element={<ShiftGeneratorPage />} />
-        <Route path="/form-maker" element={<FormMakerPage />} />
-        <Route path="/form-maker/new" element={<FormBuilderPage />} />
-        <Route path="/form-maker/:formId" element={<FormBuilderPage />} />
         <Route path="/scout-form" element={<DynamicScoutFormPage />} />
         <Route path="/admin" element={<AdminPanelPage />} />
   <Route path="/pi-panel" element={<PiPanelPage />} />
@@ -188,6 +184,9 @@ function App() {
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
         return
       }
+      if (!hasUsableAuthToken()) {
+        return
+      }
       void (async () => {
         try {
           const activeConfig = await syncActiveFormConfig()
@@ -205,6 +204,9 @@ function App() {
     }
 
     const runEventSync = () => {
+      if (!hasUsableAuthToken()) {
+        return
+      }
       void (async () => {
         try {
           const settings = await syncEventSettings()

@@ -1,13 +1,37 @@
 const express = require("express")
+const { prisma } = require("../db")
 const {
   replaceScheduleAssignments,
   getScheduleState,
   getMyAssignments,
   notifyScheduleReleased,
+  applyCoverageOverride,
+  clearCoverageOverride,
 } = require("../services/scheduleNotifications")
 const asyncHandler = require("../utils/asyncHandler")
 
 const router = express.Router()
+const MANAGER_ROLES = new Set(["lead", "tech_lead"])
+
+const requireScheduleManager = async (req, res) => {
+  const email = req.user?.email
+  if (!email) {
+    res.status(401).json({ error: "Not authenticated" })
+    return false
+  }
+
+  const roleRow = await prisma.role.findUnique({
+    where: { email: String(email).trim().toLowerCase() },
+    select: { role: true },
+  })
+
+  if (!roleRow || !MANAGER_ROLES.has(roleRow.role)) {
+    res.status(403).json({ error: "Forbidden" })
+    return false
+  }
+
+  return true
+}
 
 // In-memory TBA watch state (single active watch per server process)
 let watchState = { eventKey: null, watching: false, released: false, matchCount: null, intervalId: null }
@@ -44,9 +68,6 @@ router.post(
           stopWatch()
           watchState.released = true
           watchState.matchCount = quals.length
-          notifyScheduleReleased({ eventKey: watchState.eventKey, isUpdate: false }).catch((err) =>
-            console.warn("Watch: failed to notify scouts", err)
-          )
         }
       } catch (err) {
         console.warn("TBA watch poll failed", err?.message || err)
@@ -95,7 +116,7 @@ router.get(
 router.post(
   "/assignments",
   asyncHandler(async (req, res) => {
-    const { eventKey, assignments, matches, aliases } = req.body || {}
+    const { eventKey, assignments, matches, aliases, notify } = req.body || {}
     if (!eventKey || typeof eventKey !== "string" || !eventKey.trim()) {
       return res.status(400).json({ error: "eventKey is required" })
     }
@@ -111,11 +132,52 @@ router.post(
     })
 
     // Fire-and-forget — do not block the response
-    notifyScheduleReleased({ eventKey, isUpdate }).catch((err) =>
-      console.error("Failed to send schedule notification", err)
-    )
+    if (notify === true) {
+      notifyScheduleReleased({ eventKey, isUpdate }).catch((err) =>
+        console.error("Failed to send schedule notification", err)
+      )
+    }
 
     res.json({ success: true })
+  })
+)
+
+router.post(
+  "/coverage-overrides",
+  asyncHandler(async (req, res) => {
+    if (!(await requireScheduleManager(req, res))) {
+      return
+    }
+
+    const { eventKey, matchNumbers, position, overrideScoutEmail, reason } = req.body || {}
+    const result = await applyCoverageOverride({
+      eventKey,
+      matchNumbers: Array.isArray(matchNumbers) ? matchNumbers : [],
+      position,
+      overrideScoutEmail,
+      reason,
+      createdByEmail: req.user?.email || null,
+    })
+
+    res.json(result)
+  })
+)
+
+router.delete(
+  "/coverage-overrides",
+  asyncHandler(async (req, res) => {
+    if (!(await requireScheduleManager(req, res))) {
+      return
+    }
+
+    const { eventKey, matchNumbers, position } = req.body || {}
+    const result = await clearCoverageOverride({
+      eventKey,
+      matchNumbers: Array.isArray(matchNumbers) ? matchNumbers : [],
+      position,
+    })
+
+    res.json(result)
   })
 )
 

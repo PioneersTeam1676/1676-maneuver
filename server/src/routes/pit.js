@@ -3,6 +3,8 @@ const { getSeasonPrisma, resolveSeasonSelector } = require("../seasonDb")
 const asyncHandler = require("../utils/asyncHandler")
 const { parseJsonValue, stringifyJsonValue, toMsBigInt, fromBigInt } = require("../utils/dbUtils")
 const { replaceImageDataUrls } = require("../utils/imagePermalinkStore")
+const { ensureEntryIdentitySchema, updatePitEntryEmail } = require("../utils/entryIdentity")
+const { ensureScoutRegistration } = require("../utils/userRegistration")
 
 const router = express.Router()
 
@@ -44,6 +46,7 @@ router.get(
       eventName,
     })
     const { prisma } = await getSeasonPrisma(selector)
+    await ensureEntryIdentitySchema(prisma)
     const where = {}
 
     if (teamNumber) where.teamNumber = String(teamNumber)
@@ -62,6 +65,7 @@ router.get(
   "/stats",
   asyncHandler(async (_req, res) => {
     const { prisma } = await getSeasonPrisma()
+    await ensureEntryIdentitySchema(prisma)
     const rows = await prisma.pitEntry.findMany({
       select: {
         teamNumber: true,
@@ -101,6 +105,7 @@ router.post(
       eventName: entry.eventName,
     })
     const { prisma } = await getSeasonPrisma(selector)
+    await ensureEntryIdentitySchema(prisma)
     const data = await replaceImageDataUrls(buildEntryData(entry), {
       year: selector.year,
       eventCode: entry.eventName,
@@ -121,6 +126,12 @@ router.post(
       where: { id: payload.id },
       create: payload,
       update: payload,
+    })
+    await updatePitEntryEmail(prisma, payload.id, req.user?.email)
+    await ensureScoutRegistration({
+      email: req.user?.email,
+      displayName: req.user?.name,
+      photoUrl: req.user?.picture,
     })
 
     res.status(201).json({ success: true, entry: payloadToEntry(payload, data) })
@@ -144,6 +155,7 @@ router.post(
       eventName: firstEvent,
     })
     const { prisma } = await getSeasonPrisma(selector)
+    await ensureEntryIdentitySchema(prisma)
 
     const preparedEntries = await Promise.all(
       entries.map(async (entry) => {
@@ -175,6 +187,14 @@ router.post(
 
     if (operations.length) {
       await prisma.$transaction(operations)
+      if (req.user?.email) {
+        await Promise.all(preparedEntries.map(({ payload }) => updatePitEntryEmail(prisma, payload.id, req.user.email)))
+        await ensureScoutRegistration({
+          email: req.user.email,
+          displayName: req.user?.name,
+          photoUrl: req.user?.picture,
+        })
+      }
     }
 
     res.status(201).json({ success: true, count: entries.length })
@@ -190,6 +210,7 @@ router.delete(
       formId: req.query.formId,
     })
     const { prisma } = await getSeasonPrisma(selector)
+    await ensureEntryIdentitySchema(prisma)
     const info = await prisma.pitEntry.deleteMany({ where: { id } })
     res.json({ success: info.count > 0 })
   })
@@ -199,6 +220,7 @@ router.delete(
   "/",
   asyncHandler(async (_req, res) => {
     const { prisma } = await getSeasonPrisma()
+    await ensureEntryIdentitySchema(prisma)
     await prisma.pitEntry.deleteMany({})
     res.json({ success: true })
   })

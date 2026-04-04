@@ -525,3 +525,36 @@ h1 {
     overscroll-behavior: none;
   }
 }
+
+/* Defense rating slider — large touch target for mobile */
+.defense-rating-slider::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(to right, hsl(var(--muted)) 0%, hsl(var(--primary)) 100%);
+}
+.defense-rating-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: hsl(var(--primary));
+  border: 3px solid hsl(var(--background));
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  margin-top: -10px;
+  cursor: pointer;
+}
+.defense-rating-slider::-moz-range-track {
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(to right, hsl(var(--muted)) 0%, hsl(var(--primary)) 100%);
+}
+.defense-rating-slider::-moz-range-thumb {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: hsl(var(--primary));
+  border: 3px solid hsl(var(--background));
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+}

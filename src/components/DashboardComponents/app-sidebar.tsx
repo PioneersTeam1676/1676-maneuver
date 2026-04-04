@@ -1,5 +1,5 @@
 import * as React from "react"
-import { BarChart3, ClipboardList, Settings, Users2, UserCog, Activity } from "lucide-react"
+import { ClipboardList, Settings, Users2, UserCog, Activity } from "lucide-react"
 
 // import { NavDocuments } from "@/components/DashboardComponents/nav-documents"
 import { NavMain } from "@/components/DashboardComponents/nav-main"
@@ -23,49 +23,6 @@ import type { UserRole } from "@/contexts/AuthContext"
 
 const data = {
   navMain: [
-    // {
-    //   title: "Data Actions",
-    //   url: "/settings",
-    //   icon: Settings,
-    //   items: [
-    //     {
-    //       title: "Clear Data",
-    //       url: "/clear-data",
-    //     },
-    //     {
-    //       title: "Convert Scouting JSON Data",
-    //       url: "/parse-data",
-    //     }
-    //   ]
-    // },
-    {
-      title: "Strategy Hub",
-      url: "#",
-      icon: BarChart3,
-      minRole: "lead" as UserRole,
-      items: [
-        {
-          title: "Strategy Overview",
-          url: "/strategy-overview",
-          minRole: "lead" as UserRole,
-        },
-        {
-          title: "Match Strategy",
-          url: "/match-strategy",
-          minRole: "lead" as UserRole,
-        },
-        {
-          title: "Team Stats",
-          url: "/team-stats",
-          minRole: "lead" as UserRole,
-        },
-        {
-          title: "Pick Lists",
-          url: "/pick-list",
-          minRole: "lead" as UserRole,
-        },
-      ],
-    },
     {
       title: "Scouting Ops",
       url: "#",
@@ -85,11 +42,6 @@ const data = {
         {
           title: "Pit Assignments",
           url: "/pit-assignments",
-          minRole: "lead" as UserRole,
-        },
-        {
-          title: "Match Data QR",
-          url: "/match-data-qr",
           minRole: "lead" as UserRole,
         },
         {
@@ -146,11 +98,6 @@ const data = {
         {
           title: "JSON Data Transfer",
           url: "/json-transfer",
-          minRole: "lead" as UserRole,
-        },
-        {
-          title: "QR Data Transfer",
-          url: "/qr-data-transfer",
           minRole: "lead" as UserRole,
         },
         {

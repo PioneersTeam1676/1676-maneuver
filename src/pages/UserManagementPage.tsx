@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { apiGet, apiDelete, apiPut, ApiError } from "@/lib/apiClient"
+import { apiGet, apiDelete, apiPost, apiPatch, ApiError } from "@/lib/apiClient"
 import { readScoutingSeason } from "@/lib/scoutingSeason"
 import {
   Dialog,
@@ -24,11 +24,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { toast } from "sonner"
-import { Trash2, Search, UserX, User, Users, Crown, Wrench, Gamepad2, type LucideIcon } from "lucide-react"
+import { Trash2, Search, UserX, User, Users, Crown, Wrench, Gamepad2, RefreshCw, type LucideIcon } from "lucide-react"
 
 interface User {
   email: string
   role: string
+  isEntryOnly?: boolean
   activityCount?: number
   displayName?: string
   firstName?: string
@@ -43,6 +44,7 @@ interface User {
 }
 
 const roleColors: Record<string, string> = {
+  activity_only: "bg-orange-500",
   pending: "bg-gray-500",
   pit_scout: "bg-green-500",
   drive_team: "bg-cyan-500",
@@ -52,6 +54,7 @@ const roleColors: Record<string, string> = {
 }
 
 const roleIcons: Record<string, LucideIcon> = {
+  activity_only: Search,
   pending: UserX,
   pit_scout: Wrench,
   drive_team: Gamepad2,
@@ -62,6 +65,7 @@ const roleIcons: Record<string, LucideIcon> = {
 
 type RecentUserApiRecord = {
   email?: string
+  acknowledged?: boolean
   displayName?: string
   firstName?: string
   lastName?: string
@@ -88,6 +92,53 @@ type PitEntry = {
   timestamp?: number
 }
 
+type SyncResult = {
+  synced: { email: string; displayName: string }[]
+  alreadyHaveRole: { email: string; role: string; displayName: string }[]
+  unmatched: string[]
+}
+
+const DELETED_USERS_STORAGE_KEY = "user_management_deleted_users"
+
+const normalizeScoutName = (value: string) =>
+  value
+    .trim()
+    .replace(/['’.-]/g, "")
+    .replace(/\s+/g, " ")
+    .toLowerCase()
+
+const readDeletedUserTombstones = (): Record<string, string> => {
+  if (typeof window === "undefined") return {}
+  try {
+    const raw = window.localStorage.getItem(DELETED_USERS_STORAGE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as Record<string, string>
+    return Object.entries(parsed).reduce<Record<string, string>>((acc, [email, timestamp]) => {
+      const normalizedEmail = String(email || "").trim().toLowerCase()
+      const normalizedTimestamp = String(timestamp || "").trim()
+      if (!normalizedEmail || !normalizedTimestamp) return acc
+      if (Number.isNaN(new Date(normalizedTimestamp).getTime())) return acc
+      acc[normalizedEmail] = normalizedTimestamp
+      return acc
+    }, {})
+  } catch {
+    return {}
+  }
+}
+
+const writeDeletedUserTombstones = (value: Record<string, string>) => {
+  if (typeof window === "undefined") return
+  window.localStorage.setItem(DELETED_USERS_STORAGE_KEY, JSON.stringify(value))
+}
+
+const recordDeletedUserTombstone = (email: string) => {
+  const normalizedEmail = String(email || "").trim().toLowerCase()
+  if (!normalizedEmail) return
+  const next = readDeletedUserTombstones()
+  next[normalizedEmail] = new Date().toISOString()
+  writeDeletedUserTombstones(next)
+}
+
 export default function UserManagementPage() {
   const { user: currentUser } = useAuth()
   const [users, setUsers] = useState<User[]>([])
@@ -99,6 +150,9 @@ export default function UserManagementPage() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [userToDelete, setUserToDelete] = useState<User | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [syncResult, setSyncResult] = useState<SyncResult | null>(null)
+  const [syncDialogOpen, setSyncDialogOpen] = useState(false)
   const buildSeasonUrl = (path: string, params?: Record<string, string>) => {
     const search = new URLSearchParams(params)
     const season = readScoutingSeason()
@@ -122,7 +176,8 @@ export default function UserManagementPage() {
         users.filter(
           (u) =>
             u.email.toLowerCase().includes(term) ||
-            u.role.toLowerCase().includes(term)
+            u.role.toLowerCase().includes(term) ||
+            (u.displayName || "").toLowerCase().includes(term)
         )
       )
     }
@@ -154,24 +209,49 @@ export default function UserManagementPage() {
         {}
       )
 
-      const allUserEmails = Array.from(
-        new Set([
-          ...Object.keys(roleAssignments),
-          ...recentUsersArray
-            .map((u) => String(u.email || "").trim().toLowerCase())
-            .filter(Boolean),
-        ])
-      )
+      const deletedUserTombstones = readDeletedUserTombstones()
+      const activeDeletedUserTombstones = { ...deletedUserTombstones }
+      const recentUsersArrayForDisplay = recentUsersArray.filter((u) => {
+        const normalizedEmail = String(u.email || "").trim().toLowerCase()
+        if (!normalizedEmail) return false
 
-      // Include everyone we know: explicit role assignments + recent sign-ins.
-      // Missing role assignments are shown as pending.
+        const deletedAt = deletedUserTombstones[normalizedEmail]
+        if (!deletedAt) return true
+        if (roleAssignments[normalizedEmail]) {
+          delete activeDeletedUserTombstones[normalizedEmail]
+          return true
+        }
+
+        const lastSeenAt =
+          u.lastSeenAt ||
+          u.last_seen_at ||
+          u.firstSeenAt ||
+          u.first_seen_at
+
+        if (!lastSeenAt) return false
+        if (new Date(lastSeenAt).getTime() > new Date(deletedAt).getTime()) {
+          delete activeDeletedUserTombstones[normalizedEmail]
+          return true
+        }
+
+        return false
+      })
+
+      if (Object.keys(activeDeletedUserTombstones).length !== Object.keys(deletedUserTombstones).length) {
+        writeDeletedUserTombstones(activeDeletedUserTombstones)
+      }
+
+      const allUserEmails = Object.keys(roleAssignments)
+
+      // Only explicit role assignments are treated as users.
+      // Recent sign-ins without a role row should not rebuild deleted pending users.
       const userList: User[] = allUserEmails.map((email) => ({
         email,
         role: roleAssignments[email] || "pending",
       }))
 
       const recentUsersMap = new Map<string, RecentUserApiRecord>(
-        recentUsersArray
+        recentUsersArrayForDisplay
           .filter((u) => typeof u.email === "string" && u.email.trim().length > 0)
           .map((u) => [u.email!.trim().toLowerCase(), u])
       )
@@ -270,16 +350,56 @@ export default function UserManagementPage() {
         })
       )
 
+      const linkedScoutNames = new Set(
+        usersWithActivity
+          .map((user) => user.displayName || (user.firstName && user.lastName ? `${user.firstName} ${user.lastName}`.trim() : guessDisplayName(user.email)))
+          .filter((value): value is string => Boolean(value))
+          .map((value) => normalizeScoutName(value))
+      )
+
+      const scoutingEntries = Array.isArray(allScoutingResp?.entries) ? allScoutingResp.entries : []
+      const entryOnlyUsers = Array.from(
+        scoutingEntries.reduce((acc, entry) => {
+          const rawName = (entry.scout_name || entry.scoutName || "").trim()
+          if (!rawName) return acc
+
+          const key = normalizeScoutName(rawName)
+          if (linkedScoutNames.has(key)) return acc
+
+          const current = acc.get(key) || {
+            email: `unlinked:${key.replace(/[^a-z0-9]+/g, "-")}`,
+            role: "activity_only",
+            isEntryOnly: true,
+            displayName: rawName,
+            activityCount: 0,
+            scoutingEntries: 0,
+            pitEntries: 0,
+            aliases: [],
+          }
+
+          current.activityCount = (current.activityCount || 0) + 1
+          current.scoutingEntries = (current.scoutingEntries || 0) + 1
+          if (typeof entry.timestamp === "number") {
+            current.lastActivity = Math.max(current.lastActivity || 0, entry.timestamp)
+          }
+
+          acc.set(key, current)
+          return acc
+        }, new Map<string, User>())
+          .values()
+      )
+
       // Sort by role importance, then by email
-      const roleOrder = ["tech_lead", "lead", "scout", "pit_scout", "drive_team", "pending"]
-      usersWithActivity.sort((a, b) => {
+      const roleOrder = ["tech_lead", "lead", "scout", "pit_scout", "drive_team", "activity_only", "pending"]
+      const combinedUsers = [...usersWithActivity, ...entryOnlyUsers]
+      combinedUsers.sort((a, b) => {
         const roleCompare =
           roleOrder.indexOf(a.role) - roleOrder.indexOf(b.role)
         if (roleCompare !== 0) return roleCompare
-        return a.email.localeCompare(b.email)
+        return (a.displayName || a.email).localeCompare(b.displayName || b.email)
       })
 
-      setUsers(usersWithActivity)
+      setUsers(combinedUsers)
     } catch (error) {
       console.error("Error fetching users:", error)
       toast.error("Failed to fetch users")
@@ -313,22 +433,26 @@ export default function UserManagementPage() {
 
     setDeleting(true)
     try {
-      // First, unverify the user by setting their role to pending
-      await apiPut(`/roles/${encodeURIComponent(userToDelete.email)}`, { role: 'pending' })
-      
-      // Then delete the user
-      await apiDelete(`/roles/${encodeURIComponent(userToDelete.email)}`)
+      const encodedEmail = encodeURIComponent(userToDelete.email)
 
-      toast.success(`Removed and unverified ${userToDelete.email}`)
-      setUsers((prev) => prev.filter((u) => u.email !== userToDelete.email))
+      await apiPatch(`/recent-users/${encodedEmail}`, { acknowledged: true }).catch(() => undefined)
+      await Promise.all([
+        apiDelete(`/roles/${encodedEmail}`),
+        apiDelete(`/recent-users/${encodedEmail}`).catch(() => undefined),
+      ])
+
+      toast.success(`Removed ${userToDelete.email}`)
+      recordDeletedUserTombstone(userToDelete.email)
+      await fetchUsers()
       setDeleteDialogOpen(false)
       setUserToDelete(null)
     } catch (error) {
       console.error("Error deleting user:", error)
-      // Treat 404 as already-deleted and proceed optimistically
+      // Treat missing role records as already-deleted and proceed optimistically.
       if (error instanceof ApiError && error.status === 404) {
         toast.success(`User ${userToDelete.email} was already removed`)
-        setUsers((prev) => prev.filter((u) => u.email !== userToDelete.email))
+        recordDeletedUserTombstone(userToDelete.email)
+        await fetchUsers()
         setDeleteDialogOpen(false)
         setUserToDelete(null)
       } else if (error instanceof ApiError && error.status === 500) {
@@ -348,6 +472,23 @@ export default function UserManagementPage() {
   const confirmDelete = (user: User) => {
     setUserToDelete(user)
     setDeleteDialogOpen(true)
+  }
+
+  const handleSyncFromEntries = async () => {
+    setSyncing(true)
+    try {
+      const result = await apiPost<SyncResult>(buildSeasonUrl("/roles/sync-from-entries"), {})
+      setSyncResult(result)
+      setSyncDialogOpen(true)
+      if (result.synced.length > 0) {
+        await fetchUsers()
+      }
+    } catch (error) {
+      console.error("Sync failed:", error)
+      toast.error("Failed to sync scouts")
+    } finally {
+      setSyncing(false)
+    }
   }
 
   const viewUserDetails = (user: User) => {
@@ -380,17 +521,28 @@ export default function UserManagementPage() {
   const stats = {
     total: users.length,
     admins: users.filter((u) => u.role === "lead" || u.role === "tech_lead").length,
-    scouts: users.filter((u) => u.role === "scout").length,
+    scouts: users.filter((u) => u.role === "scout" || u.role === "activity_only").length,
     pending: users.filter((u) => u.role === "pending").length,
   }
 
   return (
     <div className="container mx-auto p-4 max-w-6xl space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold mb-2">User Management</h1>
-        <p className="text-muted-foreground">
-          Manage user accounts and permissions
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold mb-2">User Management</h1>
+          <p className="text-muted-foreground">
+            Manage user accounts and permissions
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          onClick={handleSyncFromEntries}
+          disabled={syncing}
+          className="shrink-0 mt-1"
+        >
+          <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? "animate-spin" : ""}`} />
+          {syncing ? "Syncing..." : "Sync Scouts"}
+        </Button>
       </div>
 
       {/* Stats Cards */}
@@ -481,6 +633,7 @@ export default function UserManagementPage() {
               {filteredUsers.map((user) => {
                 const RoleIcon = roleIcons[user.role] || User
                 const isSelf = user.email === currentUser?.email
+                const canDeleteUser = !isSelf && !user.isEntryOnly
 
                 return (
                   <div
@@ -505,13 +658,15 @@ export default function UserManagementPage() {
                             </Badge>
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {user.isEntryOnly ? "No linked email on server yet" : user.email}
+                        </p>
                         <div className="flex items-center gap-3 mt-1 flex-wrap">
                           <Badge
                             variant="secondary"
                             className={`${roleColors[user.role]} text-white`}
                           >
-                            {user.role}
+                            {user.role === "activity_only" ? "active scout" : user.role}
                           </Badge>
                           {user.activityCount !== undefined && user.activityCount > 0 && (
                             <span className="text-xs text-muted-foreground">
@@ -538,9 +693,9 @@ export default function UserManagementPage() {
                         e.stopPropagation()
                         confirmDelete(user)
                       }}
-                      disabled={isSelf}
+                      disabled={!canDeleteUser}
                       className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                      title={isSelf ? "Cannot delete your own account" : "Remove user"}
+                      title={user.isEntryOnly ? "No linked account to remove yet" : isSelf ? "Cannot delete your own account" : "Remove user"}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -570,7 +725,7 @@ export default function UserManagementPage() {
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
                     <span className="text-muted-foreground">Email:</span>
-                    <p className="font-medium break-all">{selectedUser.email}</p>
+                    <p className="font-medium break-all">{selectedUser.isEntryOnly ? "No linked email on server yet" : selectedUser.email}</p>
                   </div>
                   {selectedUser.displayName && (
                     <div>
@@ -600,7 +755,7 @@ export default function UserManagementPage() {
                     <span className="text-muted-foreground">Role:</span>
                     <div className="mt-1">
                       <Badge className={`${roleColors[selectedUser.role]} text-white`}>
-                        {selectedUser.role}
+                        {selectedUser.role === "activity_only" ? "active scout" : selectedUser.role}
                       </Badge>
                     </div>
                   </div>
@@ -687,7 +842,7 @@ export default function UserManagementPage() {
                     setDetailDialogOpen(false)
                     confirmDelete(selectedUser)
                   }}
-                  disabled={selectedUser.email === currentUser?.email}
+                  disabled={selectedUser.email === currentUser?.email || selectedUser.isEntryOnly}
                 >
                   <Trash2 className="h-4 w-4 mr-2" />
                   Remove User
@@ -736,6 +891,72 @@ export default function UserManagementPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Sync Result Dialog */}
+      <Dialog open={syncDialogOpen} onOpenChange={setSyncDialogOpen}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Scout Sync Results</DialogTitle>
+            <DialogDescription>
+              Matched scout names from season scouting entries to server-linked user accounts
+            </DialogDescription>
+          </DialogHeader>
+          {syncResult && (
+            <div className="space-y-4 text-sm">
+              {syncResult.synced.length > 0 && (
+                <div>
+                  <h4 className="font-semibold text-green-600 mb-2">
+                    ✓ Assigned scout role ({syncResult.synced.length})
+                  </h4>
+                  <div className="space-y-1">
+                    {syncResult.synced.map((s) => (
+                      <div key={s.email} className="flex justify-between p-2 rounded bg-green-50 dark:bg-green-950/30">
+                        <span className="font-medium">{s.displayName}</span>
+                        <span className="text-muted-foreground truncate ml-2">{s.email}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {syncResult.alreadyHaveRole.length > 0 && (
+                <div>
+                  <h4 className="font-semibold text-muted-foreground mb-2">
+                    Already have a role ({syncResult.alreadyHaveRole.length})
+                  </h4>
+                  <div className="space-y-1">
+                    {syncResult.alreadyHaveRole.map((s) => (
+                      <div key={s.email} className="flex justify-between p-2 rounded bg-muted/50">
+                        <span>{s.displayName}</span>
+                        <Badge variant="secondary" className={`${roleColors[s.role] || ""} text-white`}>
+                          {s.role}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {syncResult.unmatched.length > 0 && (
+                <div>
+                  <h4 className="font-semibold text-amber-600 mb-2">
+                    No linked server account found ({syncResult.unmatched.length})
+                  </h4>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    These names appear in scouting data, but the server does not currently have an email-linked user record for them.
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {syncResult.unmatched.map((name) => (
+                      <Badge key={name} variant="outline">{name}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {syncResult.synced.length === 0 && syncResult.unmatched.length === 0 && (
+                <p className="text-muted-foreground text-center py-4">All scouts already have roles assigned.</p>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

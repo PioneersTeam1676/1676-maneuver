@@ -53,13 +53,10 @@ const InitialSelectTeam = ({
         return [...DEFAULT_TEAMS];
       }
       
-      // Get the correct match data
-      let matchIndex = parseInt(selectedMatch) - 1;
-      if (isNaN(matchIndex) || matchIndex < 0 || matchIndex >= matchData.length) {
-        matchIndex = 0; // Default to first match if index is invalid
-      }
-      
-      const currentMatch = matchData[matchIndex];
+      const parsedMatchNumber = parseInt(selectedMatch, 10);
+      const currentMatch = Number.isFinite(parsedMatchNumber)
+        ? matchData.find((entry) => typeof entry?.matchNum === "number" && entry.matchNum === parsedMatchNumber)
+        : null;
       
       // Convert alliance value to correct property name and get teams
       if (currentMatch && typeof currentMatch === 'object') {
@@ -118,6 +115,16 @@ const InitialSelectTeam = ({
 
   const isFirstRender = useRef(true);
 
+  const applyPresetSelection = (teamType: "1" | "2" | "3" | null) => {
+    setTeam1Status(teamType === "1");
+    setTeam2Status(teamType === "2");
+    setTeam3Status(teamType === "3");
+    setCustomTeamStatus(false);
+    if (teamType !== null) {
+      setCustomTeamValue("");
+    }
+  };
+
   // Function to handle team selection
   const clickTeam = (currentTeamType: string, currentTeamStatus: boolean) => {
     if (currentTeamType === "1") {
@@ -175,21 +182,23 @@ const InitialSelectTeam = ({
     setTeam1Status(true);
   }, [baseTeams, team1Status, team2Status, team3Status, customTeamStatus, preferredTeamPosition]);
 
-  // Effect to update team selection when baseTeams or preferredTeamPosition changes
+  // Scheduled assignments should override any earlier default selection once they load.
   useEffect(() => {
-    // Only auto-select if no current selection and we have a preferred position
-    if (!team1Status && !team2Status && !team3Status && !customTeamStatus && 
-        preferredTeamPosition >= 1 && preferredTeamPosition <= 3) {
-      
-      if (preferredTeamPosition === 1) {
-        setTeam1Status(true);
-      } else if (preferredTeamPosition === 2) {
-        setTeam2Status(true);
-      } else if (preferredTeamPosition === 3) {
-        setTeam3Status(true);
-      }
+    if (preferredTeamPosition < 1 || preferredTeamPosition > 3) {
+      return;
     }
-  }, [baseTeams, preferredTeamPosition, team1Status, team2Status, team3Status, customTeamStatus]);
+
+    const alreadySelected =
+      (preferredTeamPosition === 1 && team1Status && !team2Status && !team3Status && !customTeamStatus) ||
+      (preferredTeamPosition === 2 && team2Status && !team1Status && !team3Status && !customTeamStatus) ||
+      (preferredTeamPosition === 3 && team3Status && !team1Status && !team2Status && !customTeamStatus);
+
+    if (alreadySelected) {
+      return;
+    }
+
+    applyPresetSelection(String(preferredTeamPosition) as "1" | "2" | "3");
+  }, [preferredTeamPosition, selectedMatch, selectedAlliance, baseTeams, team1Status, team2Status, team3Status, customTeamStatus]);
 
   // Reset when the user changes to a different match or alliance
   // (skip first render so getInitialTeamSelection() result is respected on mount)
@@ -198,10 +207,7 @@ const InitialSelectTeam = ({
       isFirstRender.current = false;
       return;
     }
-    setTeam1Status(false);
-    setTeam2Status(false);
-    setTeam3Status(false);
-    setCustomTeamStatus(false);
+    applyPresetSelection(null);
     setCustomTeamValue("");
   }, [selectedMatch, selectedAlliance]);
 

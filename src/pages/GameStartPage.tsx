@@ -89,7 +89,7 @@ const GameStartPage = () => {
 
   // Derive the assignment for the currently selected match number
   const currentAssignment = useMemo(() => {
-    if (!myAssignments.length || !matchNumber) return null;
+    if (!myAssignments?.length || !matchNumber) return null;
     const parsed = parseInt(matchNumber, 10);
     if (isNaN(parsed)) return null;
 

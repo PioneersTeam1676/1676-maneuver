@@ -29,7 +29,7 @@ const shouldRegisterServiceWorker = () => {
 
 if (shouldRegisterServiceWorker()) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
+    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
       .then((registration) => {
         let updateNotified = false
 
@@ -65,11 +65,28 @@ if (shouldRegisterServiceWorker()) {
         }
 
         // Re-check updates when the tab becomes visible.
-        document.addEventListener('visibilitychange', () => {
+        const handleVisibilityChange = () => {
           if (document.visibilityState === 'visible') {
             void checkForUpdates()
           }
-        })
+        }
+
+        const handlePageShow = () => {
+          void checkForUpdates()
+        }
+
+        const handleFocus = () => {
+          void checkForUpdates()
+        }
+
+        const handleOnline = () => {
+          void checkForUpdates()
+        }
+
+        document.addEventListener('visibilitychange', handleVisibilityChange)
+        window.addEventListener('pageshow', handlePageShow)
+        window.addEventListener('focus', handleFocus)
+        window.addEventListener('online', handleOnline)
 
         // Periodic update check.
         window.setInterval(() => {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
-import { CalendarDays, CheckCircle2, Clock, Shield, RefreshCcw, Users } from "lucide-react"
+import { CalendarDays, CheckCircle2, Radio, Shield, RefreshCcw, Users } from "lucide-react"
 
 import { useAuth } from "@/contexts/AuthContext"
 import { Badge } from "@/components/ui/badge"
@@ -14,148 +14,22 @@ import {
 } from "@/components/ui/card"
 import MatchReminderToggle from "@/components/MatchReminderToggle"
 import { fetchRemoteSchedule } from "@/lib/scheduleApi"
+import { deriveScoutShiftBlocks, formatShiftRange, groupShiftBlocksByDay } from "@/lib/scoutShiftSchedule"
 import {
-  PLAYER_POSITIONS,
-  type ParsedMatch,
-  type PlayerPosition,
   type StoredScheduleState,
 } from "@/types/schedule"
 
 const STORAGE_KEY = "schedule_automation_state"
 
 type ScheduleState = Partial<StoredScheduleState>
-
-type UpcomingShift = {
-  matchNumber: string
-  position: PlayerPosition
-  positionLabel: string
-  alliance: "red" | "blue"
-  teamNumber?: string
-  allies: string[]
-  opponents: string[]
-  startTimestamp?: number
-  startTimeText: string
-  relativeText?: string
-}
-
-type EnrichedMatch = ParsedMatch & {
-  startTimestamp?: number
-  startTimeText: string
-  relativeText?: string
-}
-
-type MatchLike = {
-  matchNumber: string
-  startTimestamp?: number
-}
-
-const POSITION_DETAILS: Record<
-  PlayerPosition,
-  { alliance: "red" | "blue"; slotIndex: number; label: string }
-> = {
-  "red-1": { alliance: "red", slotIndex: 0, label: "Red 1" },
-  "red-2": { alliance: "red", slotIndex: 1, label: "Red 2" },
-  "red-3": { alliance: "red", slotIndex: 2, label: "Red 3" },
-  "blue-1": { alliance: "blue", slotIndex: 0, label: "Blue 1" },
-  "blue-2": { alliance: "blue", slotIndex: 1, label: "Blue 2" },
-  "blue-3": { alliance: "blue", slotIndex: 2, label: "Blue 3" },
-}
-
-const sameDayFormatter = new Intl.DateTimeFormat(undefined, {
-  hour: "numeric",
-  minute: "2-digit",
-})
-
-const dayTimeFormatter = new Intl.DateTimeFormat(undefined, {
-  weekday: "short",
-  month: "short",
-  day: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-})
+  & { lastCompletedMatch?: number | null }
 
 const updatedFormatter = new Intl.DateTimeFormat(undefined, {
   hour: "numeric",
   minute: "2-digit",
 })
 
-const relativeFormatter = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" })
-
 const normalizeEmail = (value: string) => value.trim().toLowerCase()
-
-const parseStartTime = (raw?: string) => {
-  if (!raw) return undefined
-  const parsed = Date.parse(raw)
-  if (Number.isNaN(parsed)) return undefined
-  return parsed
-}
-
-const parseMatchOrder = (matchNumber: string) => {
-  if (!matchNumber) return Number.POSITIVE_INFINITY
-  const numericPortion = Number.parseInt(matchNumber.replace(/[^\d]/g, ""), 10)
-  if (!Number.isNaN(numericPortion)) return numericPortion
-  return Number.POSITIVE_INFINITY
-}
-
-const compareByStart = <T extends MatchLike>(a: T, b: T) => {
-  const { startTimestamp: timeA } = a
-  const { startTimestamp: timeB } = b
-
-  if (typeof timeA === "number" && typeof timeB === "number" && timeA !== timeB) {
-    return timeA - timeB
-  }
-
-  if (typeof timeA === "number" && typeof timeB !== "number") {
-    return -1
-  }
-
-  if (typeof timeB === "number" && typeof timeA !== "number") {
-    return 1
-  }
-
-  const orderA = parseMatchOrder(a.matchNumber)
-  const orderB = parseMatchOrder(b.matchNumber)
-  if (orderA !== orderB) {
-    return orderA - orderB
-  }
-  return a.matchNumber.localeCompare(b.matchNumber, undefined, {
-    numeric: true,
-    sensitivity: "base",
-  })
-}
-
-const formatMatchTime = (startTimestamp?: number) => {
-  if (!startTimestamp) return "Time TBD"
-  const target = new Date(startTimestamp)
-  const today = new Date()
-  if (today.toDateString() === target.toDateString()) {
-    return sameDayFormatter.format(target)
-  }
-  return dayTimeFormatter.format(target)
-}
-
-const formatRelativeTime = (startTimestamp?: number) => {
-  if (!startTimestamp) return undefined
-  const diff = startTimestamp - Date.now()
-  const abs = Math.abs(diff)
-  const minute = 60 * 1000
-  const hour = 60 * minute
-  const day = 24 * hour
-
-  if (abs < 30 * 1000) {
-    return "starting now"
-  }
-  if (abs < hour) {
-    const minutes = Math.round(diff / minute)
-    return relativeFormatter.format(minutes, "minute")
-  }
-  if (abs < day) {
-    const hours = Math.round(diff / hour)
-    return relativeFormatter.format(hours, "hour")
-  }
-  const days = Math.round(diff / day)
-  return relativeFormatter.format(days, "day")
-}
 
 const formatLastUpdated = (timestamp: number) => updatedFormatter.format(new Date(timestamp))
 
@@ -174,6 +48,7 @@ const HomePage = () => {
           eventKey: remote.eventKey,
           matches: remote.matches ?? [],
           assignments: remote.assignments ?? [],
+          lastCompletedMatch: remote.lastCompletedMatch ?? null,
           aliases: remote.aliases ?? {},
           mode: remote.mode ?? "auto",
         }
@@ -236,82 +111,24 @@ const HomePage = () => {
   const normalizedEmail = normalizeEmail(user?.email ?? "")
   const assignments = schedule?.assignments ?? []
   const matches = schedule?.matches ?? []
+  const lastCompletedMatch = schedule?.lastCompletedMatch ?? null
 
-  const upcomingShifts = useMemo<UpcomingShift[]>(() => {
-    if (!normalizedEmail) return []
+  const upcomingShiftBlocks = useMemo(
+    () =>
+      deriveScoutShiftBlocks({
+        email: normalizedEmail,
+        assignments,
+        matches,
+        lastCompletedMatch,
+        includeCompleted: false,
+      }).slice(0, 6),
+    [assignments, lastCompletedMatch, matches, normalizedEmail]
+  )
 
-    const result: UpcomingShift[] = []
-
-    assignments.forEach((assignment) => {
-      for (const slot of PLAYER_POSITIONS) {
-        const assigned = assignment.positions?.[slot]
-        if (!assigned || normalizeEmail(assigned) !== normalizedEmail) {
-          continue
-        }
-
-        const positionMeta = POSITION_DETAILS[slot]
-        const matchInfo = matches.find((match) => match.matchNumber === assignment.matchNumber)
-        const startTimestamp = parseStartTime(assignment.startTime ?? matchInfo?.startTime)
-        const allianceTeams = matchInfo
-          ? positionMeta.alliance === "red"
-            ? [...(matchInfo.red ?? [])]
-            : [...(matchInfo.blue ?? [])]
-          : []
-        const opponentTeams = matchInfo
-          ? positionMeta.alliance === "red"
-            ? [...(matchInfo.blue ?? [])]
-            : [...(matchInfo.red ?? [])]
-          : []
-
-        result.push({
-          matchNumber: assignment.matchNumber,
-          position: slot,
-          positionLabel: positionMeta.label,
-          alliance: positionMeta.alliance,
-          teamNumber: allianceTeams[positionMeta.slotIndex] || undefined,
-          allies: allianceTeams.filter(Boolean),
-          opponents: opponentTeams.filter(Boolean),
-          startTimestamp,
-          startTimeText: formatMatchTime(startTimestamp),
-          relativeText: formatRelativeTime(startTimestamp),
-        })
-
-        break
-      }
-    })
-
-    result.sort((a, b) => compareByStart(a, b))
-    return result.slice(0, 5)
-  }, [assignments, matches, normalizedEmail])
-
-  const shiftMap = useMemo(() => {
-    return new Map(upcomingShifts.map((shift) => [shift.matchNumber, shift]))
-  }, [upcomingShifts])
-
-  const upcomingMatches = useMemo<EnrichedMatch[]>(() => {
-    if (matches.length === 0) return []
-
-    const now = Date.now()
-    const enriched = matches
-      .map((match) => {
-        const startTimestamp = parseStartTime(match.startTime)
-        return {
-          ...match,
-          red: match.red ? [...match.red] : [],
-          blue: match.blue ? [...match.blue] : [],
-          startTimestamp,
-          startTimeText: formatMatchTime(startTimestamp),
-          relativeText: formatRelativeTime(startTimestamp),
-        }
-      })
-      .sort((a, b) => compareByStart(a, b))
-      .filter((match) => {
-        if (!match.startTimestamp) return true
-        return match.startTimestamp >= now - 15 * 60 * 1000
-      })
-
-    return enriched.slice(0, 6)
-  }, [matches])
+  const groupedUpcomingShiftBlocks = useMemo(
+    () => groupShiftBlocksByDay(upcomingShiftBlocks),
+    [upcomingShiftBlocks]
+  )
 
   const firstName = useMemo(() => {
     if (!user?.name) return "Scout"
@@ -546,61 +363,45 @@ const HomePage = () => {
           <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <CardTitle>Upcoming Shifts</CardTitle>
-              <CardDescription>Matches where you are scheduled to scout.</CardDescription>
+              <CardDescription>Grouped by day and merged into shift blocks.</CardDescription>
             </div>
-            <Button asChild size="sm">
-              <Link to="/game-start" className="flex items-center gap-2 text-primary-foreground hover:text-primary-foreground">
-                <Users className="h-4 w-4" />
-                Match Flow
+            <Button asChild size="sm" variant="outline">
+              <Link to="/schedule" className="flex items-center gap-2">
+                <CalendarDays className="h-4 w-4" />
+                Full Schedule
               </Link>
             </Button>
           </CardHeader>
           <CardContent>
-            {upcomingShifts.length === 0 ? (
+            {upcomingShiftBlocks.length === 0 ? (
               <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
                 No assigned shifts yet. We’ll post assignments here once a lead publishes the event schedule.
               </div>
             ) : (
               <div className="space-y-4">
-                {upcomingShifts.map((shift) => (
-                  <div key={shift.matchNumber} className="rounded-lg border bg-muted/40 p-4">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <div className="flex items-center gap-2 text-sm font-semibold">
-                        <CalendarDays className="h-4 w-4 text-primary" />
-                        <span>Match {shift.matchNumber}</span>
-                      </div>
-                      <Badge variant="secondary">{shift.positionLabel}</Badge>
-                      {shift.teamNumber && (
-                        <Badge variant="outline">Team {shift.teamNumber}</Badge>
-                      )}
+                {groupedUpcomingShiftBlocks.map((group) => (
+                  <div key={group.dayKey} className="space-y-3">
+                    <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      <CalendarDays className="h-3.5 w-3.5" />
+                      <span>{group.dayLabel}</span>
                     </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
-                      <div className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        <span>{shift.startTimeText}</span>
-                      </div>
-                      {shift.relativeText && <span>{shift.relativeText}</span>}
-                    </div>
-                    {(shift.allies.length > 0 || shift.opponents.length > 0) && (
-                      <div className="mt-3 grid gap-2 text-sm md:grid-cols-2">
-                        {shift.allies.length > 0 && (
-                          <div>
-                            <p className="text-xs uppercase tracking-wide text-foreground">Alliance</p>
-                            <p className="mt-1 font-semibold text-foreground">
-                              {shift.allies.join(" • ")}
-                            </p>
+                    {group.blocks.map((block) => (
+                      <div key={`${group.dayKey}-${block.startMatchNumber}-${block.position}`} className="rounded-lg border bg-muted/40 p-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="text-sm font-semibold">
+                            Matches {formatShiftRange(block)}
                           </div>
-                        )}
-                        {shift.opponents.length > 0 && (
-                          <div>
-                            <p className="text-xs uppercase tracking-wide text-muted-foreground">Opponents</p>
-                            <p className="mt-1 font-semibold text-muted-foreground">
-                              {shift.opponents.join(" • ")}
-                            </p>
-                          </div>
-                        )}
+                          <Badge variant="secondary">{block.positionLabel}</Badge>
+                          <Badge variant={block.status === "current" ? "default" : "outline"}>
+                            {block.status === "current" ? "Current shift" : "Upcoming"}
+                          </Badge>
+                        </div>
+                        <div className="mt-2 text-sm text-muted-foreground">
+                          {block.matchCount} {block.matchCount === 1 ? "match" : "matches"}
+                          {block.teams.length > 0 ? ` • Teams ${block.teams.join(" • ")}` : ""}
+                        </div>
                       </div>
-                    )}
+                    ))}
                   </div>
                 ))}
               </div>
@@ -610,52 +411,30 @@ const HomePage = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle>Upcoming Matches</CardTitle>
-            <CardDescription>The next matches on the event schedule.</CardDescription>
+            <CardTitle>Shift Status</CardTitle>
+            <CardDescription>Follow the live event progression instead of TBA time estimates.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {upcomingMatches.length === 0 ? (
-              <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-                No matches are scheduled yet. They’ll appear here after the official schedule is published. Need a dry run? Load demo data from Dev Utilities.
+            <div className="rounded-lg border p-4">
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                <Radio className="h-4 w-4 text-primary" />
+                <span>Event Progress</span>
               </div>
-            ) : (
-              upcomingMatches.map((match) => {
-                const assignedShift = shiftMap.get(match.matchNumber)
-                return (
-                  <div key={match.matchNumber} className="rounded-lg border p-4">
-                    <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">
-                      <CalendarDays className="h-4 w-4 text-primary" />
-                      <span>Match {match.matchNumber}</span>
-                      <span className="text-muted-foreground">• {match.startTimeText}</span>
-                    </div>
-                    {match.relativeText && (
-                      <div className="mt-1 text-xs text-muted-foreground">{match.relativeText}</div>
-                    )}
-                    {assignedShift && (
-                      <div className="mt-2">
-                        <Badge variant="secondary" className="text-xs">
-                          Your station: {assignedShift.positionLabel}
-                        </Badge>
-                      </div>
-                    )}
-                    <div className="mt-3 grid gap-3 text-sm">
-                      <div>
-                        <p className="text-xs font-semibold uppercase text-red-500">Red Alliance</p>
-                        <p className="mt-1 font-medium text-foreground">
-                          {(match.red ?? []).filter(Boolean).join(" • ") || "TBD"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs font-semibold uppercase text-blue-500">Blue Alliance</p>
-                        <p className="mt-1 font-medium text-foreground">
-                          {(match.blue ?? []).filter(Boolean).join(" • ") || "TBD"}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })
-            )}
+              <p className="mt-2 text-sm text-muted-foreground">
+                {typeof lastCompletedMatch === "number"
+                  ? `The app has recorded scouting submissions through match ${lastCompletedMatch}.`
+                  : "Live match progress has not been detected yet."}
+              </p>
+            </div>
+            <div className="rounded-lg border p-4">
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                <Users className="h-4 w-4 text-primary" />
+                <span>Scout Reminders</span>
+              </div>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Enable reminders below and we will alert you based on the live match tracker, not TBA start-time guesses.
+              </p>
+            </div>
           </CardContent>
         </Card>
       </div>
