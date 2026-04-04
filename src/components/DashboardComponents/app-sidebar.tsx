@@ -78,8 +78,8 @@ const data = {
           minRole: "lead" as UserRole,
         },
         {
-          title: "Schedule Automation",
-          url: "/schedule-automation",
+          title: "Shift Generator",
+          url: "/shift-generator",
           minRole: "lead" as UserRole,
         },
         {

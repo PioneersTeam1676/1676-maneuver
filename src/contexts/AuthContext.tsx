@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { apiDelete, apiGet, apiPatch, apiPut } from '@/lib/apiClient'
+import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '@/lib/apiClient'
 
 type User = {
   name: string
@@ -281,7 +281,7 @@ const routePermissions: Array<{ pattern: RegExp; minRole: UserRole | null }> = [
   { pattern: /^\/pit-assignments$/, minRole: 'lead' },
   { pattern: /^\/verification-center$/, minRole: 'lead' },
   { pattern: /^\/match-data-qr$/, minRole: 'lead' },
-  { pattern: /^\/schedule-automation$/, minRole: 'lead' },
+  { pattern: /^\/shift-generator$/, minRole: 'lead' },
   { pattern: /^\/achievements$/, minRole: 'lead' },
   { pattern: /^\/event-settings$/, minRole: 'lead' },
   { pattern: /^\/scout-management$/, minRole: 'lead' },
@@ -717,6 +717,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   )
 
   useEffect(() => {
+    if (!ready || !user?.email) return
+    upsertRecentUser({
+      email: user.email,
+      name: user.name,
+      picture: user.picture,
+      acknowledged: emailMatchesAllowedDomain(normalizeEmail(user.email)) || ADMIN_EMAILS.includes(normalizeEmail(user.email)),
+    })
+  }, [ready, user, upsertRecentUser])
+
+  useEffect(() => {
     localStorage.setItem(RECENT_STORAGE_KEY, JSON.stringify(recentUsers))
   }, [recentUsers])
 
@@ -810,6 +820,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setRequiresAllianceConfirmation(!(existingProfile?.confirmedAlliance))
       } else {
         setRequiresAllianceConfirmation(false)
+      }
+
+      // Auto-register allowed-domain users in the backend roles table.
+      // The endpoint only inserts if no role exists, so it never downgrades a lead/admin.
+      if (isAllowedDomainUser) {
+        void apiPost('/roles/self-register', {}).catch((error) => {
+          console.warn('Failed to self-register scout role', error)
+        })
       }
 
       void fetchRoleAssignmentsFromApi().catch((error) => {

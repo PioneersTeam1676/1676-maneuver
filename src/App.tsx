@@ -41,7 +41,7 @@ import VerificationCenterPage from "./pages/VerificationCenterPage";
 import DevUtilitiesPage from "./pages/DevUtilitiesPage";
 import TOSPage from "./pages/TOSPage";
 import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
-import ScheduleAutomationPage from "./pages/ScheduleAutomationPage";
+import ShiftGeneratorPage from "./pages/ShiftGeneratorPage";
 import AdminPanelPage from "./pages/AdminPanelPage";
 import PiPanelPage from "./pages/PiPanelPage";
 import UserManagementPage from "./pages/UserManagementPage";
@@ -88,7 +88,7 @@ function App() {
         <Route path="/pit-assignments" element={<PitAssignmentsPage />} />
         <Route path="/strategy-overview" element={<StrategyOverviewPage />} />
         <Route path="/pick-list" element={<PickListPage />} />
-        <Route path="/schedule-automation" element={<ScheduleAutomationPage />} />
+        <Route path="/shift-generator" element={<ShiftGeneratorPage />} />
         <Route path="/form-maker" element={<FormMakerPage />} />
         <Route path="/form-maker/new" element={<FormBuilderPage />} />
         <Route path="/form-maker/:formId" element={<FormBuilderPage />} />
