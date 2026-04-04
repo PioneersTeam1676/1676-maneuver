@@ -511,6 +511,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           acknowledged: true,
         })
 
+        // Self-register in backend roles table if allowed-domain user.
+        // Covers the "returning user" path where processOAuthResponse is never called.
+        // Safe: the endpoint is a no-op if they already have a role.
+        if (emailMatchesAllowedDomain(normalized)) {
+          void apiPost('/roles/self-register', {}).catch(() => {
+            // Silently ignore — token may be expired; they'll self-register on next fresh login.
+          })
+        }
+
         setRoleAssignments((prev) => {
           const next = { ...prev }
           let changed = false
