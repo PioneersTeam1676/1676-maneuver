@@ -56,6 +56,9 @@ const extractToken = (req) => {
     if (value) return value
   }
 
+  const queryToken = normalizeToken(req.query?.api_key)
+  if (queryToken) return queryToken
+
   return null
 }
 

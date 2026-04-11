@@ -1,4 +1,5 @@
 import { apiDelete, apiGet, apiPost, apiPut, ApiError } from "@/lib/apiClient"
+import { HARD_CODED_MATCH_FORM_SOURCE } from "@/pages/ScoutFormPage"
 import type { FormDbConfig, FormDefinition, FormField, FormSummary } from "@/types/formBuilder"
 
 let builtInMatchForm: FormDefinition | null = null
@@ -6,13 +7,8 @@ let builtInPitForm: FormDefinition | null = null
 
 const loadBuiltInMatchForm = async (): Promise<FormDefinition | null> => {
   if (builtInMatchForm) return builtInMatchForm
-  try {
-    const mod = await import("@/data/matchScoutForm.json")
-    builtInMatchForm = mod.default as unknown as FormDefinition
-    return builtInMatchForm
-  } catch {
-    return null
-  }
+  builtInMatchForm = HARD_CODED_MATCH_FORM_SOURCE
+  return builtInMatchForm
 }
 
 const loadBuiltInPitForm = async (): Promise<FormDefinition | null> => {

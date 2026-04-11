@@ -55,7 +55,117 @@ const RESERVED_EDIT_KEYS = new Set([
   "Scout Name",
   "eventName",
   "Event",
+  "playerStation",
+  "teamPosition",
+  "stationNumber",
+  "alliancePositionLabel",
 ]);
+
+const normalizeText = (value: unknown) => String(value ?? "").trim();
+
+const hasText = (value: unknown) => normalizeText(value).length > 0;
+
+const extractStationContext = (entry: ScoutingEntryDB) => {
+  const data = entry.data ?? {};
+  const stationCandidates = [
+    data.playerStation,
+    data.alliancePositionLabel,
+    data.scoutTeam,
+    data.station,
+    data.driverStation,
+    data.alliance,
+    entry.alliance,
+  ];
+
+  const parseStationLabel = (value: unknown) => {
+    const text = normalizeText(value).toLowerCase();
+    if (!text) return null;
+    const compact = text.replace(/alliance/g, "").replace(/[^a-z0-9]/g, "");
+    const match = compact.match(/^(red|blue)([123])$/);
+    if (match) {
+      return {
+        alliance: match[1] === "red" ? "Red" : "Blue",
+        slotNumber: match[2],
+      };
+    }
+    if (compact === "red" || compact === "blue") {
+      return {
+        alliance: compact === "red" ? "Red" : "Blue",
+        slotNumber: "",
+      };
+    }
+    return null;
+  };
+
+  for (const candidate of stationCandidates) {
+    const parsed = parseStationLabel(candidate);
+    if (parsed) {
+      return {
+        ...parsed,
+        label: parsed.slotNumber ? `${parsed.alliance} ${parsed.slotNumber}` : parsed.alliance,
+      };
+    }
+  }
+
+  const positionCandidates = [
+    data.teamPosition,
+    data.stationNumber,
+    data.slotIndex,
+    data.teamSlot,
+  ];
+  const slotNumber = positionCandidates
+    .map((candidate) => {
+      const numeric = Number(candidate);
+      if (!Number.isFinite(numeric)) return "";
+      if (numeric >= 1 && numeric <= 3) return String(numeric);
+      if (numeric >= 0 && numeric <= 2) return String(numeric + 1);
+      return "";
+    })
+    .find(Boolean) || "";
+
+  const allianceText = normalizeText(data.alliance || data.scoutTeam || entry.alliance).toLowerCase();
+  const alliance =
+    allianceText.includes("red") ? "Red" :
+    allianceText.includes("blue") ? "Blue" :
+    "";
+
+  if (!alliance) {
+    return { alliance: "", slotNumber: "", label: "" };
+  }
+
+  return {
+    alliance,
+    slotNumber,
+    label: slotNumber ? `${alliance} ${slotNumber}` : alliance,
+  };
+};
+
+const getIssueDetails = (entry: ScoutingEntryDB, duplicateEntryIds: Set<string>) => {
+  const details: string[] = [];
+  const teamLabel = normalizeText(entry.teamNumber) || "Unknown team";
+  const matchLabel = normalizeText(entry.matchNumber);
+  const station = extractStationContext(entry);
+  const stationLabel = station.label ? ` at ${station.label}` : "";
+
+  if (duplicateEntryIds.has(entry.id)) {
+    const duplicateMatchLabel = matchLabel ? `match ${matchLabel}` : "unknown match";
+    details.push(`Duplicate entry for Team ${teamLabel} in ${duplicateMatchLabel}${stationLabel}.`);
+  }
+  if (!hasText(entry.teamNumber)) {
+    details.push(`Missing team number${matchLabel ? ` for match ${matchLabel}` : ""}${stationLabel}.`);
+  }
+  if (!hasText(entry.matchNumber)) {
+    details.push(`Missing match number for Team ${teamLabel}${stationLabel}.`);
+  }
+  if (!hasText(entry.scoutName)) {
+    details.push(`Missing scout name for Team ${teamLabel}${matchLabel ? ` in match ${matchLabel}` : ""}${stationLabel}.`);
+  }
+  if (!hasText(entry.eventName)) {
+    details.push(`Missing event for Team ${teamLabel}${matchLabel ? ` in match ${matchLabel}` : ""}${stationLabel}.`);
+  }
+
+  return details;
+};
 
 const DataManagementPage = () => {
   const [entries, setEntries] = useState<ScoutingEntryDB[]>([]);
@@ -107,7 +217,7 @@ const DataManagementPage = () => {
     return Number.isNaN(parsed) ? Number.MAX_SAFE_INTEGER : parsed;
   };
 
-  const normalizeSearchValue = (value: unknown) => String(value ?? "").trim().toLowerCase();
+  const normalizeSearchValue = (value: unknown) => normalizeText(value).toLowerCase();
 
   const buildDuplicateKey = useCallback((entry: ScoutingEntryDB) => {
     const eventName = normalizeSearchValue(entry.eventName);
@@ -154,10 +264,10 @@ const DataManagementPage = () => {
   const getEntryFlags = useCallback((entry: ScoutingEntryDB) => {
     const flags: string[] = [];
     if (duplicateEntryIds.has(entry.id)) flags.push("Duplicate");
-    if (!entry.teamNumber) flags.push("Missing team");
-    if (!entry.matchNumber) flags.push("Missing match");
-    if (!entry.scoutName) flags.push("Missing scout");
-    if (!entry.eventName) flags.push("Missing event");
+    if (!hasText(entry.teamNumber)) flags.push("Missing team");
+    if (!hasText(entry.matchNumber)) flags.push("Missing match");
+    if (!hasText(entry.scoutName)) flags.push("Missing scout");
+    if (!hasText(entry.eventName)) flags.push("Missing event");
     return flags;
   }, [duplicateEntryIds]);
 
@@ -773,6 +883,8 @@ const DataManagementPage = () => {
                   ) : (
                     filteredEntries.map((entry) => {
                       const flags = getEntryFlags(entry);
+                      const issueDetails = getIssueDetails(entry, duplicateEntryIds);
+                      const station = extractStationContext(entry);
                       return (
                       <TableRow key={entry.id} className={flags.length > 0 ? "bg-yellow-50/40 dark:bg-yellow-950/10" : undefined}>
                         <TableCell>
@@ -784,8 +896,12 @@ const DataManagementPage = () => {
                         <TableCell className="font-medium">{entry.teamNumber || "—"}</TableCell>
                         <TableCell>{entry.matchNumber || "—"}</TableCell>
                         <TableCell>
-                          {entry.alliance ? (
-                            <Badge variant={entry.alliance === "red" ? "destructive" : "default"}>
+                          {station.label ? (
+                            <Badge variant={station.alliance === "Red" ? "destructive" : "default"}>
+                              {station.label}
+                            </Badge>
+                          ) : entry.alliance ? (
+                            <Badge variant={String(entry.alliance).toLowerCase().includes("red") ? "destructive" : "default"}>
                               {entry.alliance}
                             </Badge>
                           ) : (
@@ -801,17 +917,26 @@ const DataManagementPage = () => {
                         </TableCell>
                         <TableCell>
                           {flags.length > 0 ? (
-                            <div className="flex flex-wrap gap-1">
-                              {flags.map((flag) => (
-                                <Badge
-                                  key={`${entry.id}-${flag}`}
-                                  variant="outline"
-                                  className="border-yellow-300 bg-yellow-50 text-yellow-800 dark:border-yellow-900 dark:bg-yellow-950 dark:text-yellow-300"
-                                >
-                                  {flag === "Duplicate" && <AlertTriangle className="mr-1 h-3 w-3" />}
-                                  {flag}
-                                </Badge>
-                              ))}
+                            <div className="space-y-2">
+                              <div className="flex flex-wrap gap-1">
+                                {flags.map((flag) => (
+                                  <Badge
+                                    key={`${entry.id}-${flag}`}
+                                    variant="outline"
+                                    className="border-yellow-300 bg-yellow-50 text-yellow-800 dark:border-yellow-900 dark:bg-yellow-950 dark:text-yellow-300"
+                                  >
+                                    {flag === "Duplicate" && <AlertTriangle className="mr-1 h-3 w-3" />}
+                                    {flag}
+                                  </Badge>
+                                ))}
+                              </div>
+                              {issueDetails.length > 0 ? (
+                                <div className="space-y-1 text-xs text-muted-foreground">
+                                  {issueDetails.map((detail) => (
+                                    <div key={`${entry.id}-${detail}`}>{detail}</div>
+                                  ))}
+                                </div>
+                              ) : null}
                             </div>
                           ) : (
                             <span className="text-sm text-muted-foreground">—</span>

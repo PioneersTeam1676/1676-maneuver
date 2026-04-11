@@ -49,7 +49,7 @@ import UserManagementPage from "./pages/UserManagementPage";
 import ScoutActivityPage from "./pages/ScoutActivityPage";
 import AuthCallbackPage from "./pages/AuthCallbackPage";
 import AllianceOnboardingPage from "./pages/AllianceOnboardingPage";
-import DynamicScoutFormPage from "./pages/DynamicScoutFormPage";
+import ScoutFormPage from "./pages/ScoutFormPage";
 import OutlierDetectionPage from "./pages/OutlierDetectionPage";
 import SchedulePage from "@/pages/SchedulePage";
 import { InstallPrompt } from '@/components/InstallPrompt';
@@ -88,7 +88,7 @@ function App() {
         <Route path="/strategy-overview" element={<StrategyOverviewPage />} />
         <Route path="/pick-list" element={<PickListPage />} />
         <Route path="/shift-generator" element={<ShiftGeneratorPage />} />
-        <Route path="/scout-form" element={<DynamicScoutFormPage />} />
+        <Route path="/scout-form" element={<ScoutFormPage />} />
         <Route path="/admin" element={<AdminPanelPage />} />
   <Route path="/pi-panel" element={<PiPanelPage />} />
         <Route path="/user-management" element={<UserManagementPage />} />
