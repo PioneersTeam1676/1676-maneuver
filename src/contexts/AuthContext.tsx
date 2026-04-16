@@ -305,6 +305,7 @@ const routePermissions: Array<{ pattern: RegExp; minRole: UserRole | null }> = [
   { pattern: /^\/auto-scoring$/, minRole: 'scout' },
   { pattern: /^\/teleop-scoring$/, minRole: 'scout' },
   { pattern: /^\/endgame$/, minRole: 'scout' },
+  { pattern: /^\/scout-form$/, minRole: 'scout' },
   { pattern: /^\/tos$/, minRole: null }, // Public terms of service
   { pattern: /^\/terms$/, minRole: null }, // Public terms of service
   { pattern: /^\/privacy$/, minRole: null }, // Public privacy policy
