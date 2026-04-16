@@ -27,7 +27,9 @@ const roleLabels: Record<UserRole, string> = {
   pending: "Pending",
   pit_scout: "Pit Scout",
   drive_team: "Drive Team",
+  scout_minus: "Scout −",
   scout: "Scout",
+  scout_plus: "Scout +",
   lead: "Lead",
   tech_lead: "Technical Lead",
 }

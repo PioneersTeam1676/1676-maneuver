@@ -4,7 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { apiGet, apiDelete, apiPost, apiPatch, ApiError } from "@/lib/apiClient"
+import { apiGet, apiDelete, apiPost, apiPatch, apiPut, ApiError } from "@/lib/apiClient"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { readScoutingSeason } from "@/lib/scoutingSeason"
 import {
   Dialog,
@@ -48,7 +49,9 @@ const roleColors: Record<string, string> = {
   pending: "bg-gray-500",
   pit_scout: "bg-green-500",
   drive_team: "bg-cyan-500",
+  scout_minus: "bg-blue-300",
   scout: "bg-blue-500",
+  scout_plus: "bg-blue-700",
   lead: "bg-purple-500",
   tech_lead: "bg-amber-700",
 }
@@ -58,10 +61,25 @@ const roleIcons: Record<string, LucideIcon> = {
   pending: UserX,
   pit_scout: Wrench,
   drive_team: Gamepad2,
+  scout_minus: User,
   scout: User,
+  scout_plus: User,
   lead: Users,
   tech_lead: Crown,
 }
+
+const ROLE_LABELS: Record<string, string> = {
+  pending: "Pending",
+  pit_scout: "Pit Scout",
+  drive_team: "Drive Team",
+  scout_minus: "Scout −",
+  scout: "Scout",
+  scout_plus: "Scout +",
+  lead: "Lead",
+  tech_lead: "Tech Lead",
+}
+
+const ASSIGNABLE_ROLES = ["pending", "pit_scout", "drive_team", "scout_minus", "scout", "scout_plus", "lead", "tech_lead"] as const
 
 type RecentUserApiRecord = {
   email?: string
@@ -496,6 +514,18 @@ export default function UserManagementPage() {
     setDetailDialogOpen(true)
   }
 
+  const handleRoleChange = async (user: User, newRole: string) => {
+    if (user.isEntryOnly || !user.email) return
+    try {
+      await apiPut(`/roles/${encodeURIComponent(user.email)}`, { role: newRole })
+      setUsers((prev) => prev.map((u) => u.email === user.email ? { ...u, role: newRole } : u))
+      setSelectedUser((prev) => prev ? { ...prev, role: newRole } : prev)
+      toast.success(`Role updated to ${ROLE_LABELS[newRole] ?? newRole}`)
+    } catch {
+      toast.error("Failed to update role")
+    }
+  }
+
   const formatDate = (timestamp?: number | string) => {
     if (!timestamp) return "Never"
     const date = typeof timestamp === "number" ? new Date(timestamp) : new Date(timestamp)
@@ -521,7 +551,7 @@ export default function UserManagementPage() {
   const stats = {
     total: users.length,
     admins: users.filter((u) => u.role === "lead" || u.role === "tech_lead").length,
-    scouts: users.filter((u) => u.role === "scout" || u.role === "activity_only").length,
+    scouts: users.filter((u) => ["scout", "scout_plus", "scout_minus", "activity_only"].includes(u.role)).length,
     pending: users.filter((u) => u.role === "pending").length,
   }
 
@@ -664,9 +694,9 @@ export default function UserManagementPage() {
                         <div className="flex items-center gap-3 mt-1 flex-wrap">
                           <Badge
                             variant="secondary"
-                            className={`${roleColors[user.role]} text-white`}
+                            className={`${roleColors[user.role] ?? "bg-gray-500"} text-white`}
                           >
-                            {user.role === "activity_only" ? "active scout" : user.role}
+                            {ROLE_LABELS[user.role] ?? user.role}
                           </Badge>
                           {user.activityCount !== undefined && user.activityCount > 0 && (
                             <span className="text-xs text-muted-foreground">
@@ -753,11 +783,31 @@ export default function UserManagementPage() {
                   )}
                   <div>
                     <span className="text-muted-foreground">Role:</span>
-                    <div className="mt-1">
-                      <Badge className={`${roleColors[selectedUser.role]} text-white`}>
-                        {selectedUser.role === "activity_only" ? "active scout" : selectedUser.role}
-                      </Badge>
-                    </div>
+                    {selectedUser.isEntryOnly ? (
+                      <div className="mt-1">
+                        <Badge className={`${roleColors[selectedUser.role] ?? "bg-gray-500"} text-white`}>
+                          {ROLE_LABELS[selectedUser.role] ?? selectedUser.role}
+                        </Badge>
+                      </div>
+                    ) : (
+                      <div className="mt-1">
+                        <Select
+                          value={selectedUser.role}
+                          onValueChange={(newRole) => handleRoleChange(selectedUser, newRole)}
+                        >
+                          <SelectTrigger className="w-40 h-8 text-sm">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {ASSIGNABLE_ROLES.map((r) => (
+                              <SelectItem key={r} value={r} className="text-sm">
+                                {ROLE_LABELS[r]}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

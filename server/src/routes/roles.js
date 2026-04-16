@@ -8,7 +8,7 @@ const { ensureEntryIdentitySchema, normalizeEmail } = require("../utils/entryIde
 
 const router = express.Router()
 
-const validRoles = new Set(["pending", "pit_scout", "drive_team", "scout", "lead", "tech_lead"])
+const validRoles = new Set(["pending", "pit_scout", "drive_team", "scout_minus", "scout", "scout_plus", "lead", "tech_lead"])
 
 const normalizeName = (value) =>
   sanitizeString(value)

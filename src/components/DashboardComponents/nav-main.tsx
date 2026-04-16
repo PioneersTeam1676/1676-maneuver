@@ -24,7 +24,9 @@ const roleWeights: Record<UserRole, number> = {
   pending: 0,
   pit_scout: 1,
   drive_team: 1,
+  scout_minus: 2,
   scout: 2,
+  scout_plus: 2,
   lead: 3,
   tech_lead: 4,
 }

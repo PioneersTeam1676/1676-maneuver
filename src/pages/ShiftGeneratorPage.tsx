@@ -65,6 +65,7 @@ interface WatchStatus {
 interface PersistedState {
   eventKey: string
   shiftSize: number
+  overlapEnabled: boolean
   attendees: AttendeeEntry[]
   generated: GeneratedSchedule | null
 }
@@ -149,6 +150,7 @@ const ShiftGeneratorPage = () => {
   // ─── Persisted state ────────────────────────────────────────────────────
   const [eventKey, setEventKey] = useState("")
   const [shiftSize, setShiftSize] = useState(7)
+  const [overlapEnabled, setOverlapEnabled] = useState(false)
   const [attendees, setAttendees] = useState<AttendeeEntry[]>([])
   const [savedEventKey, setSavedEventKey] = useState("")
   const [hasHydrated, setHasHydrated] = useState(false)
@@ -191,6 +193,7 @@ const ShiftGeneratorPage = () => {
       if (raw) {
         const stored = JSON.parse(raw) as PersistedState
         if (stored.shiftSize) setShiftSize(stored.shiftSize)
+        if (typeof stored.overlapEnabled === 'boolean') setOverlapEnabled(stored.overlapEnabled)
         if (Array.isArray(stored.attendees)) setAttendees(stored.attendees)
         if (stored.eventKey) setSavedEventKey(stored.eventKey)
         if (stored.generated) setGenerated(stored.generated)
@@ -255,9 +258,13 @@ const ShiftGeneratorPage = () => {
       const existingByEmail = new Map(prev.map((a) => [a.email, a]))
       return registeredScouts.map((scout) => {
         const existing = existingByEmail.get(scout.email)
-        return existing
-          ? { ...existing, displayName: scout.displayName }
-          : { email: scout.email, displayName: scout.displayName, present: false, load: 2 as LoadPref }
+        if (existing) return { ...existing, displayName: scout.displayName }
+        const role = roleAssignments[scout.email]
+        const defaultLoad: LoadPref =
+          role === 'scout_plus' ? 3 :
+          role === 'scout_minus' ? 1 :
+          2
+        return { email: scout.email, displayName: scout.displayName, present: false, load: defaultLoad }
       })
     })
   }, [hasHydrated, registeredScouts])
@@ -267,7 +274,7 @@ const ShiftGeneratorPage = () => {
     if (!hasHydrated) {
       return
     }
-    const state: PersistedState = { eventKey: savedEventKey || eventKey, shiftSize, attendees, generated }
+    const state: PersistedState = { eventKey: savedEventKey || eventKey, shiftSize, overlapEnabled, attendees, generated }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
   }, [attendees, eventKey, generated, hasHydrated, savedEventKey, shiftSize])
 
@@ -443,7 +450,7 @@ const ShiftGeneratorPage = () => {
     if (!eventKey.trim()) { toast.error("Set the current event in Event Settings first"); return }
 
     const totalMatches = watchStatus.matchCount ?? 72
-    const result = generateShiftSchedule({ scouts, totalMatches, shiftSize })
+    const result = generateShiftSchedule({ scouts, totalMatches, shiftSize, overlapEnabled })
     setGenerated(result)
     setSavedEventKey(eventKey.trim())
     if (result.warnings.length > 0) {
@@ -703,7 +710,7 @@ const ShiftGeneratorPage = () => {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-end gap-3">
+          <div className="flex items-end gap-3 flex-wrap">
             <div>
               <Label htmlFor="shift-size">Matches per shift</Label>
               <Input
@@ -715,6 +722,27 @@ const ShiftGeneratorPage = () => {
                 onChange={(e) => setShiftSize(Math.max(1, parseInt(e.target.value) || 7))}
                 className="w-28"
               />
+            </div>
+            <div className="flex flex-col gap-1 pb-0.5">
+              <Label className="text-sm">Shift Overlap</Label>
+              <div
+                className="flex items-center gap-2 cursor-pointer"
+                onClick={() => setOverlapEnabled((v) => !v)}
+              >
+                <Checkbox
+                  id="overlap-toggle"
+                  checked={overlapEnabled}
+                  onCheckedChange={(checked) => setOverlapEnabled(Boolean(checked))}
+                />
+                <label htmlFor="overlap-toggle" className="text-sm cursor-pointer select-none">
+                  Overlap boundary match
+                </label>
+              </div>
+              {overlapEnabled && (
+                <p className="text-xs text-muted-foreground">
+                  All 12 scouts cover the handoff match (e.g. 1-7 &amp; 7-13).
+                </p>
+              )}
             </div>
             <Button onClick={generate} disabled={presentAttendees.length === 0}>
               Generate Schedule
@@ -749,6 +777,9 @@ const ShiftGeneratorPage = () => {
                       {generated.shiftRanges.map((r) => (
                         <th key={r.label} className="px-3 py-2 text-left font-medium whitespace-nowrap">
                           {r.label}
+                          {r.overlapAtStart && (
+                            <span className="ml-1 text-[10px] text-muted-foreground font-normal">↔</span>
+                          )}
                         </th>
                       ))}
                     </tr>

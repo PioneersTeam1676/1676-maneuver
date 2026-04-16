@@ -39,13 +39,15 @@ import { toast } from "sonner"
 import { sendManualNotification } from "@/lib/pushNotifications"
 import { clearAllScoutingData } from "@/lib/dexieDB"
 
-const ROLE_OPTIONS: Array<Exclude<UserRole, "pending">> = ["pit_scout", "drive_team", "scout", "lead", "tech_lead"]
+const ROLE_OPTIONS: Array<Exclude<UserRole, "pending">> = ["pit_scout", "drive_team", "scout_minus", "scout", "scout_plus", "lead", "tech_lead"]
 
 const roleLabels: Record<UserRole, string> = {
   pending: "Pending approval",
   pit_scout: "Pit Scout",
   drive_team: "Drive Team",
+  scout_minus: "Scout −",
   scout: "Scout",
+  scout_plus: "Scout +",
   lead: "Lead",
   tech_lead: "Technical Lead",
 }

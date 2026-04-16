@@ -8,7 +8,7 @@ type User = {
   sub: string // Google subject (user id)
 }
 
-export type UserRole = 'pending' | 'pit_scout' | 'drive_team' | 'scout' | 'lead' | 'tech_lead'
+export type UserRole = 'pending' | 'pit_scout' | 'drive_team' | 'scout_minus' | 'scout' | 'scout_plus' | 'lead' | 'tech_lead'
 
 type RoleAssignments = Record<string, UserRole>
 
@@ -130,7 +130,7 @@ const ULTRA_ADMIN_EMAILS: string[] = collectEmails(
   import.meta.env.VITE_GOOGLE_ADMIN_EMAIL as string | undefined
 )
 
-const VALID_ROLES: UserRole[] = ['pending', 'pit_scout', 'drive_team', 'scout', 'lead', 'tech_lead']
+const VALID_ROLES: UserRole[] = ['pending', 'pit_scout', 'drive_team', 'scout_minus', 'scout', 'scout_plus', 'lead', 'tech_lead']
 
 const isUserRole = (value: unknown): value is UserRole => VALID_ROLES.includes(value as UserRole)
 
@@ -293,7 +293,9 @@ const roleRank: Record<UserRole, number> = {
   pending: 0,
   pit_scout: 1,
   drive_team: 1,
+  scout_minus: 2,
   scout: 2,
+  scout_plus: 2,
   lead: 3,
   tech_lead: 4,
 }
@@ -341,7 +343,9 @@ const routePermissions: Array<{ pattern: RegExp; minRole: UserRole | null }> = [
 const DEFAULT_ROUTE_BY_ROLE: Record<UserRole, string> = {
   tech_lead: '/',
   lead: '/',
+  scout_plus: '/',
   scout: '/',
+  scout_minus: '/',
   pit_scout: '/pit-scouting',
   drive_team: '/drive-scouting',
   pending: '/alliance-onboarding',
@@ -1403,8 +1407,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return 'drive_team'
     }
 
+    if (assigned === 'scout_plus') {
+      return 'scout_plus'
+    }
+
     if (assigned === 'scout') {
       return 'scout'
+    }
+
+    if (assigned === 'scout_minus') {
+      return 'scout_minus'
     }
 
     if (assigned === 'pending') {

@@ -10,12 +10,14 @@ export interface ShiftGeneratorInput {
   scouts: ScoutInput[]
   totalMatches: number
   shiftSize: number
+  overlapEnabled?: boolean
 }
 
 export interface ShiftRange {
   label: string
   start: number
   end: number
+  overlapAtStart?: boolean
 }
 
 export interface GeneratedSchedule {
@@ -37,13 +39,24 @@ const POSITION_LABELS: Record<Position, string> = {
   'blue-3': 'Blue 3',
 }
 
-const computeShiftRanges = (totalMatches: number, shiftSize: number): ShiftRange[] => {
+const computeShiftRanges = (totalMatches: number, shiftSize: number, overlap = false): ShiftRange[] => {
   const ranges: ShiftRange[] = []
+  const effectiveSize = Math.max(1, shiftSize)
+  const step = overlap && effectiveSize > 1 ? effectiveSize - 1 : effectiveSize
   let start = 1
   while (start <= totalMatches) {
-    const end = Math.min(start + shiftSize - 1, totalMatches)
-    ranges.push({ label: `Match ${start}-${end}`, start, end })
-    start += shiftSize
+    const end = Math.min(start + effectiveSize - 1, totalMatches)
+    // With overlap, don't create a degenerate single-boundary shift at the end
+    if (overlap && ranges.length > 0 && end === start) {
+      break
+    }
+    ranges.push({
+      label: `Match ${start}-${end}`,
+      start,
+      end,
+      overlapAtStart: overlap && ranges.length > 0,
+    })
+    start += step
   }
   return ranges
 }
@@ -168,7 +181,7 @@ const assignPositionsForShift = (
 }
 
 export const generateShiftSchedule = (input: ShiftGeneratorInput): GeneratedSchedule => {
-  const { scouts, totalMatches, shiftSize } = input
+  const { scouts, totalMatches, shiftSize, overlapEnabled = false } = input
 
   if (scouts.length === 0) {
     return { assignments: [], shiftRanges: [], warnings: ['No scouts provided'], csv: '' }
@@ -177,7 +190,7 @@ export const generateShiftSchedule = (input: ShiftGeneratorInput): GeneratedSche
     return { assignments: [], shiftRanges: [], warnings: ['Invalid totalMatches or shiftSize'], csv: '' }
   }
 
-  const shiftRanges = computeShiftRanges(totalMatches, shiftSize)
+  const shiftRanges = computeShiftRanges(totalMatches, shiftSize, overlapEnabled)
   const numShifts = shiftRanges.length
   const desiredAssignments = computeDesiredAssignments(scouts, numShifts)
   const assignedCounts = new Map<string, number>(scouts.map((scout) => [scout.email, 0]))
@@ -201,10 +214,14 @@ export const generateShiftSchedule = (input: ShiftGeneratorInput): GeneratedSche
     while (selected.length < requiredScouts) {
       const selectedEmails = new Set(selected.map((scout) => scout.email))
       const remainingCandidates = scouts.filter((scout) => !selectedEmails.has(scout.email))
-      const restedCandidates = remainingCandidates.filter(
+      // Prefer scouts off for 2+ shifts, then 1+ shift, then anyone (minimise back-to-back)
+      const rested2 = remainingCandidates.filter(
+        (scout) => (lastShiftIndex.get(scout.email) ?? -3) < shiftIdx - 2,
+      )
+      const rested1 = remainingCandidates.filter(
         (scout) => (lastShiftIndex.get(scout.email) ?? -2) < shiftIdx - 1,
       )
-      const pool = restedCandidates.length > 0 ? restedCandidates : remainingCandidates
+      const pool = rested2.length > 0 ? rested2 : rested1.length > 0 ? rested1 : remainingCandidates
       const chosen = chooseScoutForShift(pool, desiredAssignments, assignedCounts, lastShiftIndex)
       selected.push(chosen)
     }
@@ -276,14 +293,52 @@ export const generateShiftSchedule = (input: ShiftGeneratorInput): GeneratedSche
   }
 
   const assignments: MatchAssignment[] = []
-  for (let shiftIdx = 0; shiftIdx < numShifts; shiftIdx += 1) {
-    const range = shiftRanges[shiftIdx]
-    const positions = shiftAssignments[shiftIdx]
-    for (let matchNum = range.start; matchNum <= range.end; matchNum += 1) {
-      const matchPositions = {} as MatchAssignment['positions']
-      for (const position of POSITIONS) {
-        matchPositions[position] = positions.get(position) ?? 'Unassigned'
+
+  if (!overlapEnabled || shiftSize <= 1) {
+    // Standard: each match belongs to exactly one shift
+    for (let shiftIdx = 0; shiftIdx < numShifts; shiftIdx += 1) {
+      const range = shiftRanges[shiftIdx]
+      const positions = shiftAssignments[shiftIdx]
+      for (let matchNum = range.start; matchNum <= range.end; matchNum += 1) {
+        const matchPositions = {} as MatchAssignment['positions']
+        for (const position of POSITIONS) {
+          matchPositions[position] = positions.get(position) ?? 'Unassigned'
+        }
+        assignments.push({ matchNumber: `qm${matchNum}`, positions: matchPositions })
       }
+    }
+  } else {
+    // Overlap: boundary matches covered by two consecutive shifts.
+    // Incoming shift gets standard positions; outgoing shift gets *-prev positions.
+    // All 12 scouts are stored — getMyAssignments filters by email so each scout
+    // sees the overlap match regardless of position suffix.
+    for (let matchNum = 1; matchNum <= totalMatches; matchNum += 1) {
+      const covering = shiftRanges
+        .map((range, idx) => ({ range, idx }))
+        .filter(({ range }) => range.start <= matchNum && matchNum <= range.end)
+
+      if (covering.length === 0) continue
+
+      const matchPositions = {} as MatchAssignment['positions']
+
+      if (covering.length === 1) {
+        const positions = shiftAssignments[covering[0].idx]
+        for (const position of POSITIONS) {
+          matchPositions[position] = positions.get(position) ?? 'Unassigned'
+        }
+      } else {
+        // Sort so outgoing (lower shiftIdx) comes first
+        covering.sort((a, b) => a.idx - b.idx)
+        const [outgoing, incoming] = covering
+        const incomingPositions = shiftAssignments[incoming.idx]
+        const outgoingPositions = shiftAssignments[outgoing.idx]
+        for (const position of POSITIONS) {
+          matchPositions[position] = incomingPositions.get(position) ?? 'Unassigned'
+          const prevKey = `${position}-prev`
+          ;(matchPositions as Record<string, string>)[prevKey] = outgoingPositions.get(position) ?? 'Unassigned'
+        }
+      }
+
       assignments.push({ matchNumber: `qm${matchNum}`, positions: matchPositions })
     }
   }
