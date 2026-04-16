@@ -332,8 +332,12 @@ export const generateShiftSchedule = (input: ShiftGeneratorInput): GeneratedSche
         const [outgoing, incoming] = covering
         const incomingPositions = shiftAssignments[incoming.idx]
         const outgoingPositions = shiftAssignments[outgoing.idx]
+        // Scouts doing back-to-back shifts keep their outgoing position for
+        // the overlap match — don't assign them to their incoming slot too.
+        const outgoingScouts = new Set(outgoingPositions.values())
         for (const position of POSITIONS) {
-          matchPositions[position] = incomingPositions.get(position) ?? 'Unassigned'
+          const incomingScout = incomingPositions.get(position) ?? 'Unassigned'
+          matchPositions[position] = outgoingScouts.has(incomingScout) ? 'Unassigned' : incomingScout
           const prevKey = `${position}-prev`
           ;(matchPositions as Record<string, string>)[prevKey] = outgoingPositions.get(position) ?? 'Unassigned'
         }
