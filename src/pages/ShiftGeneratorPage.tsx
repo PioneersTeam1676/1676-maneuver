@@ -794,9 +794,11 @@ const ShiftGeneratorPage = () => {
                             {label}
                           </td>
                           {generated.shiftRanges.map((range) => {
-                            // Find the scout for this position in this shift's first match
+                            // For overlap shifts the boundary match has some slots as 'Unassigned'
+                            // (back-to-back scouts keep their outgoing role). Use the next match.
+                            const lookupStart = range.overlapAtStart ? range.start + 1 : range.start
                             const firstMatch = generated.assignments.find(
-                              (a) => parseInt(a.matchNumber.replace(/\D/g, "")) === range.start
+                              (a) => parseInt(a.matchNumber.replace(/\D/g, "")) === lookupStart
                             )
                             const email = firstMatch?.positions[pos] ?? ""
                             const scout = presentAttendees.find((a) => a.email === email)

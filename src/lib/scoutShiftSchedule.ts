@@ -186,10 +186,17 @@ export const deriveScoutShiftBlocks = ({
   for (const assignment of assignments || []) {
     if (!assignment?.positions) continue
 
-    for (const [position, assignedEmail] of Object.entries(assignment.positions) as Array<[PlayerPosition, string]>) {
-      if (!assignedEmail || normalizeEmail(assignedEmail) !== normalizedEmail) {
-        continue
-      }
+    const posMap = assignment.positions as Record<string, string>
+    let matched = false
+
+    for (const position of Object.keys(POSITION_DETAILS) as PlayerPosition[]) {
+      if (matched) break
+      const standard = posMap[position]
+      const prev = posMap[`${position}-prev`]
+
+      const matchesStandard = standard && normalizeEmail(standard) === normalizedEmail
+      const matchesPrev = prev && normalizeEmail(prev) === normalizedEmail
+      if (!matchesStandard && !matchesPrev) continue
 
       const meta = POSITION_DETAILS[position]
       const match = matchMap.get(assignment.matchNumber)
@@ -206,7 +213,7 @@ export const deriveScoutShiftBlocks = ({
         teamNumber: allianceTeams[meta.slotIndex] || undefined,
         startTimestamp,
       })
-      break
+      matched = true
     }
   }
 
@@ -324,7 +331,15 @@ export const deriveCoverageBlocks = ({
   for (const assignment of assignments || []) {
     if (!assignment?.positions) continue
 
-    for (const [position, assignedEmail] of Object.entries(assignment.positions) as Array<[PlayerPosition, string]>) {
+    const posMap = assignment.positions as Record<string, string>
+
+    for (const position of Object.keys(POSITION_DETAILS) as PlayerPosition[]) {
+      const standard = posMap[position]
+      const prev = posMap[`${position}-prev`]
+      // For overlap matches the standard slot may be 'Unassigned' (back-to-back scout kept
+      // their outgoing role). Fall back to the *-prev scout so no slot shows as unassigned.
+      const assignedEmail =
+        standard && standard !== "Unassigned" ? standard : prev && prev !== "Unassigned" ? prev : standard
       if (!assignedEmail) continue
 
       const meta = POSITION_DETAILS[position]
