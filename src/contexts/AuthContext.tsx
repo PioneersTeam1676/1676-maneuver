@@ -74,6 +74,9 @@ type AuthContextValue = {
   acknowledgeRecentUser: (email: string) => void
   refreshRoles: () => Promise<void>
   refreshRecentUsers: () => Promise<void>
+  canRescout: boolean
+  rescouterPermissions: Record<string, boolean>
+  setRescouter: (email: string, enabled: boolean) => Promise<void>
 }
 
 const ROLE_STORAGE_KEY = 'auth_roles'
@@ -131,6 +134,7 @@ const ULTRA_ADMIN_EMAILS: string[] = collectEmails(
 )
 
 const VALID_ROLES: UserRole[] = ['pending', 'pit_scout', 'drive_team', 'scout_minus', 'scout', 'scout_plus', 'lead', 'tech_lead']
+const RESCOUTER_DEFAULT_ROLES: UserRole[] = ['scout_plus', 'lead', 'tech_lead']
 
 const isUserRole = (value: unknown): value is UserRole => VALID_ROLES.includes(value as UserRole)
 
@@ -417,6 +421,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return fallback
     }
   })
+  const [rescouterPermissions, setRescouterPermissions] = useState<Record<string, boolean>>({})
+
   const [recentUsers, setRecentUsers] = useState<RecentUserRecord[]>(() => {
     try {
       return parseStoredRecentUsers(localStorage.getItem(RECENT_STORAGE_KEY))
@@ -776,6 +782,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [ensureAdminPresence, user])
 
+  const fetchRescouterPermissions = useCallback(async () => {
+    if (!hasUsableAuthToken()) return
+    try {
+      const data = await apiGet<{ permissions: Record<string, boolean> }>('/rescout/permissions')
+      setRescouterPermissions(data.permissions ?? {})
+    } catch {
+      // non-critical, leave empty
+    }
+  }, [])
+
   const fetchRecentUsersFromApi = useCallback(async () => {
     if (!hasUsableAuthToken()) {
       throw new Error('No usable auth token')
@@ -845,6 +861,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const run = async () => {
       try {
         await fetchRoleAssignmentsFromApi()
+        void fetchRescouterPermissions()
       } catch (error) {
         if (!cancelled) {
           console.error('Failed to load roles from API', error)
@@ -861,7 +878,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [ready, user, fetchRoleAssignmentsFromApi])
+  }, [ready, user, fetchRoleAssignmentsFromApi, fetchRescouterPermissions])
 
   const upsertRecentUser = useCallback(
     (payload: { email: string; name?: string | null; picture?: string | null; acknowledged?: boolean }) => {
@@ -1446,6 +1463,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isAdmin = roleRank[role] >= roleRank.lead
   const isLead = roleRank[role] >= roleRank.lead
 
+  const canRescout = useMemo<boolean>(() => {
+    if (!user) return false
+    const normalized = normalizeEmail(user.email)
+    if (normalized in rescouterPermissions) return rescouterPermissions[normalized]
+    return RESCOUTER_DEFAULT_ROLES.includes(role)
+  }, [user, role, rescouterPermissions])
+
+  const setRescouter = useCallback(async (email: string, enabled: boolean) => {
+    const normalized = normalizeEmail(email)
+    await apiPut(`/rescout/permissions/${encodeURIComponent(normalized)}`, { enabled })
+    setRescouterPermissions(prev => ({ ...prev, [normalized]: enabled }))
+  }, [])
+
   useEffect(() => {
     if (!isLead) return
     if (!hasUsableAuthToken()) return
@@ -1551,6 +1581,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     acknowledgeRecentUser,
     refreshRoles: fetchRoleAssignmentsFromApi,
     refreshRecentUsers: fetchRecentUsersFromApi,
+    canRescout,
+    rescouterPermissions,
+    setRescouter,
   }), [
     user,
     role,
@@ -1577,6 +1610,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     acknowledgeRecentUser,
     fetchRoleAssignmentsFromApi,
     fetchRecentUsersFromApi,
+    canRescout,
+    rescouterPermissions,
+    setRescouter,
   ])
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
