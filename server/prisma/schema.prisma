@@ -233,3 +233,27 @@ model FormDefinition {
   @@index([year], map: "idx_form_definitions_year")
   @@map("form_definitions")
 }
+
+model RescouterPermission {
+  email     String  @id @db.VarChar(255)
+  enabled   Boolean @default(true)
+  updatedAt Int     @map("updated_at")
+
+  @@map("rescouter_permissions")
+}
+
+model RescoutClaim {
+  id            Int      @id @default(autoincrement())
+  matchNumber   String   @map("match_number") @db.VarChar(255)
+  alliance      String   @db.VarChar(16)
+  position      String   @db.VarChar(16)
+  eventKey      String   @map("event_key") @db.VarChar(255)
+  scoutEmail    String   @map("scout_email") @db.VarChar(255)
+  scoutName     String   @map("scout_name") @db.VarChar(255)
+  claimedAt     DateTime @default(now()) @map("claimed_at")
+  lastHeartbeat DateTime @default(now()) @map("last_heartbeat")
+
+  @@index([eventKey, matchNumber, position], map: "idx_rescout_slot")
+  @@index([lastHeartbeat], map: "idx_rescout_heartbeat")
+  @@map("rescout_claims")
+}
