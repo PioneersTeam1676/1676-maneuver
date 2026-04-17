@@ -88,6 +88,7 @@ export interface TBAMatch {
   actual_time: number;
   predicted_time: number;
   post_result_time: number;
+  videos?: Array<{ type: string; key: string }>;
 }
 
 export interface TBAEvent {
@@ -337,6 +338,64 @@ export const fetchQualificationSchedule = async (eventKey: string, apiKey?: stri
       blueAlliance: match.alliances.blue.team_keys.map(team => team.replace('frc', '')),
     }))
     .sort((a, b) => a.matchNum - b.matchNum);
+};
+
+const isCompletedQualificationMatch = (match: TBAMatch): boolean => {
+  if (match.comp_level !== 'qm') {
+    return false;
+  }
+
+  if (Number(match.post_result_time) > 0) {
+    return true;
+  }
+
+  if (typeof match.winning_alliance === 'string' && match.winning_alliance.trim()) {
+    return true;
+  }
+
+  const redScore = Number(match.alliances?.red?.score);
+  const blueScore = Number(match.alliances?.blue?.score);
+  return Number.isFinite(redScore) && Number.isFinite(blueScore) && redScore >= 0 && blueScore >= 0;
+};
+
+const isInProgressQualificationMatch = (match: TBAMatch): boolean => (
+  match.comp_level === 'qm' &&
+  Number(match.actual_time) > 0 &&
+  !isCompletedQualificationMatch(match)
+);
+
+export const resolveCurrentQualificationMatchNumber = (matches: TBAMatch[]): number | null => {
+  const qualificationMatches = matches
+    .filter((match) => match.comp_level === 'qm')
+    .sort((a, b) => a.match_number - b.match_number);
+
+  if (qualificationMatches.length === 0) {
+    return null;
+  }
+
+  const inProgressMatch = qualificationMatches.find(isInProgressQualificationMatch);
+  if (inProgressMatch) {
+    return inProgressMatch.match_number;
+  }
+
+  const lastCompletedMatchNumber = qualificationMatches.reduce((max, match) => (
+    isCompletedQualificationMatch(match) ? Math.max(max, match.match_number) : max
+  ), 0);
+
+  if (lastCompletedMatchNumber <= 0) {
+    return qualificationMatches[0]?.match_number ?? null;
+  }
+
+  const nextScheduledMatch = qualificationMatches.find((match) => match.match_number > lastCompletedMatchNumber);
+  return nextScheduledMatch?.match_number ?? lastCompletedMatchNumber;
+};
+
+export const fetchCurrentQualificationMatchNumber = async (
+  eventKey: string,
+  apiKey?: string
+): Promise<number | null> => {
+  const matches = await getEventMatches(eventKey, apiKey);
+  return resolveCurrentQualificationMatchNumber(matches);
 };
 
 const matchScheduleSyncMap: Record<string, Promise<void>> = {};
