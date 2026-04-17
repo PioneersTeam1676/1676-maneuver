@@ -20,6 +20,7 @@ const scheduleRouter = require("./routes/schedule")
 const pushRouter = require("./routes/push")
 const formsRouter = require("./routes/forms")
 const webhookSyncRouter = require("./routes/webhookSync")
+const rescoutRouter = require("./routes/rescout")
 const { createApiAuthMiddleware } = require("./middleware/apiAuth")
 const { scheduleBackups } = require("./backupManager")
 const { databaseInfo } = require("./db")
@@ -201,6 +202,7 @@ const registerRoutes = (prefix = "") => {
   app.use(resolvePath("/push"), apiAuthMiddleware, pushRouter)
   app.use(resolvePath("/forms"), apiAuthMiddleware, formsRouter)
   app.use(resolvePath("/webhook-sync"), apiAuthMiddleware, webhookSyncRouter)
+  app.use(resolvePath("/rescout"), apiAuthMiddleware, rescoutRouter)
 }
 
 for (const prefix of routePrefixes) {
