@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { useAuth } from "@/contexts/AuthContext"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -158,7 +159,7 @@ const recordDeletedUserTombstone = (email: string) => {
 }
 
 export default function UserManagementPage() {
-  const { user: currentUser } = useAuth()
+  const { user: currentUser, setRescouter, rescouterPermissions, isUltraAdmin } = useAuth()
   const [users, setUsers] = useState<User[]>([])
   const [filteredUsers, setFilteredUsers] = useState<User[]>([])
   const [searchTerm, setSearchTerm] = useState("")
@@ -526,6 +527,15 @@ export default function UserManagementPage() {
     }
   }
 
+  const handleRescouterToggle = async (targetUser: User, enabled: boolean) => {
+    try {
+      await setRescouter(targetUser.email, enabled)
+      toast.success(`Rescouter ${enabled ? "enabled" : "disabled"} for ${targetUser.displayName || targetUser.email}`)
+    } catch {
+      toast.error("Failed to update rescouter permission")
+    }
+  }
+
   const formatDate = (timestamp?: number | string) => {
     if (!timestamp) return "Never"
     const date = typeof timestamp === "number" ? new Date(timestamp) : new Date(timestamp)
@@ -716,6 +726,40 @@ export default function UserManagementPage() {
                         </div>
                       </div>
                     </div>
+                    {!user.isEntryOnly && isUltraAdmin && (
+                      <div className="flex items-center gap-2 ml-2" onClick={(e) => e.stopPropagation()}>
+                        <Select
+                          value={user.role}
+                          onValueChange={(newRole) => handleRoleChange(user, newRole)}
+                        >
+                          <SelectTrigger className="w-32 h-7 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {ASSIGNABLE_ROLES.map((r) => (
+                              <SelectItem key={r} value={r} className="text-xs">
+                                {ROLE_LABELS[r] ?? r}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <div className="flex items-center gap-1" title="Rescouter access">
+                          <Checkbox
+                            id={`rescout-${user.email}`}
+                            checked={
+                              user.email.toLowerCase() in rescouterPermissions
+                                ? rescouterPermissions[user.email.toLowerCase()]
+                                : ["scout_plus", "lead", "tech_lead"].includes(user.role)
+                            }
+                            onCheckedChange={(checked) => handleRescouterToggle(user, !!checked)}
+                            className="h-3 w-3"
+                          />
+                          <label htmlFor={`rescout-${user.email}`} className="text-xs text-muted-foreground cursor-pointer">
+                            Rescout
+                          </label>
+                        </div>
+                      </div>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon"
@@ -791,21 +835,9 @@ export default function UserManagementPage() {
                       </div>
                     ) : (
                       <div className="mt-1">
-                        <Select
-                          value={selectedUser.role}
-                          onValueChange={(newRole) => handleRoleChange(selectedUser, newRole)}
-                        >
-                          <SelectTrigger className="w-40 h-8 text-sm">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {ASSIGNABLE_ROLES.map((r) => (
-                              <SelectItem key={r} value={r} className="text-sm">
-                                {ROLE_LABELS[r]}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <Badge className={`${roleColors[selectedUser.role] ?? "bg-gray-500"} text-white`}>
+                          {ROLE_LABELS[selectedUser.role] ?? selectedUser.role}
+                        </Badge>
                       </div>
                     )}
                   </div>

@@ -1,4 +1,4 @@
-import { Binoculars, Calendar, ChevronRight, Wrench, Gamepad2, type LucideIcon } from "lucide-react"
+import { Binoculars, Calendar, ChevronRight, Wrench, Gamepad2, RotateCcw, type LucideIcon } from "lucide-react"
 import { useAuth, type UserRole } from "@/contexts/AuthContext"
 import {
   Collapsible,
@@ -47,7 +47,7 @@ export function NavMain({
     }[]
   }[]
 }) {
-    const { canAccessPath, role } = useAuth();
+    const { canAccessPath, role, canRescout } = useAuth();
     const { isMobile, setOpenMobile } = useSidebar();
     const { 
       confirmNavigation, 
@@ -134,6 +134,14 @@ export function NavMain({
               <SidebarMenuButton tooltip={"Schedule"} onClick={() => proceedClick("/schedule")}>
                 <Calendar />
                 <span>Schedule</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
+          {canRescout && (
+            <SidebarMenuItem className="flex items-center gap-2">
+              <SidebarMenuButton tooltip={"Rescout"} onClick={() => proceedClick("/rescout")}>
+                <RotateCcw />
+                <span>Rescout</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           )}

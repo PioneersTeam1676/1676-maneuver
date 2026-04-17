@@ -52,8 +52,8 @@ import AllianceOnboardingPage from "./pages/AllianceOnboardingPage";
 import ScoutFormPage from "./pages/ScoutFormPage";
 import OutlierDetectionPage from "./pages/OutlierDetectionPage";
 import SchedulePage from "@/pages/SchedulePage";
+import RescouterPage from "@/pages/RescouterPage";
 import { InstallPrompt } from '@/components/InstallPrompt';
-import { PWAUpdatePrompt } from '@/components/PWAUpdatePrompt';
 // import { StatusBarSpacer } from '@/components/StatusBarSpacer';
 import { SplashScreen } from '@/components/SplashScreen';
 import { FullscreenProvider } from '@/contexts/FullscreenContext';
@@ -102,6 +102,7 @@ function App() {
         <Route path="/privacy" element={<PrivacyPolicyPage />} />
         <Route path="/alliance-onboarding" element={<AllianceOnboardingPage />} />
         <Route path="/schedule" element={<SchedulePage />} />
+        <Route path="/rescout" element={<RescouterPage />} />
         <Route path="/outliers" element={<OutlierDetectionPage />} />
         <Route path="/auth/google/callback" element={<AuthCallbackPage />} />
         {/* Add more routes as needed */}
@@ -261,7 +262,6 @@ function App() {
           <div className="min-h-screen bg-background">
             <RouterProvider router={router} />
             <InstallPrompt />
-            <PWAUpdatePrompt />
             {/* <StatusBarSpacer /> */}
           </div>
         </FullscreenProvider>
