@@ -13,11 +13,13 @@ import { generateEntryId } from "@/lib/scoutingDataUtils";
 import { saveScoutingEntry } from "@/lib/dexieDB";
 import type { ScoutingDataWithId } from "@/lib/scoutingDataUtils";
 import { ArrowRight } from "lucide-react";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 
 const EndgamePage = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const states = location.state;
+  useUnsavedChangesGuard(true);
 
   const [shallowClimbAttempted, setShallowClimbAttempted] = useState(false);
   const [deepClimbAttempted, setDeepClimbAttempted] = useState(false);
@@ -82,10 +84,6 @@ const EndgamePage = () => {
 
       localStorage.removeItem("autoStateStack");
       localStorage.removeItem("teleopStateStack");
-
-      const currentMatchNumber = localStorage.getItem("currentMatchNumber") || "1";
-      const nextMatchNumber = (parseInt(currentMatchNumber) + 1).toString();
-      localStorage.setItem("currentMatchNumber", nextMatchNumber);
 
       toast.success("Match data saved successfully!");
       navigate("/game-start");

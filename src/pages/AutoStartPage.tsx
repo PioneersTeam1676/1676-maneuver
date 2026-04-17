@@ -7,9 +7,11 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import AutoStartMap from "@/components/AutoComponents/AutoStartMap";
 import { AlertTriangle } from "lucide-react";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 
 const AutoStartPage = () => {
   const location = useLocation();
+  useUnsavedChangesGuard(true);
   const navigate = useNavigate();
   const states = location.state;
 

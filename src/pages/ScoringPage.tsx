@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import ReefScoringSection from "@/components/ScoringComponents/ReefScoringSection";
 import AlgaeSection from "@/components/ScoringComponents/AlgaeSection";
 import { ArrowRight } from "lucide-react";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 
 interface ScoringPageProps {
   phase: "auto" | "teleop";
@@ -18,6 +19,7 @@ const ScoringPage = ({ phase }: ScoringPageProps) => {
   const location = useLocation();
   const navigate = useNavigate();
   const states = location.state;
+  useUnsavedChangesGuard(true);
 
   const getSavedState = () => {
     const stateKey = `${phase}StateStack`;

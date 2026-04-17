@@ -18,6 +18,7 @@ import { addIdsToScoutingData } from "@/lib/scoutingDataUtils"
 import { saveScoutingEntry } from "@/lib/dexieDB"
 import { splitSpecialChoiceOption } from "@/lib/specialChoiceOptions"
 import { cn } from "@/lib/utils"
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard"
 import { coercePages, flattenFields, getPageFields, normalizeUiConfig } from "@/lib/formSchema"
 import type { FormDefinition, FormField, FormFloatingImage, FormPage } from "@/types/formBuilder"
 
@@ -1577,6 +1578,7 @@ export default function ScoutFormPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const state = location.state as LocationState | null
+  useUnsavedChangesGuard(true)
   const inputs = state?.inputs
   const form = HARDCODED_MATCH_FORM
   const [values, setValues] = useState<Record<string, unknown>>(buildInitialMatchValues)
