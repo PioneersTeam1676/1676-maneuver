@@ -1467,6 +1467,12 @@ const isDefendedField = (field: FormField) => {
   return label.includes("defended") || label.includes("defense") || label.includes("defending")
 }
 
+const isPlayingDefenseValue = (value: unknown) => {
+  if (typeof value !== "string") return false
+  const normalized = normalizeOptionTitle(value)
+  return normalized === "was defending" || normalized === "defense" || normalized === "playing defense"
+}
+
 const isNotesField = (field: FormField) => (field.label || "").trim().toLowerCase().includes("note")
 
 const CLIMB_LEVEL_OPTION_SETS = {
@@ -2039,6 +2045,9 @@ export default function ScoutFormPage() {
                   }
                   return true
                 })
+                const sectionUsesDefenseSlider = sectionFields.some(
+                  (field) => isStratChoiceField(field) && isPlayingDefenseValue(values[field.id])
+                )
 
                 return sectionFields.map((field) => {
                 const fieldValue = values[field.id]
@@ -2798,7 +2807,21 @@ export default function ScoutFormPage() {
                 )
               }
 
-              if (field.type === "number" && Array.isArray(field.stepperButtons) && field.stepperButtons.length > 0) {
+              const showDefenseSlider =
+                sectionUsesDefenseSlider &&
+                field.type === "number" &&
+                hasEstimateOrRatingValue(field)
+              const displayField =
+                showDefenseSlider && hasEstimateOrRatingValue(field)
+                  ? { ...field, label: "Defense Rating" }
+                  : field
+
+              if (
+                field.type === "number" &&
+                Array.isArray(field.stepperButtons) &&
+                field.stepperButtons.length > 0 &&
+                !showDefenseSlider
+              ) {
                 const min = field.min ?? 0
                 const max = typeof field.max === "number" ? field.max : undefined
                 const step = field.step ?? 1
@@ -2826,18 +2849,19 @@ export default function ScoutFormPage() {
                 )
               }
 
-              if (field.type === "slider") {
-                const min = field.min ?? 0
-                const max = field.max ?? 5
-                const step = field.step ?? 1
-                const numericValue = Number(fieldValue || min)
-                const isFullWidthSlider = isWideRatingField(field) || isTransitionOrPhasePage
+              if (field.type === "slider" || showDefenseSlider) {
+                const min = showDefenseSlider ? 1 : field.min ?? 0
+                const max = showDefenseSlider ? 10 : field.max ?? 5
+                const step = 1
+                const numericValue = Math.min(max, Math.max(min, toFiniteNumber(fieldValue, min)))
+                const isFullWidthSlider =
+                  showDefenseSlider || isWideRatingField(field) || isTransitionOrPhasePage
                 return (
                   <div
                     key={field.id}
                     className={cn("space-y-1", isFullWidthSlider && "col-span-2", isGrayedOut && "opacity-50")}
                   >
-                    <FieldLabel field={field} isRequired={isRequired} />
+                    <FieldLabel field={displayField} isRequired={isRequired} />
                     <div className="space-y-1">
                       <input
                         type="range"
@@ -2845,8 +2869,8 @@ export default function ScoutFormPage() {
                         max={max}
                         step={step}
                         value={numericValue}
-                        onChange={(event) => handleValueChange(field.id, event.target.value)}
-                        className="w-full"
+                        onChange={(event) => handleValueChange(field.id, Number(event.target.value))}
+                        className={cn("w-full", showDefenseSlider && "defense-rating-slider")}
                         style={{ touchAction: "none" }}
                         onTouchStart={(e) => e.stopPropagation()}
                         onTouchMove={(e) => e.stopPropagation()}

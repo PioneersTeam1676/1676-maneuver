@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   Command,
   CommandEmpty,
@@ -67,6 +67,8 @@ export function EventNameSelector({ currentEventName, onEventNameChange }: Event
   const { role } = useAuth()
   const isEditable = role === "lead" || role === "tech_lead"
   const navigate = useNavigate()
+  const currentEventNameRef = useRef(currentEventName)
+  currentEventNameRef.current = currentEventName
 
   // Load saved events list on component mount
   useEffect(() => {
@@ -92,7 +94,9 @@ export function EventNameSelector({ currentEventName, onEventNameChange }: Event
 
     const handleEventNameUpdated = () => {
       const latestEvent = loadCurrentEventFromStorage()
-      onEventNameChange(latestEvent)
+      if (latestEvent) {
+        onEventNameChange(latestEvent)
+      }
       setEventsList(loadEventsFromStorage())
     }
 
@@ -116,7 +120,7 @@ export function EventNameSelector({ currentEventName, onEventNameChange }: Event
         const settings = await syncEventSettings()
         if (cancelled) return
         setEventsList(settings.events)
-        if (!currentEventName && settings.currentEvent) {
+        if (!currentEventNameRef.current && settings.currentEvent) {
           onEventNameChange(settings.currentEvent)
         }
       } catch (error) {
@@ -140,7 +144,7 @@ export function EventNameSelector({ currentEventName, onEventNameChange }: Event
       cancelled = true
       window.removeEventListener("focus", handleFocus)
     }
-  }, [currentEventName, onEventNameChange])
+  }, [onEventNameChange])
 
   const saveEvent = async (name: string) => {
     if (!name.trim()) return

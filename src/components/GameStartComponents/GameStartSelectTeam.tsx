@@ -1,6 +1,8 @@
 import { useEffect, useState, useMemo, useRef, type JSX } from "react";
 import SelectTeamButton from "./GameStartSelectTeamButton";
 import { Input } from "../ui/input";
+
+const DEFAULT_TEAMS = ["0001", "0002", "0003"] as const;
 /**
  * A component that renders a team selection interface.
  *
@@ -30,8 +32,6 @@ const InitialSelectTeam = ({
   eventKey,
   matchDataVersion,
 }: InitialSelectTeamProps): JSX.Element => {
-  const DEFAULT_TEAMS = ["0001", "0002", "0003"] as const;
-
   const baseTeams = useMemo(() => {
     if (typeof window === "undefined") {
       return [...DEFAULT_TEAMS];
@@ -114,6 +114,7 @@ const InitialSelectTeam = ({
   );
 
   const isFirstRender = useRef(true);
+  const manualOverrideRef = useRef(false);
 
   const applyPresetSelection = (teamType: "1" | "2" | "3" | null) => {
     setTeam1Status(teamType === "1");
@@ -127,6 +128,8 @@ const InitialSelectTeam = ({
 
   // Function to handle team selection
   const clickTeam = (currentTeamType: string, currentTeamStatus: boolean) => {
+    manualOverrideRef.current = true;
+
     if (currentTeamType === "1") {
       setTeam1Status(!currentTeamStatus);
 
@@ -188,6 +191,10 @@ const InitialSelectTeam = ({
       return;
     }
 
+    if (manualOverrideRef.current) {
+      return;
+    }
+
     const alreadySelected =
       (preferredTeamPosition === 1 && team1Status && !team2Status && !team3Status && !customTeamStatus) ||
       (preferredTeamPosition === 2 && team2Status && !team1Status && !team3Status && !customTeamStatus) ||
@@ -207,6 +214,7 @@ const InitialSelectTeam = ({
       isFirstRender.current = false;
       return;
     }
+    manualOverrideRef.current = false;
     applyPresetSelection(null);
     setCustomTeamValue("");
   }, [selectedMatch, selectedAlliance]);
@@ -269,7 +277,10 @@ const InitialSelectTeam = ({
               inputMode="numeric"
               placeholder="Team #"
               value={customTeamValue}
-              onChange={(e) => setCustomTeamValue(e.target.value)}
+              onChange={(e) => {
+                manualOverrideRef.current = true;
+                setCustomTeamValue(e.target.value);
+              }}
               onFocus={() => {
                 clickTeam("custom", customTeamStatus);
                 setTextSelected(true);

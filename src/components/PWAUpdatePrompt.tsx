@@ -1,114 +1,43 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-// src/components/PWAUpdatePrompt.tsx
-import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { toast } from 'sonner';
-import { analytics } from '@/lib/analytics';
+import { useEffect, useState } from 'react'
+import { useRegisterSW } from 'virtual:pwa-register/react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { analytics } from '@/lib/analytics'
 
 export function PWAUpdatePrompt() {
-  const [showPrompt, setShowPrompt] = useState(false);
-  const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(null);
-  const [applyingUpdate, setApplyingUpdate] = useState(false);
+  const [dismissed, setDismissed] = useState(false)
+  const { needRefresh, updateServiceWorker } = useRegisterSW({
+    immediate: true,
+  })
+  const [showPrompt] = needRefresh
+  const [applyingUpdate, setApplyingUpdate] = useState(false)
 
   useEffect(() => {
-    if ('serviceWorker' in navigator) {
-      const handleUpdateAvailable = (event: any) => {
-        setWaitingWorker(event.detail.waiting);
-        setShowPrompt(true);
-      };
-
-      const handleUpdateInstalled = () => {
-        setShowPrompt(false);
-        toast.success('App updated successfully!');
-      };
-
-      const checkForWaitingWorker = async () => {
-        try {
-          const registration = await navigator.serviceWorker.getRegistration();
-          if (!registration) return;
-          await registration.update().catch(() => undefined);
-          if (registration.waiting) {
-            setWaitingWorker(registration.waiting);
-            setShowPrompt(true);
-          }
-        } catch {
-          // Ignore SW update probe failures.
-        }
-      };
-
-      // Check for updates on page load
-      navigator.serviceWorker.ready.then((registration) => {
-        // Immediately check for a waiting worker
-        if (registration.waiting) {
-          setWaitingWorker(registration.waiting);
-          setShowPrompt(true);
-        }
-        registration.addEventListener('updatefound', () => {
-          const newWorker = registration.installing;
-          if (newWorker) {
-            newWorker.addEventListener('statechange', () => {
-              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                setWaitingWorker(newWorker);
-                setShowPrompt(true);
-              }
-            });
-          }
-        });
-      });
-
-      const handleVisibility = () => {
-        if (document.visibilityState === 'visible') {
-          void checkForWaitingWorker();
-        }
-      };
-
-      window.addEventListener('pageshow', checkForWaitingWorker);
-      window.addEventListener('focus', checkForWaitingWorker);
-      window.addEventListener('online', checkForWaitingWorker);
-      document.addEventListener('visibilitychange', handleVisibility);
-
-      // Custom events for update notifications
-      window.addEventListener('sw-update-available', handleUpdateAvailable);
-      window.addEventListener('sw-update-installed', handleUpdateInstalled);
-
-      return () => {
-        window.removeEventListener('pageshow', checkForWaitingWorker);
-        window.removeEventListener('focus', checkForWaitingWorker);
-        window.removeEventListener('online', checkForWaitingWorker);
-        document.removeEventListener('visibilitychange', handleVisibility);
-        window.removeEventListener('sw-update-available', handleUpdateAvailable);
-        window.removeEventListener('sw-update-installed', handleUpdateInstalled);
-      };
+    if (showPrompt) {
+      setDismissed(false)
+      return
     }
-  }, []);
 
-  const handleUpdate = () => {
-    if (waitingWorker) {
-      // Track PWA update
-      analytics.trackPWAUpdate();
-      setApplyingUpdate(true);
+    setApplyingUpdate(false)
+  }, [showPrompt])
 
-      const handleControllerChange = () => {
-        window.location.reload();
-      };
+  const handleUpdate = async () => {
+    analytics.trackPWAUpdate()
+    setApplyingUpdate(true)
+    setDismissed(false)
 
-      navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange, { once: true });
-      waitingWorker.postMessage({ type: 'SKIP_WAITING' });
-      setShowPrompt(false);
-
-      // Fallback in case iOS delays controllerchange notification.
-      window.setTimeout(() => {
-        window.location.reload();
-      }, 1500);
+    try {
+      await updateServiceWorker()
+    } catch {
+      setApplyingUpdate(false)
     }
-  };
+  }
 
   const handleClose = () => {
-    setShowPrompt(false);
-  };
+    setDismissed(true)
+  }
 
-  if (!showPrompt) return null;
+  if (!showPrompt || dismissed) return null
 
   return (
     <Card className="fixed inset-x-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-50 mx-auto w-auto max-w-80 shadow-lg">
@@ -134,5 +63,5 @@ export function PWAUpdatePrompt() {
         </div>
       </CardContent>
     </Card>
-  );
+  )
 }

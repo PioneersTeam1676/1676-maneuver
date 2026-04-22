@@ -65,16 +65,26 @@ export default function SchedulePage() {
     void refreshSchedule()
   }, [refreshSchedule])
 
+  const effectiveLastCompletedMatch = useMemo(() => {
+    if (typeof schedule?.lastCompletedMatch === "number") return schedule.lastCompletedMatch;
+    try {
+      const stored = parseInt(localStorage.getItem("currentMatchNumber") ?? "", 10);
+      return Number.isFinite(stored) && stored > 0 ? stored - 1 : null;
+    } catch {
+      return null;
+    }
+  }, [schedule?.lastCompletedMatch])
+
   const shiftBlocks = useMemo(
     () =>
       deriveScoutShiftBlocks({
         email: user?.email ?? null,
         assignments: schedule?.assignments ?? [],
         matches: schedule?.matches ?? [],
-        lastCompletedMatch: schedule?.lastCompletedMatch ?? null,
+        lastCompletedMatch: effectiveLastCompletedMatch,
         includeCompleted: true,
       }),
-    [schedule?.assignments, schedule?.lastCompletedMatch, schedule?.matches, user?.email]
+    [schedule?.assignments, effectiveLastCompletedMatch, schedule?.matches, user?.email]
   )
 
   const groupedShiftBlocks = useMemo(() => groupShiftBlocksByDay(shiftBlocks), [shiftBlocks])
@@ -142,8 +152,8 @@ export default function SchedulePage() {
           <p className="text-sm text-muted-foreground">Published shifts for {eventName || "this event"}.</p>
         </div>
         <Badge variant="outline" className="w-fit rounded-full px-3 py-1 text-xs">
-          {typeof schedule?.lastCompletedMatch === "number"
-            ? `Live progress: through match ${schedule.lastCompletedMatch}`
+          {typeof effectiveLastCompletedMatch === "number"
+            ? `${typeof schedule?.lastCompletedMatch === "number" ? "Live" : "Local"} progress: through match ${effectiveLastCompletedMatch}`
             : "Live progress unavailable"}
         </Badge>
       </div>

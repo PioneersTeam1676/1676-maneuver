@@ -22,13 +22,12 @@ export default defineConfig({
       includeAssets: ['pioneer.png'],
       workbox: {
         importScripts: ["push-handler.js"],
-        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024, // 3 MB (increase from default 2 MB)
-        // Exclude external analytics and API domains from caching
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallbackDenylist: [/^https:\/\/www\.googletagmanager\.com/, /^https:\/\/www\.google-analytics\.com/],
         runtimeCaching: [
           {
-            urlPattern: ({ request, url }) => 
-              request.destination === "document" && 
+            urlPattern: ({ request, url }) =>
+              request.destination === "document" &&
               !url.hostname.includes('googletagmanager.com') &&
               !url.hostname.includes('google-analytics.com'),
             handler: "NetworkFirst",
@@ -37,8 +36,8 @@ export default defineConfig({
             },
           },
           {
-            urlPattern: ({ request, url }) => 
-              request.destination === "script" && 
+            urlPattern: ({ request, url }) =>
+              request.destination === "script" &&
               !url.hostname.includes('googletagmanager.com') &&
               !url.hostname.includes('google-analytics.com'),
             handler: "NetworkFirst",
@@ -60,7 +59,7 @@ export default defineConfig({
               cacheName: "image-cache",
               expiration: {
                 maxEntries: 50,
-                maxAgeSeconds: 30 * 24 * 60 * 60, // Cache images for 30 days
+                maxAgeSeconds: 30 * 24 * 60 * 60,
               },
             },
           },

@@ -54,6 +54,7 @@ import OutlierDetectionPage from "./pages/OutlierDetectionPage";
 import SchedulePage from "@/pages/SchedulePage";
 import RescouterPage from "@/pages/RescouterPage";
 import { InstallPrompt } from '@/components/InstallPrompt';
+import { PWAUpdatePrompt } from '@/components/PWAUpdatePrompt';
 // import { StatusBarSpacer } from '@/components/StatusBarSpacer';
 import { SplashScreen } from '@/components/SplashScreen';
 import { FullscreenProvider } from '@/contexts/FullscreenContext';
@@ -262,6 +263,7 @@ function App() {
           <div className="min-h-screen bg-background">
             <RouterProvider router={router} />
             <InstallPrompt />
+            <PWAUpdatePrompt />
             {/* <StatusBarSpacer /> */}
           </div>
         </FullscreenProvider>

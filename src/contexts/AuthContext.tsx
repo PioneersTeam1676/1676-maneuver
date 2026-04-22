@@ -385,7 +385,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const raw = localStorage.getItem(ROLE_STORAGE_KEY)
       if (!raw) return {}
       const parsed = JSON.parse(raw) as RoleAssignments
-      const validRoles = new Set<UserRole>(['pending', 'pit_scout', 'drive_team', 'scout', 'lead', 'tech_lead'])
+      const validRoles = new Set<UserRole>(['pending', 'pit_scout', 'drive_team', 'scout_minus', 'scout', 'scout_plus', 'lead', 'tech_lead'])
       const normalizedAssignments = Object.entries(parsed).reduce<RoleAssignments>((acc, [email, role]) => {
         // Only keep valid roles
         if (validRoles.has(role)) {

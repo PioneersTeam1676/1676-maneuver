@@ -20,17 +20,20 @@ export interface ShiftRange {
   overlapAtStart?: boolean
 }
 
+export const POSITIONS = ['red-1', 'red-2', 'red-3', 'blue-1', 'blue-2', 'blue-3'] as const
+export type Position = typeof POSITIONS[number]
+export type ShiftAssignment = Record<Position, string>
+
 export interface GeneratedSchedule {
   assignments: MatchAssignment[]
   shiftRanges: ShiftRange[]
+  shiftAssignments: ShiftAssignment[]
   warnings: string[]
   csv: string
+  overlapEnabled: boolean
 }
 
-const POSITIONS = ['red-1', 'red-2', 'red-3', 'blue-1', 'blue-2', 'blue-3'] as const
-type Position = typeof POSITIONS[number]
-
-const POSITION_LABELS: Record<Position, string> = {
+export const POSITION_LABELS: Record<Position, string> = {
   'red-1': 'Red 1',
   'red-2': 'Red 2',
   'red-3': 'Red 3',
@@ -64,6 +67,132 @@ const computeShiftRanges = (totalMatches: number, shiftSize: number, overlap = f
 const compareScoutsByName = (a: ScoutInput, b: ScoutInput) => (
   (a.displayName || a.email).localeCompare(b.displayName || b.email)
 )
+
+const emptyShiftAssignment = (): ShiftAssignment => ({
+  'red-1': 'Unassigned',
+  'red-2': 'Unassigned',
+  'red-3': 'Unassigned',
+  'blue-1': 'Unassigned',
+  'blue-2': 'Unassigned',
+  'blue-3': 'Unassigned',
+})
+
+const mapToShiftAssignment = (positions: Map<Position, string>): ShiftAssignment => {
+  const assignment = emptyShiftAssignment()
+  for (const position of POSITIONS) {
+    assignment[position] = positions.get(position) ?? 'Unassigned'
+  }
+  return assignment
+}
+
+const findAssignmentForShift = (assignments: MatchAssignment[], shiftRange: ShiftRange) => {
+  const lookupStart = shiftRange.overlapAtStart ? shiftRange.start + 1 : shiftRange.start
+  const lookupMatch = `qm${lookupStart}`
+  const exact = assignments.find((assignment) => assignment.matchNumber === lookupMatch)
+  if (exact) {
+    return exact
+  }
+
+  return assignments.find((assignment) => {
+    const matchNumber = parseInt(assignment.matchNumber.replace(/\D/g, ''), 10)
+    return Number.isFinite(matchNumber) && matchNumber >= shiftRange.start && matchNumber <= shiftRange.end
+  })
+}
+
+export const deriveShiftAssignmentsFromSchedule = (
+  schedule: Pick<GeneratedSchedule, 'assignments' | 'shiftRanges'>,
+): ShiftAssignment[] => (
+  schedule.shiftRanges.map((range) => {
+    const source = findAssignmentForShift(schedule.assignments, range)
+    const assignment = emptyShiftAssignment()
+    for (const position of POSITIONS) {
+      assignment[position] = source?.positions[position] ?? 'Unassigned'
+    }
+    return assignment
+  })
+)
+
+interface BuildGeneratedScheduleInput {
+  overlapEnabled: boolean
+  scouts: Pick<ScoutInput, 'email' | 'displayName'>[]
+  shiftAssignments: ShiftAssignment[]
+  shiftRanges: ShiftRange[]
+  warnings: string[]
+}
+
+export const buildGeneratedSchedule = ({
+  overlapEnabled,
+  scouts,
+  shiftAssignments,
+  shiftRanges,
+  warnings,
+}: BuildGeneratedScheduleInput): GeneratedSchedule => {
+  const assignments: MatchAssignment[] = []
+  const totalMatches = shiftRanges.reduce((max, range) => Math.max(max, range.end), 0)
+
+  if (!overlapEnabled || shiftRanges.every((range) => !range.overlapAtStart)) {
+    for (let shiftIdx = 0; shiftIdx < shiftRanges.length; shiftIdx += 1) {
+      const range = shiftRanges[shiftIdx]
+      const positions = shiftAssignments[shiftIdx] ?? emptyShiftAssignment()
+      for (let matchNum = range.start; matchNum <= range.end; matchNum += 1) {
+        assignments.push({
+          matchNumber: `qm${matchNum}`,
+          positions: { ...positions },
+        })
+      }
+    }
+  } else {
+    for (let matchNum = 1; matchNum <= totalMatches; matchNum += 1) {
+      const covering = shiftRanges
+        .map((range, idx) => ({ range, idx }))
+        .filter(({ range }) => range.start <= matchNum && matchNum <= range.end)
+
+      if (covering.length === 0) continue
+
+      const matchPositions = {} as MatchAssignment['positions']
+
+      if (covering.length === 1) {
+        const positions = shiftAssignments[covering[0].idx] ?? emptyShiftAssignment()
+        for (const position of POSITIONS) {
+          matchPositions[position] = positions[position] ?? 'Unassigned'
+        }
+      } else {
+        covering.sort((a, b) => a.idx - b.idx)
+        const [outgoing, incoming] = covering
+        const incomingPositions = shiftAssignments[incoming.idx] ?? emptyShiftAssignment()
+        const outgoingPositions = shiftAssignments[outgoing.idx] ?? emptyShiftAssignment()
+        const outgoingScouts = new Set(Object.values(outgoingPositions))
+        for (const position of POSITIONS) {
+          const incomingScout = incomingPositions[position] ?? 'Unassigned'
+          matchPositions[position] = outgoingScouts.has(incomingScout) ? 'Unassigned' : incomingScout
+          const prevKey = `${position}-prev`
+          ;(matchPositions as Record<string, string>)[prevKey] = outgoingPositions[position] ?? 'Unassigned'
+        }
+      }
+
+      assignments.push({ matchNumber: `qm${matchNum}`, positions: matchPositions })
+    }
+  }
+
+  const emailToDisplay = new Map(scouts.map((scout) => [scout.email, scout.displayName || scout.email]))
+  const headerRow = ['', ...shiftRanges.map((range) => range.label)].join(',')
+  const rows = POSITIONS.map((position) => {
+    const cells = shiftAssignments.map((assignment) => {
+      const email = assignment[position] ?? ''
+      return emailToDisplay.get(email) ?? email
+    })
+    return [POSITION_LABELS[position], ...cells].join(',')
+  })
+
+  return {
+    assignments,
+    shiftAssignments: shiftAssignments.map((assignment) => ({ ...assignment })),
+    shiftRanges,
+    warnings,
+    csv: [headerRow, ...rows].join('\n'),
+    overlapEnabled,
+  }
+}
 
 const computeDesiredAssignments = (scouts: ScoutInput[], numShifts: number) => {
   const desired = new Map<string, number>(scouts.map((scout) => [scout.email, 0]))
@@ -184,10 +313,10 @@ export const generateShiftSchedule = (input: ShiftGeneratorInput): GeneratedSche
   const { scouts, totalMatches, shiftSize, overlapEnabled = false } = input
 
   if (scouts.length === 0) {
-    return { assignments: [], shiftRanges: [], warnings: ['No scouts provided'], csv: '' }
+    return { assignments: [], shiftRanges: [], shiftAssignments: [], warnings: ['No scouts provided'], csv: '', overlapEnabled }
   }
   if (totalMatches < 1 || shiftSize < 1) {
-    return { assignments: [], shiftRanges: [], warnings: ['Invalid totalMatches or shiftSize'], csv: '' }
+    return { assignments: [], shiftRanges: [], shiftAssignments: [], warnings: ['Invalid totalMatches or shiftSize'], csv: '', overlapEnabled }
   }
 
   const shiftRanges = computeShiftRanges(totalMatches, shiftSize, overlapEnabled)
@@ -292,75 +421,11 @@ export const generateShiftSchedule = (input: ShiftGeneratorInput): GeneratedSche
     )
   }
 
-  const assignments: MatchAssignment[] = []
-
-  if (!overlapEnabled || shiftSize <= 1) {
-    // Standard: each match belongs to exactly one shift
-    for (let shiftIdx = 0; shiftIdx < numShifts; shiftIdx += 1) {
-      const range = shiftRanges[shiftIdx]
-      const positions = shiftAssignments[shiftIdx]
-      for (let matchNum = range.start; matchNum <= range.end; matchNum += 1) {
-        const matchPositions = {} as MatchAssignment['positions']
-        for (const position of POSITIONS) {
-          matchPositions[position] = positions.get(position) ?? 'Unassigned'
-        }
-        assignments.push({ matchNumber: `qm${matchNum}`, positions: matchPositions })
-      }
-    }
-  } else {
-    // Overlap: boundary matches covered by two consecutive shifts.
-    // Incoming shift gets standard positions; outgoing shift gets *-prev positions.
-    // All 12 scouts are stored — getMyAssignments filters by email so each scout
-    // sees the overlap match regardless of position suffix.
-    for (let matchNum = 1; matchNum <= totalMatches; matchNum += 1) {
-      const covering = shiftRanges
-        .map((range, idx) => ({ range, idx }))
-        .filter(({ range }) => range.start <= matchNum && matchNum <= range.end)
-
-      if (covering.length === 0) continue
-
-      const matchPositions = {} as MatchAssignment['positions']
-
-      if (covering.length === 1) {
-        const positions = shiftAssignments[covering[0].idx]
-        for (const position of POSITIONS) {
-          matchPositions[position] = positions.get(position) ?? 'Unassigned'
-        }
-      } else {
-        // Sort so outgoing (lower shiftIdx) comes first
-        covering.sort((a, b) => a.idx - b.idx)
-        const [outgoing, incoming] = covering
-        const incomingPositions = shiftAssignments[incoming.idx]
-        const outgoingPositions = shiftAssignments[outgoing.idx]
-        // Scouts doing back-to-back shifts keep their outgoing position for
-        // the overlap match — don't assign them to their incoming slot too.
-        const outgoingScouts = new Set(outgoingPositions.values())
-        for (const position of POSITIONS) {
-          const incomingScout = incomingPositions.get(position) ?? 'Unassigned'
-          matchPositions[position] = outgoingScouts.has(incomingScout) ? 'Unassigned' : incomingScout
-          const prevKey = `${position}-prev`
-          ;(matchPositions as Record<string, string>)[prevKey] = outgoingPositions.get(position) ?? 'Unassigned'
-        }
-      }
-
-      assignments.push({ matchNumber: `qm${matchNum}`, positions: matchPositions })
-    }
-  }
-
-  const emailToDisplay = new Map(scouts.map((scout) => [scout.email, scout.displayName || scout.email]))
-  const headerRow = ['', ...shiftRanges.map((range) => range.label)].join(',')
-  const rows = POSITIONS.map((position) => {
-    const cells = shiftRanges.map((_, index) => {
-      const email = shiftAssignments[index].get(position) ?? ''
-      return emailToDisplay.get(email) ?? email
-    })
-    return [POSITION_LABELS[position], ...cells].join(',')
-  })
-
-  return {
-    assignments,
+  return buildGeneratedSchedule({
+    overlapEnabled: overlapEnabled && shiftSize > 1,
+    scouts,
+    shiftAssignments: shiftAssignments.map((assignment) => mapToShiftAssignment(assignment)),
     shiftRanges,
     warnings,
-    csv: [headerRow, ...rows].join('\n'),
-  }
+  })
 }

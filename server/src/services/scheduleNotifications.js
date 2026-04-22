@@ -118,6 +118,41 @@ const fetchSubscriptions = async (email) => {
   return mainPrisma.pushSubscription.findMany({ where: { email } })
 }
 
+const getSubscriptionStatusByEmail = async (emails = []) => {
+  const normalizedEmails = Array.from(
+    new Set(
+      emails
+        .map((email) => normalizeEmail(email || ""))
+        .filter((email) => email && email.includes("@"))
+    )
+  )
+
+  if (!normalizedEmails.length) {
+    return {}
+  }
+
+  const rows = await mainPrisma.pushSubscription.findMany({
+    where: { email: { in: normalizedEmails } },
+    select: { email: true },
+  })
+
+  const counts = rows.reduce((acc, row) => {
+    const email = normalizeEmail(row.email || "")
+    if (!email) return acc
+    acc[email] = (acc[email] || 0) + 1
+    return acc
+  }, {})
+
+  return normalizedEmails.reduce((acc, email) => {
+    const subscriptionCount = counts[email] || 0
+    acc[email] = {
+      subscriptionCount,
+      hasSubscription: subscriptionCount > 0,
+    }
+    return acc
+  }, {})
+}
+
 const touchSubscription = async (id) => {
   await mainPrisma.pushSubscription.update({
     where: { id },
@@ -130,25 +165,46 @@ const clearNotificationsForEmail = async (email) => {
   await seasonPrisma.scheduleNotification.deleteMany({ where: { scoutEmail: email } })
 }
 
-const upsertProgress = async ({ eventKey, matchOrder }) => {
-  const seasonPrisma = await getSeasonPrismaForEvent(eventKey)
-  const existing = await seasonPrisma.scheduleProgress.findUnique({ where: { eventKey } })
-  const nextMatchOrder = existing
-    ? Math.max(existing.lastCompletedMatch, matchOrder)
-    : matchOrder
+const normalizeCompletedMatch = (value) => {
+  const parsed = Number.parseInt(String(value ?? "").trim(), 10)
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
+}
+
+const setMatchProgress = async ({
+  eventKey,
+  lastCompletedMatch,
+  clearNotifications = false,
+  processNotifications = true,
+}) => {
+  const normalizedEvent = eventKey?.trim()
+  if (!normalizedEvent) return { changed: false, lastCompletedMatch: null }
+
+  const seasonPrisma = await getSeasonPrismaForEvent(normalizedEvent)
+  const nextMatchOrder = normalizeCompletedMatch(lastCompletedMatch)
+  const existing = await seasonPrisma.scheduleProgress.findUnique({ where: { eventKey: normalizedEvent } })
   const now = nowSeconds()
+  const changed = !existing || existing.lastCompletedMatch !== nextMatchOrder
 
   if (!existing) {
     await seasonPrisma.scheduleProgress.create({
-      data: { eventKey, lastCompletedMatch: nextMatchOrder, lastUpdated: now }
+      data: { eventKey: normalizedEvent, lastCompletedMatch: nextMatchOrder, lastUpdated: now }
     })
-    return
+  } else {
+    await seasonPrisma.scheduleProgress.update({
+      where: { eventKey: normalizedEvent },
+      data: { lastCompletedMatch: nextMatchOrder, lastUpdated: now }
+    })
   }
 
-  await seasonPrisma.scheduleProgress.update({
-    where: { eventKey },
-    data: { lastCompletedMatch: nextMatchOrder, lastUpdated: now }
-  })
+  if (clearNotifications) {
+    await seasonPrisma.scheduleNotification.deleteMany({ where: { eventKey: normalizedEvent } })
+  }
+
+  if (processNotifications && changed) {
+    await processUpcomingNotifications(normalizedEvent)
+  }
+
+  return { changed, lastCompletedMatch: nextMatchOrder }
 }
 
 const fetchProgress = async (eventKey) => {
@@ -295,6 +351,28 @@ const markNotificationSent = async (eventKey, matchNumber, scoutEmail) => {
   })
 }
 
+const loadSentNotificationKeys = async (eventKey, matchNumbers = []) => {
+  if (!eventKey || !Array.isArray(matchNumbers) || matchNumbers.length === 0) {
+    return new Set()
+  }
+
+  const seasonPrisma = await getSeasonPrismaForEvent(eventKey)
+  const rows = await seasonPrisma.scheduleNotification.findMany({
+    where: {
+      eventKey,
+      matchNumber: { in: Array.from(new Set(matchNumbers)) },
+    },
+    select: {
+      matchNumber: true,
+      scoutEmail: true,
+    },
+  })
+
+  return new Set(
+    rows.map((row) => `${row.matchNumber}::${normalizeEmail(row.scoutEmail || "")}`)
+  )
+}
+
 const insertManualLog = async ({ tag, email }) => {
   const seasonPrisma = await getActiveSeasonPrisma()
   await seasonPrisma.scheduleNotification.upsert({
@@ -401,12 +479,20 @@ const processUpcomingNotifications = async (eventKey) => {
     return
   }
 
+  const sentNotificationKeys = await loadSentNotificationKeys(
+    eventKey,
+    eligible.map((assignment) => assignment.matchNumber)
+  )
   const matchDetails = await buildMatchDetailsMap(eventKey)
   const sentResults = []
 
   for (const assignment of eligible) {
     const email = normalizeEmail(assignment.scoutEmail || "")
     if (!email || email === "unassigned" || !email.includes("@")) {
+      continue
+    }
+    const notificationKey = `${assignment.matchNumber}::${email}`
+    if (sentNotificationKeys.has(notificationKey)) {
       continue
     }
 
@@ -447,20 +533,12 @@ const processUpcomingNotifications = async (eventKey) => {
     const results = await Promise.all(subscriptions.map((sub) => sendNotificationToSubscription(sub, payload)))
     if (results.some(Boolean)) {
       await markNotificationSent(eventKey, assignment.matchNumber, email)
+      sentNotificationKeys.add(notificationKey)
     }
     sentResults.push(...results)
   }
 
   return sentResults.some(Boolean)
-}
-
-const updateMatchProgress = async (eventKey, matchNumber) => {
-  const normalizedEvent = eventKey?.trim()
-  if (!normalizedEvent) return
-  const order = parseMatchOrder(matchNumber)
-  if (order == null) return
-  await upsertProgress({ eventKey: normalizedEvent, matchOrder: order })
-  await processUpcomingNotifications(normalizedEvent)
 }
 
 const sendManualNotification = async ({ email, title, body, url, tag }) => {
@@ -494,6 +572,11 @@ const sendManualNotification = async ({ email, title, body, url, tag }) => {
 
   if (deliveredCount > 0) {
     await insertManualLog({ tag: payload.tag, email: normalizedEmail })
+  } else {
+    console.warn(
+      `Manual notification to ${normalizedEmail} was not delivered`,
+      { attempted: subscriptions.length, reason: "delivery_failed", tag: payload.tag }
+    )
   }
 
   return {
@@ -658,6 +741,63 @@ const applyCoverageOverride = async ({
 
     if (!rows.length) {
       return []
+    }
+
+    const replacementExistsInSchedule = await tx.scoutScheduleAssignment.findFirst({
+      where: {
+        eventKey: normalizedEvent,
+        scoutEmail: normalizedOverrideEmail,
+      },
+      select: {
+        matchNumber: true,
+      },
+    })
+
+    if (!replacementExistsInSchedule) {
+      throw new Error("Replacement scout must already be assigned somewhere in the published schedule")
+    }
+
+    const shiftRows = await tx.scoutScheduleAssignment.findMany({
+      where: {
+        eventKey: normalizedEvent,
+        matchNumber: { in: uniqueMatchNumbers },
+      },
+      select: {
+        matchNumber: true,
+        position: true,
+        scoutEmail: true,
+      },
+    })
+
+    const shiftOverrides = await tx.$queryRawUnsafe(
+      `
+        SELECT
+          match_number AS matchNumber,
+          position,
+          override_scout_email AS overrideScoutEmail
+        FROM schedule_assignment_overrides
+        WHERE event_key = ?
+          AND match_number IN (${buildInClause(uniqueMatchNumbers)})
+      `,
+      normalizedEvent,
+      ...uniqueMatchNumbers
+    )
+
+    const shiftOverrideMap = new Map(
+      (Array.isArray(shiftOverrides) ? shiftOverrides : []).map((override) => [
+        buildAssignmentOverrideKey(override.matchNumber, override.position),
+        normalizeEmail(override.overrideScoutEmail || ""),
+      ])
+    )
+
+    const replacementBusyInShift = shiftRows.some((row) => {
+      const overrideEmail = shiftOverrideMap.get(buildAssignmentOverrideKey(row.matchNumber, row.position))
+      const effectiveEmail = overrideEmail || normalizeEmail(row.scoutEmail || "")
+      return effectiveEmail === normalizedOverrideEmail
+    })
+
+    if (replacementBusyInShift) {
+      throw new Error("Replacement scout is already assigned during one or more matches in that shift")
     }
 
     await Promise.all(
@@ -902,7 +1042,7 @@ const notifyScheduleReleased = async ({ eventKey, isUpdate = false }) => {
 module.exports = {
   storeSubscription,
   removeSubscription,
-  updateMatchProgress,
+  setMatchProgress,
   replaceScheduleAssignments,
   getScheduleState,
   processUpcomingNotifications,
@@ -911,4 +1051,5 @@ module.exports = {
   notifyScheduleReleased,
   applyCoverageOverride,
   clearCoverageOverride,
+  getSubscriptionStatusByEmail,
 }

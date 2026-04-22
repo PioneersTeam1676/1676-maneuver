@@ -10,9 +10,17 @@ import GameStartSelectTeam from "@/components/GameStartComponents/GameStartSelec
 import { EventNameSelector } from "@/components/GameStartComponents/EventNameSelector";
 // import { createMatchPrediction, getPredictionForMatch } from "@/lib/scoutGameUtils";
 import { AlertTriangle } from "lucide-react";
-import { fetchQualificationSchedule, resolveTbaApiKey, MATCH_DATA_UPDATED_EVENT } from "@/lib/tbaUtils";
+import {
+  fetchCurrentQualificationMatchNumber,
+  fetchQualificationSchedule,
+  resolveTbaApiKey,
+  MATCH_DATA_UPDATED_EVENT,
+} from "@/lib/tbaUtils";
 import { fetchMyAssignments, type MyAssignment } from "@/lib/scheduleApi";
+import { haptics } from "@/lib/haptics";
 // import { ACTIVE_FORM_UPDATED_EVENT, getActiveFormId, syncActiveFormConfig } from "@/lib/activeForm";
+
+const MATCH_PROGRESS_POLL_MS = 15_000;
 
 const GameStartPage = () => {
   const location = useLocation();
@@ -53,7 +61,9 @@ const GameStartPage = () => {
   );
   const [matchNumber, setMatchNumber] = useState(getInitialMatchNumber());
   const [debouncedMatchNumber, setDebouncedMatchNumber] = useState(matchNumber);
-  const [selectTeam, setSelectTeam] = useState(states?.inputs?.selectTeam || "");
+  const [selectTeam, setSelectTeam] = useState(
+    states?.inputs?.selectTeam || states?.inputs?.teamNumber || ""
+  );
   const [eventName, setEventName] = useState(
     states?.inputs?.eventName || localStorage.getItem("eventName") || ""
   );
@@ -69,6 +79,9 @@ const GameStartPage = () => {
     }
   });
   const [myAssignments, setMyAssignments] = useState<MyAssignment[]>([]);
+  const myAssignmentsRef = useRef<MyAssignment[]>([]);
+  const manualMatchOverrideRef = useRef(Boolean(states?.inputs?.matchNumber));
+  const previousEventNameRef = useRef(eventName);
   // Debounce matchNumber for team selection
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -81,7 +94,10 @@ const GameStartPage = () => {
   useEffect(() => {
     if (!eventName) return;
     fetchMyAssignments(eventName)
-      .then(setMyAssignments)
+      .then((assignments) => {
+        myAssignmentsRef.current = assignments;
+        setMyAssignments(assignments);
+      })
       .catch((err: unknown) => {
         console.warn("Failed to fetch schedule assignments:", err);
       });
@@ -148,6 +164,54 @@ const GameStartPage = () => {
       localStorage.setItem("currentMatchNumber", matchNumber);
     }
   }, [matchNumber]);
+
+  useEffect(() => {
+    const trimmedEvent = eventName.trim();
+    const resolvedKey = resolveTbaApiKey();
+
+    if (!trimmedEvent || !resolvedKey) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const syncCurrentMatchNumber = async () => {
+      try {
+        const officialMatchNumber = await fetchCurrentQualificationMatchNumber(trimmedEvent, resolvedKey);
+        if (cancelled || !officialMatchNumber || officialMatchNumber <= 0) {
+          return;
+        }
+
+        const nextMatchNumber = String(officialMatchNumber);
+        if (manualMatchOverrideRef.current) {
+          return;
+        }
+        // Don't advance past the scout's last assigned match
+        if (myAssignmentsRef.current.length > 0) {
+          const maxOrder = Math.max(...myAssignmentsRef.current.map((a) => a.matchOrder ?? 0));
+          if (maxOrder > 0 && officialMatchNumber > maxOrder) {
+            return;
+          }
+        }
+        setMatchNumber((current: string) => (current === nextMatchNumber ? current : nextMatchNumber));
+        localStorage.setItem("currentMatchNumber", nextMatchNumber);
+      } catch (error) {
+        if (!cancelled) {
+          console.warn("Failed to sync current match number from TBA", error);
+        }
+      }
+    };
+
+    void syncCurrentMatchNumber();
+    const intervalId = window.setInterval(() => {
+      void syncCurrentMatchNumber();
+    }, MATCH_PROGRESS_POLL_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [eventName]);
 
   useEffect(() => {
     const trimmedEvent = eventName.trim();
@@ -335,6 +399,7 @@ const GameStartPage = () => {
     localStorage.setItem("autoStateStack", JSON.stringify([]));
     localStorage.setItem("teleopStateStack", JSON.stringify([]));
 
+    haptics.success();
     const nextRoute = "/scout-form";
     navigate(nextRoute, {
       state: {
@@ -355,8 +420,18 @@ const GameStartPage = () => {
 
 
   const handleMatchNumberChange = (value: string) => {
+    manualMatchOverrideRef.current = true;
     setMatchNumber(value);
   };
+
+  useEffect(() => {
+    if (previousEventNameRef.current === eventName) {
+      return;
+    }
+
+    previousEventNameRef.current = eventName;
+    manualMatchOverrideRef.current = false;
+  }, [eventName]);
 
   useEffect(() => {
     if (!matchNumber) return;
@@ -416,7 +491,7 @@ const GameStartPage = () => {
               <div className="flex items-center justify-between">
                 <Label htmlFor="match-number">Match Number</Label>
                 <span className="text-xs text-muted-foreground">
-                  Auto-increments after each match
+                  Synced to the official TBA match feed every 15 seconds
                 </span>
               </div>
               <Input
@@ -559,7 +634,9 @@ const GameStartPage = () => {
                 preferredTeamPosition={
                   currentAssignment?.slotIndex != null
                     ? currentAssignment.slotIndex + 1
-                    : stationInfo.teamPosition
+                    : states?.inputs?.teamPosition != null
+                      ? Number(states.inputs.teamPosition)
+                      : stationInfo.teamPosition
                 }
               />
             </div>

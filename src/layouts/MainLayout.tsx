@@ -1,11 +1,11 @@
 import Dashboard from "@/pages/Dashboard";
 import LandingPage from "@/pages/LandingPage";
 import { Toaster } from "@/components/ui/sonner";
-import { PWAUpdatePrompt } from '@/components/PWAUpdatePrompt';
 import MatchReminderBackground from "@/components/MatchReminderBackground";
 import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 
 const MainLayout = () => {
   const location = useLocation();
@@ -34,18 +34,26 @@ const MainLayout = () => {
       <>
         <LandingPage />
         <Toaster />
-        <PWAUpdatePrompt />
       </>
     );
   }
 
+  if (!ready) {
+    return (
+      <div className="flex min-h-dvh w-full items-center justify-center bg-background">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
   return (
-    <div className="flex min-h-dvh w-full flex-col bg-background">
-      <Dashboard />
-      <MatchReminderBackground />
-      <Toaster />
-      <PWAUpdatePrompt />
-    </div>
+    <AppErrorBoundary>
+      <div className="flex min-h-dvh w-full flex-col bg-background">
+        <Dashboard />
+        <MatchReminderBackground />
+        <Toaster />
+      </div>
+    </AppErrorBoundary>
   );
 };
 

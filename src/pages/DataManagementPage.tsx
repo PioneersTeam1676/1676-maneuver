@@ -1,13 +1,19 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import {
   deleteScoutingEntries,
   loadAllPitScoutingEntries,
   loadAllScoutingEntries,
+  loadScoutingEntriesByEvent,
   saveScoutingEntry,
   type ScoutingEntryDB,
 } from "@/lib/dexieDB";
 import { listForms } from "@/lib/formBuilderApi";
 import { readScoutingSeason, writeScoutingSeason } from "@/lib/scoutingSeason";
+import {
+  STORAGE_EVENT_NAME_KEY,
+  STORAGE_EVENTS_KEY,
+  syncEventSettings,
+} from "@/lib/eventSettingsClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,12 +41,27 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { AlertTriangle, Edit, Filter, Search, Trash2, X } from "lucide-react";
+import { AlertTriangle, ClipboardCheck, Edit, Filter, Search, Trash2, X } from "lucide-react";
+import { fetchRemoteSchedule } from "@/lib/scheduleApi";
+import { fetchQualificationSchedule, resolveTbaApiKey } from "@/lib/tbaUtils";
+import type { ParsedMatch } from "@/types/schedule";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 
 type SortOption = "matchAsc" | "matchDesc" | "timestampDesc" | "timestampAsc" | "teamAsc";
+
+interface MissingMatch {
+  matchNumber: string;
+  matchNumNormalized: string;
+  position: string;
+  alliance: "Red" | "Blue";
+  slotIndex: number;
+  teamNumber: string;
+  assignedScout: string;
+}
+
+const normalizeMatchNum = (v: string) => v.replace(/\D/g, "");
 const RESERVED_EDIT_KEYS = new Set([
   "selectTeam",
   "teamNumber",
@@ -177,24 +198,42 @@ const DataManagementPage = () => {
   const [editingEntry, setEditingEntry] = useState<ScoutingEntryDB | null>(null);
   const [editedData, setEditedData] = useState<Record<string, unknown>>({});
   
+  // Event-scoped loading
+  const [loadingEvent, setLoadingEvent] = useState<string>(() => {
+    try { return localStorage.getItem(STORAGE_EVENT_NAME_KEY) ?? ""; } catch { return ""; }
+  });
+  const [availableEvents, setAvailableEvents] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_EVENTS_KEY);
+      return raw ? (JSON.parse(raw) as string[]) : [];
+    } catch { return []; }
+  });
+
   // Filters
   const [searchAll, setSearchAll] = useState("");
   const [searchTeam, setSearchTeam] = useState("");
   const [searchMatch, setSearchMatch] = useState("");
   const [filterScout, setFilterScout] = useState<string>("all");
   const [filterAlliance, setFilterAlliance] = useState<string>("all");
-  const [filterEvent, setFilterEvent] = useState<string>("all");
   const [showDuplicatesOnly, setShowDuplicatesOnly] = useState(false);
   const [showIssuesOnly, setShowIssuesOnly] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>("matchAsc");
-  
+
   // Unique values for filters
   const [scouts, setScouts] = useState<string[]>([]);
-  const [events, setEvents] = useState<string[]>([]);
   
   // Delete confirmation
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deletingIds, setDeletingIds] = useState<string[]>([]);
+
+  // Missing matches audit
+  const [missingMatches, setMissingMatches] = useState<MissingMatch[]>([]);
+  const [missingMatchesLoading, setMissingMatchesLoading] = useState(false);
+  const [missingMatchesChecked, setMissingMatchesChecked] = useState(false);
+  const [missingEventKey, setMissingEventKey] = useState("");
+
+  // Duplicate grouping
+  const [groupDuplicates, setGroupDuplicates] = useState(false);
 
   const formatEntryDate = (timestamp: number) => {
     const date = new Date(timestamp);
@@ -286,18 +325,15 @@ const DataManagementPage = () => {
     [entries]
   );
 
-  const loadData = async () => {
+  const loadData = async (eventName: string) => {
     setLoading(true);
     try {
-      const allEntries = await loadAllScoutingEntries();
-      setEntries(allEntries);
-      
-      // Extract unique scouts and events
-      const uniqueScouts = Array.from(new Set(allEntries.map(e => e.scoutName).filter(Boolean))) as string[];
-      const uniqueEvents = Array.from(new Set(allEntries.map(e => e.eventName).filter(Boolean))) as string[];
-      
+      const loaded = eventName
+        ? await loadScoutingEntriesByEvent(eventName)
+        : await loadAllScoutingEntries();
+      setEntries(loaded);
+      const uniqueScouts = Array.from(new Set(loaded.map(e => e.scoutName).filter(Boolean))) as string[];
       setScouts(uniqueScouts.sort());
-      setEvents(uniqueEvents.sort());
     } catch (error) {
       console.error("Failed to load data:", error);
       toast.error("Failed to load scouting data");
@@ -307,8 +343,20 @@ const DataManagementPage = () => {
   };
 
   useEffect(() => {
-    void loadData();
+    void (async () => {
+      try {
+        const settings = await syncEventSettings();
+        setAvailableEvents(settings.events);
+        setLoadingEvent(prev => prev || settings.currentEvent);
+      } catch {
+        // Use cached localStorage values
+      }
+    })();
   }, []);
+
+  useEffect(() => {
+    void loadData(loadingEvent);
+  }, [loadingEvent]);
 
   useEffect(() => {
     const loadSeasons = async () => {
@@ -341,7 +389,6 @@ const DataManagementPage = () => {
       if (searchMatch && !entry.matchNumber?.includes(searchMatch)) return false;
       if (filterScout !== "all" && entry.scoutName !== filterScout) return false;
       if (filterAlliance !== "all" && entry.alliance !== filterAlliance) return false;
-      if (filterEvent !== "all" && entry.eventName !== filterEvent) return false;
       if (showDuplicatesOnly && !duplicateEntryIds.has(entry.id)) return false;
       if (showIssuesOnly && getEntryFlags(entry).length === 0) return false;
       return true;
@@ -373,7 +420,6 @@ const DataManagementPage = () => {
     duplicateEntryIds,
     entries,
     filterAlliance,
-    filterEvent,
     filterScout,
     getEntryFlags,
     searchAll,
@@ -383,6 +429,30 @@ const DataManagementPage = () => {
     showIssuesOnly,
     sortBy,
   ]);
+
+  const displayEntries = useMemo(() => {
+    if (!groupDuplicates) return filteredEntries;
+
+    const groups = new Map<string, ScoutingEntryDB[]>();
+    const singles: ScoutingEntryDB[] = [];
+
+    for (const entry of filteredEntries) {
+      if (duplicateEntryIds.has(entry.id)) {
+        const key = buildDuplicateKey(entry) ?? entry.id;
+        const group = groups.get(key) ?? [];
+        group.push(entry);
+        groups.set(key, group);
+      } else {
+        singles.push(entry);
+      }
+    }
+
+    const sortedGroups = Array.from(groups.values()).sort(
+      (a, b) => parseMatchNumber(a[0]?.matchNumber) - parseMatchNumber(b[0]?.matchNumber)
+    );
+
+    return [...sortedGroups.flat(), ...singles];
+  }, [filteredEntries, groupDuplicates, duplicateEntryIds, buildDuplicateKey]);
 
   const toggleSelectAll = () => {
     if (selectedIds.size === filteredEntries.length) {
@@ -412,11 +482,16 @@ const DataManagementPage = () => {
   };
 
   const confirmDelete = async () => {
+    const deleteTargets = deletingIds.map((id) => {
+      const entry = entries.find((item) => String(item.id) === String(id));
+      return entry ? { id, eventName: entry.eventName } : String(id);
+    });
+
     try {
-      await deleteScoutingEntries(deletingIds);
+      await deleteScoutingEntries(deleteTargets);
       toast.success(`Deleted ${deletingIds.length} ${deletingIds.length === 1 ? 'entry' : 'entries'}`);
       setSelectedIds(new Set());
-      await loadData();
+      await loadData(loadingEvent);
     } catch (error) {
       console.error("Failed to delete entries:", error);
       toast.error("Failed to delete entries");
@@ -531,10 +606,113 @@ const DataManagementPage = () => {
       toast.success("Entry updated successfully");
       setEditingEntry(null);
       setEditedData({});
-      await loadData();
+      await loadData(loadingEvent);
     } catch (error) {
       console.error("Failed to update entry:", error);
       toast.error("Failed to update entry");
+    }
+  };
+
+  const handleFindMissingMatches = async () => {
+    setMissingMatchesLoading(true);
+    setMissingMatchesChecked(false);
+    try {
+      const schedule = await fetchRemoteSchedule(missingEventKey || undefined);
+      if (!schedule || !schedule.assignments.length) {
+        toast.error("No schedule found — publish a schedule first");
+        return;
+      }
+
+      const aliases = schedule.aliases ?? {};
+      const effectiveEventKey = missingEventKey.trim() || schedule.eventKey || "";
+
+      type MatchTeamData = { red: string[]; blue: string[] };
+      const matchTeamMap = new Map<string, MatchTeamData>();
+      let usedTba = false;
+
+      if (effectiveEventKey && resolveTbaApiKey()) {
+        try {
+          const tbaSchedule = await fetchQualificationSchedule(effectiveEventKey);
+          for (const m of tbaSchedule) {
+            matchTeamMap.set(String(m.matchNum), { red: m.redAlliance, blue: m.blueAlliance });
+          }
+          usedTba = tbaSchedule.length > 0;
+        } catch (err) {
+          console.warn("TBA fetch failed, falling back to schedule data", err);
+        }
+      }
+
+      if (!usedTba) {
+        const fallbackMap = new Map<string, ParsedMatch>();
+        for (const m of schedule.matches) {
+          fallbackMap.set(normalizeMatchNum(m.matchNumber), m);
+        }
+        for (const [k, m] of fallbackMap) {
+          matchTeamMap.set(k, { red: m.red, blue: m.blue });
+        }
+      }
+
+      const existingKeys = new Set<string>();
+      let latestMatchNum = 0;
+      for (const entry of entries) {
+        if (!entry.matchNumber || !entry.teamNumber) continue;
+        existingKeys.add(`${normalizeMatchNum(entry.matchNumber)}::${entry.teamNumber}`);
+        const n = parseInt(normalizeMatchNum(entry.matchNumber), 10);
+        if (Number.isFinite(n) && n > latestMatchNum) latestMatchNum = n;
+      }
+
+      const missing: MissingMatch[] = [];
+      for (const assignment of schedule.assignments) {
+        const matchNorm = normalizeMatchNum(assignment.matchNumber);
+        if (latestMatchNum > 0 && parseInt(matchNorm, 10) > latestMatchNum) continue;
+        const teamData = matchTeamMap.get(matchNorm);
+
+        for (const pos of (["red-1", "red-2", "red-3", "blue-1", "blue-2", "blue-3"] as const)) {
+          const scoutEmail = assignment.positions[pos];
+          if (!scoutEmail || scoutEmail === "Unassigned") continue;
+
+          const [allianceStr, slotStr] = pos.split("-");
+          const slotIndex = parseInt(slotStr, 10) - 1;
+
+          const teamNumber = teamData
+            ? (allianceStr === "red" ? teamData.red[slotIndex] : teamData.blue[slotIndex]) ?? ""
+            : "";
+
+          if (!teamNumber) continue;
+
+          if (!existingKeys.has(`${matchNorm}::${teamNumber}`)) {
+            missing.push({
+              matchNumber: assignment.matchNumber,
+              matchNumNormalized: matchNorm,
+              position: pos,
+              alliance: allianceStr === "red" ? "Red" : "Blue",
+              slotIndex: slotIndex + 1,
+              teamNumber,
+              assignedScout: aliases[scoutEmail] ?? scoutEmail,
+            });
+          }
+        }
+      }
+
+      missing.sort((a, b) => {
+        const mDiff = parseInt(a.matchNumNormalized, 10) - parseInt(b.matchNumNormalized, 10);
+        return mDiff !== 0 ? mDiff : a.position.localeCompare(b.position);
+      });
+
+      setMissingMatches(missing);
+      setMissingMatchesChecked(true);
+
+      const source = usedTba ? "TBA" : "schedule data";
+      if (missing.length === 0) {
+        toast.success(`All assigned matches have entries (checked via ${source})`);
+      } else {
+        toast.warning(`${missing.length} missing ${missing.length === 1 ? "entry" : "entries"} (via ${source})`);
+      }
+    } catch (error) {
+      console.error("Failed to find missing matches:", error);
+      toast.error("Failed to check schedule");
+    } finally {
+      setMissingMatchesLoading(false);
     }
   };
 
@@ -544,7 +722,6 @@ const DataManagementPage = () => {
     setSearchMatch("");
     setFilterScout("all");
     setFilterAlliance("all");
-    setFilterEvent("all");
     setShowDuplicatesOnly(false);
     setShowIssuesOnly(false);
     setSortBy("matchAsc");
@@ -561,7 +738,7 @@ const DataManagementPage = () => {
       await loadAllScoutingEntries();
       await loadAllPitScoutingEntries();
       setSelectedIds(new Set());
-      await loadData();
+      await loadData(loadingEvent);
       const label = selectedSeason === "auto" ? "current season" : `season ${selectedSeason}`;
       toast.success(`Loaded scouting data for ${label}`);
     } catch (error) {
@@ -578,7 +755,6 @@ const DataManagementPage = () => {
     searchMatch ||
     filterScout !== "all" ||
     filterAlliance !== "all" ||
-    filterEvent !== "all" ||
     showDuplicatesOnly ||
     showIssuesOnly ||
     sortBy !== "matchAsc";
@@ -594,37 +770,60 @@ const DataManagementPage = () => {
             </p>
           </div>
 
-          {/* Statistics */}
+          {/* Event + Season selector */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Data Season</CardTitle>
+              <CardTitle className="text-lg">Data Scope</CardTitle>
               <CardDescription>
-                Load scouting data from a specific season database. This replaces the local cache and routes new saves to that season until you switch back to Auto.
+                Select which event to load data for. Only that event's entries are fetched from the server.
               </CardDescription>
             </CardHeader>
-            <CardContent className="flex flex-col gap-4 md:flex-row md:items-end">
-              <div className="grid gap-2">
-                <Label htmlFor="season-select">Season</Label>
-                <Select value={selectedSeason} onValueChange={handleSeasonChange}>
-                  <SelectTrigger id="season-select" className="w-[220px]">
-                    <SelectValue placeholder="Select a season" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="auto">Auto (current season)</SelectItem>
-                    {seasonOptions.map((year) => (
-                      <SelectItem key={year} value={year}>
-                        Season {year}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <CardContent className="flex flex-col gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-end gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="event-select">Event</Label>
+                  <Select
+                    value={loadingEvent || "__all__"}
+                    onValueChange={(val) => setLoadingEvent(val === "__all__" ? "" : val)}
+                  >
+                    <SelectTrigger id="event-select" className="w-[260px]">
+                      <SelectValue placeholder="Select an event" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">All events (slow)</SelectItem>
+                      {availableEvents.map((ev) => (
+                        <SelectItem key={ev} value={ev}>{ev}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {loadingEvent && (
+                  <Badge variant="secondary" className="h-fit">{loadingEvent}</Badge>
+                )}
               </div>
-              <Button onClick={handleSeasonSync} disabled={syncingSeason}>
-                {syncingSeason ? "Loading…" : "Load Season Data"}
-              </Button>
-              <span className="text-xs text-muted-foreground">
-                Use this to restore previous seasons after switching forms, then return to Auto for current scouting.
-              </span>
+
+              <div className="border-t pt-4 flex flex-col sm:flex-row sm:items-end gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="season-select">Season database</Label>
+                  <Select value={selectedSeason} onValueChange={handleSeasonChange}>
+                    <SelectTrigger id="season-select" className="w-[220px]">
+                      <SelectValue placeholder="Select a season" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto">Auto (current season)</SelectItem>
+                      {seasonOptions.map((year) => (
+                        <SelectItem key={year} value={year}>Season {year}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button onClick={handleSeasonSync} disabled={syncingSeason}>
+                  {syncingSeason ? "Loading…" : "Load Season Data"}
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  Use to restore previous seasons, then return to Auto for current scouting.
+                </span>
+              </div>
             </CardContent>
           </Card>
 
@@ -677,6 +876,74 @@ const DataManagementPage = () => {
               </CardHeader>
             </Card>
           </div>
+
+          {/* Missing Matches Audit */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <ClipboardCheck className="h-4 w-4" />
+                <CardTitle className="text-lg">Missing Matches Audit</CardTitle>
+              </div>
+              <CardDescription>
+                Compare the published schedule against submitted scouting entries to find gaps.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-end gap-3">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="missingEventKey">Event Key (optional)</Label>
+                  <Input
+                    id="missingEventKey"
+                    placeholder="e.g. 2025txdal — leave blank for active event"
+                    value={missingEventKey}
+                    onChange={(e) => setMissingEventKey(e.target.value)}
+                    className="w-72"
+                  />
+                </div>
+                <Button onClick={handleFindMissingMatches} disabled={missingMatchesLoading}>
+                  {missingMatchesLoading ? "Checking…" : "Find Missing Matches"}
+                </Button>
+                {missingMatchesChecked && (
+                  <Badge variant={missingMatches.length === 0 ? "secondary" : "outline"} className={missingMatches.length > 0 ? "border-yellow-400 bg-yellow-50 text-yellow-800 dark:border-yellow-800 dark:bg-yellow-950 dark:text-yellow-300" : ""}>
+                    {missingMatches.length === 0 ? "All entries present" : `${missingMatches.length} missing`}
+                  </Badge>
+                )}
+              </div>
+
+              {missingMatchesChecked && missingMatches.length > 0 && (
+                <div className="overflow-x-auto rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Match</TableHead>
+                        <TableHead>Team</TableHead>
+                        <TableHead>Position</TableHead>
+                        <TableHead>Assigned Scout</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {missingMatches.map((m) => (
+                        <TableRow key={`${m.matchNumNormalized}-${m.position}`} className="bg-yellow-50/40 dark:bg-yellow-950/10">
+                          <TableCell className="font-medium">{m.matchNumNormalized}</TableCell>
+                          <TableCell>{m.teamNumber}</TableCell>
+                          <TableCell>
+                            <Badge variant={m.alliance === "Red" ? "destructive" : "default"}>
+                              {m.alliance} {m.slotIndex}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm">{m.assignedScout}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+
+              {missingMatchesChecked && missingMatches.length === 0 && (
+                <p className="text-sm text-muted-foreground">Every scheduled position has a corresponding scouting entry.</p>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Filters */}
           <Card>
@@ -770,23 +1037,6 @@ const DataManagementPage = () => {
                 </div>
                 
                 <div>
-                  <Label htmlFor="filterEvent">Event</Label>
-                  <Select value={filterEvent} onValueChange={setFilterEvent}>
-                    <SelectTrigger id="filterEvent">
-                      <SelectValue placeholder="All Events" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Events</SelectItem>
-                      {events.map((event) => (
-                        <SelectItem key={event} value={event}>
-                          {event}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
                   <Label htmlFor="sortEntries">Sort</Label>
                   <Select value={sortBy} onValueChange={(value: SortOption) => setSortBy(value)}>
                     <SelectTrigger id="sortEntries">
@@ -817,6 +1067,13 @@ const DataManagementPage = () => {
                     onCheckedChange={(checked) => setShowIssuesOnly(Boolean(checked))}
                   />
                   Show issues only
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox
+                    checked={groupDuplicates}
+                    onCheckedChange={(checked) => setGroupDuplicates(Boolean(checked))}
+                  />
+                  Group duplicates together
                 </label>
                 <div className="text-sm text-muted-foreground">
                   Duplicates are matched by event, match, team, and alliance.
@@ -881,91 +1138,106 @@ const DataManagementPage = () => {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredEntries.map((entry) => {
+                    displayEntries.map((entry, idx) => {
                       const flags = getEntryFlags(entry);
                       const issueDetails = getIssueDetails(entry, duplicateEntryIds);
                       const station = extractStationContext(entry);
+
+                      const isDup = duplicateEntryIds.has(entry.id);
+                      const currentDupKey = isDup ? buildDuplicateKey(entry) : null;
+                      const prevEntry = displayEntries[idx - 1];
+                      const prevIsDup = prevEntry ? duplicateEntryIds.has(prevEntry.id) : false;
+                      const prevDupKey = prevEntry && prevIsDup ? buildDuplicateKey(prevEntry) : null;
+                      const showSeparator = groupDuplicates && isDup && idx > 0 && prevIsDup && currentDupKey !== prevDupKey;
+
                       return (
-                      <TableRow key={entry.id} className={flags.length > 0 ? "bg-yellow-50/40 dark:bg-yellow-950/10" : undefined}>
-                        <TableCell>
-                          <Checkbox
-                            checked={selectedIds.has(entry.id)}
-                            onCheckedChange={() => toggleSelect(entry.id)}
-                          />
-                        </TableCell>
-                        <TableCell className="font-medium">{entry.teamNumber || "—"}</TableCell>
-                        <TableCell>{entry.matchNumber || "—"}</TableCell>
-                        <TableCell>
-                          {station.label ? (
-                            <Badge variant={station.alliance === "Red" ? "destructive" : "default"}>
-                              {station.label}
-                            </Badge>
-                          ) : entry.alliance ? (
-                            <Badge variant={String(entry.alliance).toLowerCase().includes("red") ? "destructive" : "default"}>
-                              {entry.alliance}
-                            </Badge>
-                          ) : (
-                            "—"
-                          )}
-                        </TableCell>
-                        <TableCell>{entry.scoutName || "—"}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {entry.eventName || "—"}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {formatEntryDate(entry.timestamp)}
-                        </TableCell>
-                        <TableCell>
-                          {flags.length > 0 ? (
-                            <div className="space-y-2">
-                              <div className="flex flex-wrap gap-1">
-                                {flags.map((flag) => (
-                                  <Badge
-                                    key={`${entry.id}-${flag}`}
-                                    variant="outline"
-                                    className="border-yellow-300 bg-yellow-50 text-yellow-800 dark:border-yellow-900 dark:bg-yellow-950 dark:text-yellow-300"
-                                  >
-                                    {flag === "Duplicate" && <AlertTriangle className="mr-1 h-3 w-3" />}
-                                    {flag}
-                                  </Badge>
-                                ))}
-                              </div>
-                              {issueDetails.length > 0 ? (
-                                <div className="space-y-1 text-xs text-muted-foreground">
-                                  {issueDetails.map((detail) => (
-                                    <div key={`${entry.id}-${detail}`}>{detail}</div>
+                      <Fragment key={entry.id}>
+                        {showSeparator && (
+                          <TableRow>
+                            <TableCell colSpan={9} className="h-0.5 p-0 bg-border" />
+                          </TableRow>
+                        )}
+                        <TableRow className={flags.length > 0 ? "bg-yellow-50/40 dark:bg-yellow-950/10" : undefined}>
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedIds.has(entry.id)}
+                              onCheckedChange={() => toggleSelect(entry.id)}
+                            />
+                          </TableCell>
+                          <TableCell className="font-medium">{entry.teamNumber || "—"}</TableCell>
+                          <TableCell>{entry.matchNumber || "—"}</TableCell>
+                          <TableCell>
+                            {station.label ? (
+                              <Badge variant={station.alliance === "Red" ? "destructive" : "default"}>
+                                {station.label}
+                              </Badge>
+                            ) : entry.alliance ? (
+                              <Badge variant={String(entry.alliance).toLowerCase().includes("red") ? "destructive" : "default"}>
+                                {entry.alliance}
+                              </Badge>
+                            ) : (
+                              "—"
+                            )}
+                          </TableCell>
+                          <TableCell>{entry.scoutName || "—"}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {entry.eventName || "—"}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {formatEntryDate(entry.timestamp)}
+                          </TableCell>
+                          <TableCell>
+                            {flags.length > 0 ? (
+                              <div className="space-y-2">
+                                <div className="flex flex-wrap gap-1">
+                                  {flags.map((flag) => (
+                                    <Badge
+                                      key={`${entry.id}-${flag}`}
+                                      variant="outline"
+                                      className="border-yellow-300 bg-yellow-50 text-yellow-800 dark:border-yellow-900 dark:bg-yellow-950 dark:text-yellow-300"
+                                    >
+                                      {flag === "Duplicate" && <AlertTriangle className="mr-1 h-3 w-3" />}
+                                      {flag}
+                                    </Badge>
                                   ))}
                                 </div>
-                              ) : null}
+                                {issueDetails.length > 0 ? (
+                                  <div className="space-y-1 text-xs text-muted-foreground">
+                                    {issueDetails.map((detail) => (
+                                      <div key={`${entry.id}-${detail}`}>{detail}</div>
+                                    ))}
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => handleEdit(entry)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive"
+                                onClick={() => {
+                                  setDeletingIds([entry.id]);
+                                  setShowDeleteConfirm(true);
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
                             </div>
-                          ) : (
-                            <span className="text-sm text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => handleEdit(entry)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-destructive"
-                              onClick={() => {
-                                setDeletingIds([entry.id]);
-                                setShowDeleteConfirm(true);
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
+                          </TableCell>
+                        </TableRow>
+                      </Fragment>
                     )})
                   )}
                 </TableBody>
@@ -1069,7 +1341,7 @@ const DataManagementPage = () => {
                     <SelectValue placeholder="Select event" />
                   </SelectTrigger>
                   <SelectContent>
-                    {events.map((event) => (
+                    {availableEvents.map((event) => (
                       <SelectItem key={event} value={event}>
                         {event}
                       </SelectItem>

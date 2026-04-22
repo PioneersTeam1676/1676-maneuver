@@ -422,7 +422,7 @@ const HomePage = () => {
               </div>
               <p className="mt-2 text-sm text-muted-foreground">
                 {typeof lastCompletedMatch === "number"
-                  ? `The app has recorded scouting submissions through match ${lastCompletedMatch}.`
+                  ? `Official TBA results show qualification play through match ${lastCompletedMatch}.`
                   : "Live match progress has not been detected yet."}
               </p>
             </div>

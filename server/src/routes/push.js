@@ -1,8 +1,32 @@
 const express = require("express")
-const { storeSubscription, removeSubscription, sendManualNotification } = require("../services/scheduleNotifications")
+const {
+  storeSubscription,
+  removeSubscription,
+  sendManualNotification,
+  getSubscriptionStatusByEmail,
+} = require("../services/scheduleNotifications")
 const asyncHandler = require("../utils/asyncHandler")
 
 const router = express.Router()
+
+router.get(
+  "/subscriptions/status",
+  asyncHandler(async (req, res) => {
+    const rawEmails = String(req.query.emails || "")
+    const emails = rawEmails
+      .split(",")
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean)
+      .slice(0, 100)
+
+    if (!emails.length) {
+      return res.status(400).json({ error: "emails query param is required" })
+    }
+
+    const statuses = await getSubscriptionStatusByEmail(emails)
+    res.json({ statuses })
+  })
+)
 
 router.post(
   "/subscriptions",

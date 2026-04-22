@@ -29,7 +29,17 @@ import {
   groupShiftBlocksByDay,
 } from "@/lib/scoutShiftSchedule"
 import { getQualificationMatches, resolveTbaApiKey } from "@/lib/tbaUtils"
-import { generateShiftSchedule, type GeneratedSchedule, type ScoutInput } from "@/lib/shiftGenerator"
+import {
+  POSITION_LABELS,
+  POSITIONS,
+  buildGeneratedSchedule,
+  deriveShiftAssignmentsFromSchedule,
+  generateShiftSchedule,
+  type GeneratedSchedule,
+  type Position,
+  type ScoutInput,
+  type ShiftAssignment,
+} from "@/lib/shiftGenerator"
 import type { ParsedMatch, StoredScheduleState } from "@/types/schedule"
 import {
   AlertDialog,
@@ -83,7 +93,6 @@ type PendingCoverageAction =
     }
 
 const NO_REPLACEMENT_VALUE = "__none__"
-const COVERAGE_ELIGIBLE_ROLES = new Set(["scout", "lead", "tech_lead"])
 const statusBadgeClassName = {
   current: "border-red-500/30 bg-red-500 text-white",
   completed: "border-red-500/15 bg-red-500/10 text-red-600 dark:text-red-300",
@@ -95,6 +104,24 @@ const positionBadgeClassName = {
 }
 
 const normalizeEmail = (value: string) => value.trim().toLowerCase()
+
+const ensureGeneratedScheduleShape = (
+  schedule: GeneratedSchedule,
+  scouts: Pick<ScoutInput, "email" | "displayName">[],
+  fallbackOverlapEnabled: boolean,
+): GeneratedSchedule => {
+  const shiftAssignments = Array.isArray(schedule.shiftAssignments) && schedule.shiftAssignments.length === schedule.shiftRanges.length
+    ? schedule.shiftAssignments
+    : deriveShiftAssignmentsFromSchedule(schedule)
+
+  return buildGeneratedSchedule({
+    overlapEnabled: typeof schedule.overlapEnabled === "boolean" ? schedule.overlapEnabled : fallbackOverlapEnabled,
+    scouts,
+    shiftAssignments,
+    shiftRanges: schedule.shiftRanges,
+    warnings: schedule.warnings ?? [],
+  })
+}
 
 const buildCoverageBlockKey = (block: {
   position: string
@@ -164,6 +191,7 @@ const ShiftGeneratorPage = () => {
   // ─── Generated schedule ──────────────────────────────────────────────────
   const [generated, setGenerated] = useState<GeneratedSchedule | null>(null)
   const [publishing, setPublishing] = useState(false)
+  const [publishConfirmOpen, setPublishConfirmOpen] = useState(false)
   const [remoteSchedule, setRemoteSchedule] = useState<RemoteScheduleState | null>(null)
   const [loadingCoverage, setLoadingCoverage] = useState(false)
   const [replacementSelections, setReplacementSelections] = useState<Record<string, string>>({})
@@ -196,7 +224,17 @@ const ShiftGeneratorPage = () => {
         if (typeof stored.overlapEnabled === 'boolean') setOverlapEnabled(stored.overlapEnabled)
         if (Array.isArray(stored.attendees)) setAttendees(stored.attendees)
         if (stored.eventKey) setSavedEventKey(stored.eventKey)
-        if (stored.generated) setGenerated(stored.generated)
+        if (stored.generated) {
+          setGenerated(
+            ensureGeneratedScheduleShape(
+              stored.generated,
+              Array.isArray(stored.attendees)
+                ? stored.attendees.map(({ email, displayName }) => ({ email, displayName }))
+                : [],
+              typeof stored.overlapEnabled === "boolean" ? stored.overlapEnabled : false,
+            ),
+          )
+        }
       }
     } catch {
       // ignore
@@ -267,7 +305,7 @@ const ShiftGeneratorPage = () => {
         return { email: scout.email, displayName: scout.displayName, present: false, load: defaultLoad }
       })
     })
-  }, [hasHydrated, registeredScouts])
+  }, [hasHydrated, registeredScouts, roleAssignments])
 
   // ─── Persist state ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -276,7 +314,7 @@ const ShiftGeneratorPage = () => {
     }
     const state: PersistedState = { eventKey: savedEventKey || eventKey, shiftSize, overlapEnabled, attendees, generated }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
-  }, [attendees, eventKey, generated, hasHydrated, savedEventKey, shiftSize])
+  }, [attendees, eventKey, generated, hasHydrated, overlapEnabled, savedEventKey, shiftSize])
 
   useEffect(() => {
     if (!eventKey || !savedEventKey || eventKey === savedEventKey) {
@@ -325,6 +363,16 @@ const ShiftGeneratorPage = () => {
   const presentAttendees = attendees.filter((a) => a.present)
   const totalSlots = presentAttendees.reduce((sum, a) => sum + a.load, 0)
   const estimatedShifts = shiftSize > 0 ? Math.ceil((watchStatus.matchCount ?? 72) / shiftSize) : 0
+  const checkedInScoutOptions = useMemo(
+    () =>
+      presentAttendees
+        .map((attendee) => ({
+          email: attendee.email,
+          label: attendee.displayName,
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [presentAttendees]
+  )
 
   const displayNameByEmail = useMemo(() => {
     const map = new Map<string, string>()
@@ -341,21 +389,6 @@ const ShiftGeneratorPage = () => {
     })
     return map
   }, [recentUsers, roleAssignments])
-
-  const replacementOptions = useMemo(
-    () =>
-      Object.entries(roleAssignments)
-        .filter(([, role]) => COVERAGE_ELIGIBLE_ROLES.has(role))
-        .map(([email]) => {
-          const normalized = normalizeEmail(email)
-          return {
-            email: normalized,
-            label: displayNameByEmail.get(normalized) || email,
-          }
-        })
-        .sort((a, b) => a.label.localeCompare(b.label)),
-    [displayNameByEmail, roleAssignments]
-  )
 
   const coverageBlocks = useMemo(
     () =>
@@ -389,6 +422,119 @@ const ShiftGeneratorPage = () => {
     return displayNameByEmail.get(normalizeEmail(email)) || email
   }, [displayNameByEmail])
 
+  const replacementOptionsByBlock = useMemo(() => {
+    const scheduledScoutEmails = new Set<string>()
+    const assignedByMatch = new Map<string, Set<string>>()
+
+    const addScheduledScout = (rawEmail?: string | null) => {
+      const normalized = normalizeEmail(rawEmail || "")
+      if (!normalized || normalized === "unassigned") {
+        return ""
+      }
+      scheduledScoutEmails.add(normalized)
+      return normalized
+    }
+
+    for (const assignment of remoteSchedule?.assignments ?? []) {
+      const positions = assignment.positions as Record<string, string>
+      for (const rawEmail of Object.values(positions)) {
+        const normalized = addScheduledScout(rawEmail)
+        if (!normalized) {
+          continue
+        }
+        const assigned = assignedByMatch.get(assignment.matchNumber) ?? new Set<string>()
+        assigned.add(normalized)
+        assignedByMatch.set(assignment.matchNumber, assigned)
+      }
+    }
+
+    for (const override of remoteSchedule?.overrides ?? []) {
+      addScheduledScout(override.originalScoutEmail)
+      addScheduledScout(override.overrideScoutEmail)
+    }
+
+    const sortedScheduledScouts = Array.from(scheduledScoutEmails).sort((a, b) =>
+      getDisplayName(a).localeCompare(getDisplayName(b))
+    )
+
+    return coverageBlocks.reduce<Record<string, Array<{ email: string; label: string }>>>((acc, block) => {
+      const blockKey = buildCoverageBlockKey(block)
+      const blockedEmails = new Set<string>()
+      block.matches.forEach((match) => {
+        assignedByMatch.get(match.matchNumber)?.forEach((email) => {
+          blockedEmails.add(email)
+        })
+      })
+
+      const options = sortedScheduledScouts
+        .filter((email) => !blockedEmails.has(email))
+        .map((email) => ({
+          email,
+          label: getDisplayName(email),
+        }))
+
+      const selectedEmail = replacementSelections[blockKey] || block.overrideScoutEmail || ""
+      if (selectedEmail && !options.some((option) => option.email === selectedEmail)) {
+        options.unshift({
+          email: selectedEmail,
+          label: getDisplayName(selectedEmail),
+        })
+      }
+
+      acc[blockKey] = options
+      return acc
+    }, {})
+  }, [coverageBlocks, getDisplayName, remoteSchedule?.assignments, remoteSchedule?.overrides, replacementSelections])
+
+  const getShiftOptions = useCallback((shiftAssignment: ShiftAssignment, position: Position) => {
+    const assignedElsewhere = new Set(
+      POSITIONS
+        .filter((slot) => slot !== position)
+        .map((slot) => shiftAssignment[slot])
+        .filter((email) => email && email !== "Unassigned")
+    )
+
+    const options = checkedInScoutOptions.filter(
+      (option) => option.email === shiftAssignment[position] || !assignedElsewhere.has(option.email)
+    )
+
+    if (shiftAssignment[position] === "Unassigned") {
+      return [{ email: "Unassigned", label: "Unassigned" }, ...options]
+    }
+
+    if (shiftAssignment[position] && !options.some((option) => option.email === shiftAssignment[position])) {
+      return [
+        {
+          email: shiftAssignment[position],
+          label: getDisplayName(shiftAssignment[position]),
+        },
+        ...options,
+      ]
+    }
+
+    return options
+  }, [checkedInScoutOptions, getDisplayName])
+
+  const updateShiftAssignment = useCallback((shiftIndex: number, position: Position, nextEmail: string) => {
+    setGenerated((prev) => {
+      if (!prev) {
+        return prev
+      }
+
+      const nextShiftAssignments = prev.shiftAssignments.map((assignment, index) => (
+        index === shiftIndex ? { ...assignment, [position]: nextEmail } : assignment
+      ))
+
+      return buildGeneratedSchedule({
+        overlapEnabled: prev.overlapEnabled,
+        scouts: presentAttendees,
+        shiftAssignments: nextShiftAssignments,
+        shiftRanges: prev.shiftRanges,
+        warnings: prev.warnings,
+      })
+    })
+  }, [presentAttendees])
+
   // ─── TBA Watch ────────────────────────────────────────────────────────────
   const startWatch = useCallback(async () => {
     const key = eventKey.trim()
@@ -409,13 +555,19 @@ const ShiftGeneratorPage = () => {
     }
   }, [eventKey])
 
-  const stopWatch = useCallback(async () => {
+  const stopWatch = useCallback(async (options?: { silent?: boolean }) => {
     try {
       await apiDelete("/schedule/watch")
       setWatchStatus({ watching: false, released: false, eventKey: null, matchCount: null })
-      toast.info("Watch stopped")
+      if (!options?.silent) {
+        toast.info("Watch stopped")
+      }
+      return true
     } catch {
-      toast.error("Failed to stop watch")
+      if (!options?.silent) {
+        toast.error("Failed to stop watch")
+      }
+      return false
     }
   }, [])
 
@@ -440,7 +592,7 @@ const ShiftGeneratorPage = () => {
   }, [watchStatus.watching])
 
   // ─── Generate ─────────────────────────────────────────────────────────────
-  const generate = () => {
+  const generate = async () => {
     const scouts: ScoutInput[] = presentAttendees.map((a) => ({
       email: a.email,
       displayName: a.displayName,
@@ -453,10 +605,22 @@ const ShiftGeneratorPage = () => {
     const result = generateShiftSchedule({ scouts, totalMatches, shiftSize, overlapEnabled })
     setGenerated(result)
     setSavedEventKey(eventKey.trim())
+    let stoppedWatch = false
+    if (watchStatus.watching && watchStatus.eventKey === eventKey.trim()) {
+      stoppedWatch = await stopWatch({ silent: true })
+    }
     if (result.warnings.length > 0) {
-      toast.warning("Schedule generated with staffing warnings")
+      toast.warning(
+        stoppedWatch
+          ? "Schedule generated with staffing warnings. TBA watch stopped."
+          : "Schedule generated with staffing warnings."
+      )
     } else {
-      toast.success("Schedule generated")
+      toast.success(
+        stoppedWatch
+          ? "Schedule generated. TBA watch stopped."
+          : "Schedule generated."
+      )
     }
   }
 
@@ -559,7 +723,7 @@ const ShiftGeneratorPage = () => {
       await refreshCoverageSchedule(remoteSchedule.eventKey)
     } catch (error) {
       console.error("Failed to update coverage override", error)
-      toast.error("Failed to update coverage.")
+      toast.error(error instanceof Error && error.message ? error.message : "Failed to update coverage.")
     } finally {
       setCoverageActionLoadingKey(null)
       setPendingCoverageAction(null)
@@ -596,7 +760,7 @@ const ShiftGeneratorPage = () => {
 
           <div className="flex items-center gap-3">
             {isWatchingCurrentEvent ? (
-              <Button variant="outline" size="sm" onClick={stopWatch}>
+              <Button variant="outline" size="sm" onClick={() => void stopWatch()}>
                 <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
                 Stop Watching
               </Button>
@@ -785,26 +949,37 @@ const ShiftGeneratorPage = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {(["red-1", "red-2", "red-3", "blue-1", "blue-2", "blue-3"] as const).map((pos, idx) => {
-                      const label = { "red-1": "Red 1", "red-2": "Red 2", "red-3": "Red 3", "blue-1": "Blue 1", "blue-2": "Blue 2", "blue-3": "Blue 3" }[pos]
+                    {POSITIONS.map((pos, idx) => {
+                      const label = POSITION_LABELS[pos]
                       const isRed = pos.startsWith("red")
                       return (
                         <tr key={pos} className={`border-b last:border-0 ${idx % 2 === 0 ? "bg-background" : "bg-muted/20"}`}>
                           <td className={`px-3 py-2 font-medium ${isRed ? "text-red-600 dark:text-red-400" : "text-blue-600 dark:text-blue-400"}`}>
                             {label}
                           </td>
-                          {generated.shiftRanges.map((range) => {
-                            // For overlap shifts the boundary match has some slots as 'Unassigned'
-                            // (back-to-back scouts keep their outgoing role). Use the next match.
-                            const lookupStart = range.overlapAtStart ? range.start + 1 : range.start
-                            const firstMatch = generated.assignments.find(
-                              (a) => parseInt(a.matchNumber.replace(/\D/g, "")) === lookupStart
-                            )
-                            const email = firstMatch?.positions[pos] ?? ""
-                            const scout = presentAttendees.find((a) => a.email === email)
+                          {generated.shiftRanges.map((range, shiftIndex) => {
+                            const shiftAssignment = generated.shiftAssignments[shiftIndex]
+                            const email = shiftAssignment?.[pos] ?? "Unassigned"
+                            const options = shiftAssignment
+                              ? getShiftOptions(shiftAssignment, pos)
+                              : [{ email: "Unassigned", label: "Unassigned" }]
                             return (
                               <td key={range.label} className="px-3 py-2 whitespace-nowrap">
-                                {scout?.displayName ?? email ?? "—"}
+                                <Select
+                                  value={email}
+                                  onValueChange={(value) => updateShiftAssignment(shiftIndex, pos, value)}
+                                >
+                                  <SelectTrigger className="h-8 min-w-[10rem] border-0 bg-transparent px-0 text-xs shadow-none focus:ring-0">
+                                    <SelectValue placeholder="Select scout" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {options.map((option) => (
+                                      <SelectItem key={`${range.label}-${pos}-${option.email}`} value={option.email}>
+                                        {option.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
                               </td>
                             )
                           })}
@@ -816,7 +991,7 @@ const ShiftGeneratorPage = () => {
               </div>
 
               <div className="flex gap-2 pt-1">
-                <Button onClick={publish} disabled={publishing || !eventKey.trim()}>
+                <Button onClick={() => setPublishConfirmOpen(true)} disabled={publishing || !eventKey.trim()}>
                   <Send className="h-4 w-4 mr-2" />
                   {publishing ? "Publishing…" : "Publish to Scouts"}
                 </Button>
@@ -825,6 +1000,9 @@ const ShiftGeneratorPage = () => {
                   Download CSV
                 </Button>
               </div>
+              <p className="text-xs text-muted-foreground">
+                Preview changes stay local on this device until you confirm publish.
+              </p>
               {!eventKey.trim() && (
                 <p className="text-xs text-muted-foreground">Set an event key above to enable publishing.</p>
               )}
@@ -859,6 +1037,7 @@ const ShiftGeneratorPage = () => {
                     {group.blocks.map((block) => {
                       const blockKey = buildCoverageBlockKey(block)
                       const replacementEmail = replacementSelections[blockKey] || ""
+                      const replacementOptions = replacementOptionsByBlock[blockKey] ?? []
                       const currentReason = overrideReasons[blockKey] || block.overrideReason || ""
                       const canApply = Boolean(replacementEmail) && replacementEmail !== block.effectiveScoutEmail
                       const isBusy = coverageActionLoadingKey === blockKey
@@ -951,6 +1130,28 @@ const ShiftGeneratorPage = () => {
           </CardContent>
         </Card>
       )}
+
+      <AlertDialog open={publishConfirmOpen} onOpenChange={setPublishConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Publish this schedule to scouts?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will replace the current published scouting schedule for the active event and notify scouts. Preview edits are not live until you confirm here.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={publishing}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault()
+                void publish().then(() => setPublishConfirmOpen(false))
+              }}
+            >
+              {publishing ? "Publishing…" : "Publish Schedule"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={pendingCoverageAction !== null} onOpenChange={(open) => !open && setPendingCoverageAction(null)}>
         <AlertDialogContent>

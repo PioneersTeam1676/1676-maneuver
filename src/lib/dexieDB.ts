@@ -2,7 +2,7 @@ import Dexie, { type Table } from 'dexie';
 import type { ScoutingDataWithId } from './scoutingDataUtils';
 import type { PitScoutingEntry } from './pitScoutingTypes';
 import { apiDelete, apiGet, apiPatch, apiPost } from './apiClient';
-import { readScoutingSeason, withScoutingSeasonBody, withScoutingSeasonParams } from '@/lib/scoutingSeason';
+import { withScoutingSeasonBody, withScoutingSeasonParams } from '@/lib/scoutingSeason';
 
 export interface Scout {
 	name: string;
@@ -337,10 +337,6 @@ export const syncCachedScoutingEntries = async (): Promise<void> => {
 		return;
 	}
 
-	if (readScoutingSeason()) {
-		return;
-	}
-
 	if (scoutingSyncPromise) {
 		await scoutingSyncPromise;
 		return;
@@ -369,10 +365,6 @@ let pitSyncPromise: Promise<void> | null = null;
 
 export const syncCachedPitScoutingEntries = async (): Promise<void> => {
 	if (typeof navigator !== 'undefined' && !navigator.onLine) {
-		return;
-	}
-
-	if (readScoutingSeason()) {
 		return;
 	}
 
@@ -499,12 +491,15 @@ export const saveScoutingEntry = async (entry: ScoutingDataWithId): Promise<void
 	const enhancedEntry = enhanceEntry(entry);
 	await db.scoutingData.put(enhancedEntry);
 
-	try {
-		await apiPost('/scouting', withScoutingSeasonBody({ entry: enhancedEntry }));
-		await db.scoutingData.update(enhancedEntry.id, { synced: true });
-	} catch (error) {
-		handleApiError('failed to persist scouting entry remotely', error);
-	}
+	// Sync to server in background — local save already guarantees data safety
+	void (async () => {
+		try {
+			await apiPost('/scouting', withScoutingSeasonBody({ entry: enhancedEntry }));
+			await db.scoutingData.update(enhancedEntry.id, { synced: true });
+		} catch (error) {
+			handleApiError('failed to persist scouting entry remotely', error);
+		}
+	})();
 };
 
 export const saveScoutingEntries = async (entries: ScoutingDataWithId[]): Promise<void> => {
@@ -520,29 +515,26 @@ export const saveScoutingEntries = async (entries: ScoutingDataWithId[]): Promis
 };
 
 export const loadAllScoutingEntries = async (): Promise<ScoutingEntryDB[]> => {
-	try {
-		const localEntries = await db.scoutingData.toArray();
-		const pendingEntries = localEntries.filter((entry) => entry.synced === false);
-		if (pendingEntries.length && !readScoutingSeason()) {
-			await apiPost('/scouting/bulk', withScoutingSeasonBody({ entries: pendingEntries.map(normalizeScoutingEntry) }));
-			await db.scoutingData.bulkPut(pendingEntries.map((entry) => ({ ...entry, synced: true })));
-		}
-	} catch (error) {
-		handleApiError('failed to push cached scouting entries to API', error);
-	}
+	await syncCachedScoutingEntries();
 
 	try {
 		const { entries } = await apiGet<{ entries: ScoutingEntryDB[] }>(
 			`/scouting${toQueryString(withScoutingSeasonParams({}))}`,
 		);
 		const normalized = entries.map(normalizeScoutingEntry);
+		const localEntries = await db.scoutingData.toArray();
+		const unsyncedLocal = localEntries.filter((entry) => entry.synced === false);
+		const serverIds = new Set(normalized.map((entry) => entry.id));
+		// Keep local-only entries when a refresh races with a failed background sync.
+		const localOnly = unsyncedLocal.filter((entry) => !serverIds.has(entry.id));
 
 		await db.scoutingData.clear();
-		if (normalized.length) {
-			await db.scoutingData.bulkPut(normalized);
+		const mergedEntries = [...normalized, ...localOnly];
+		if (mergedEntries.length) {
+			await db.scoutingData.bulkPut(mergedEntries);
 		}
 
-		return normalized;
+		return mergedEntries;
 	} catch (error) {
 		handleApiError('failed to load scouting entries from API', error);
 		return db.scoutingData.toArray();
@@ -616,9 +608,26 @@ export const loadScoutingEntriesByTeamAndEvent = async (
 	}
 };
 
-export const deleteScoutingEntry = async (id: string): Promise<void> => {
+type ScoutingDeleteTarget = Pick<ScoutingEntryDB, 'id' | 'eventName'> | string | number;
+
+const resolveDeleteTarget = (target: ScoutingDeleteTarget): { id: string; eventName?: string } => {
+	if (typeof target === 'string' || typeof target === 'number') {
+		return { id: String(target) };
+	}
+
+	return {
+		id: String(target.id),
+		eventName: target.eventName,
+	};
+};
+
+export const deleteScoutingEntry = async (target: ScoutingDeleteTarget): Promise<void> => {
+	const { id, eventName } = resolveDeleteTarget(target);
+
 	try {
-		await apiDelete(`/scouting/${encodeURIComponent(id)}${toQueryString(withScoutingSeasonParams({}))}`);
+		await apiDelete(
+			`/scouting/${encodeURIComponent(id)}${toQueryString(withScoutingSeasonParams({ eventName }))}`,
+		);
 		await db.scoutingData.delete(id);
 	} catch (error) {
 		handleApiError(`failed to delete scouting entry ${id}`, error);
@@ -626,10 +635,18 @@ export const deleteScoutingEntry = async (id: string): Promise<void> => {
 	}
 };
 
-export const deleteScoutingEntries = async (ids: string[]): Promise<void> => {
+export const deleteScoutingEntries = async (targets: ScoutingDeleteTarget[]): Promise<void> => {
+	const deleteTargets = targets.map(resolveDeleteTarget);
+	const ids = deleteTargets.map(({ id }) => id);
+
 	try {
-		const seasonQuery = toQueryString(withScoutingSeasonParams({}));
-		await Promise.all(ids.map((item) => apiDelete(`/scouting/${encodeURIComponent(item)}${seasonQuery}`)));
+		await Promise.all(
+			deleteTargets.map(({ id, eventName }) =>
+				apiDelete(
+					`/scouting/${encodeURIComponent(id)}${toQueryString(withScoutingSeasonParams({ eventName }))}`,
+				),
+			),
+		);
 		await db.scoutingData.bulkDelete(ids);
 	} catch (error) {
 		handleApiError('failed to delete scouting entries batch', error);

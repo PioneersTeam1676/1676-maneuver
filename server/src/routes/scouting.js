@@ -2,7 +2,6 @@ const express = require("express")
 const { getSeasonPrisma, resolveSeasonSelector } = require("../seasonDb")
 const asyncHandler = require("../utils/asyncHandler")
 const { parseJsonValue, stringifyJsonValue, toMsBigInt, fromBigInt } = require("../utils/dbUtils")
-const { updateMatchProgress } = require("../services/scheduleNotifications")
 const { detectOutliers } = require("../services/outlierDetection")
 const { prisma: mainPrisma } = require("../db")
 const { ensureEntryIdentitySchema, updateScoutingEntryEmail } = require("../utils/entryIdentity")
@@ -905,12 +904,6 @@ router.post(
       photoUrl: req.user?.picture,
     })
 
-    if (payload.eventName && payload.matchNumber) {
-      Promise.resolve(updateMatchProgress(payload.eventName, payload.matchNumber)).catch((error) => {
-        console.warn("Failed to update match progress", error)
-      })
-    }
-
     res.status(201).json({ success: true })
   })
 )
@@ -973,14 +966,6 @@ router.post(
       }
     }
 
-    normalizedEntries.forEach(({ normalized }) => {
-      if (normalized.eventName && normalized.matchNumber) {
-        Promise.resolve(updateMatchProgress(normalized.eventName, normalized.matchNumber)).catch((error) => {
-          console.warn("Failed to update match progress", error)
-        })
-      }
-    })
-
     res.status(201).json({ success: true, count: entries.length })
   })
 )
@@ -992,6 +977,7 @@ router.delete(
     const selector = resolveSeasonSelector({
       year: req.query.year,
       formId: req.query.formId,
+      eventName: req.query.eventName,
     })
     const { prisma } = await getSeasonPrisma(selector)
     const parsedId = Number(id)
