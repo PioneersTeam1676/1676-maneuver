@@ -1,6 +1,7 @@
 const { OAuth2Client } = require("google-auth-library")
 const { prisma } = require("../db")
 const { upsertRecentUser } = require("../utils/recentUserUtils")
+const { getAllowedEmailDomains } = require("../utils/authDomains")
 
 const normalizeToken = (value) => {
   if (!value) return null
@@ -21,19 +22,6 @@ const resolveAuthTokens = () => {
   if (single) tokens.add(single)
   parseTokenList(process.env.API_AUTH_TOKENS).forEach((token) => tokens.add(token))
   return tokens
-}
-
-const parseDomainList = (value) =>
-  String(value || "")
-    .split(",")
-    .map((domain) => domain.trim().toLowerCase())
-    .filter(Boolean)
-
-const resolveAllowedDomains = () => {
-  const domains = new Set()
-  parseDomainList(process.env.ALLOWED_EMAIL_DOMAIN).forEach((domain) => domains.add(domain))
-  parseDomainList(process.env.VITE_ALLOWED_EMAIL_DOMAIN).forEach((domain) => domains.add(domain))
-  return domains
 }
 
 const extractToken = (req) => {
@@ -66,7 +54,7 @@ const createApiAuthMiddleware = ({ skipDomainCheck = false } = {}) => {
   const tokens = resolveAuthTokens()
   const disableGoogleAuth = normalizeToken(process.env.DISABLE_GOOGLE_ID_AUTH)
   const googleClientId = normalizeToken(process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID)
-  const allowedDomains = resolveAllowedDomains()
+  const allowedDomains = new Set(getAllowedEmailDomains())
   const googleClient = !disableGoogleAuth && googleClientId ? new OAuth2Client(googleClientId) : null
   const requireAuth = tokens.size > 0 || Boolean(googleClient)
 
@@ -76,12 +64,6 @@ const createApiAuthMiddleware = ({ skipDomainCheck = false } = {}) => {
 
   return async (req, res, next) => {
     if (req.method === "OPTIONS") {
-      return next()
-    }
-
-    // Self-registration writes (PUT to recent-users) are always allowed —
-    // no token needed so non-domain users can record their sign-in.
-    if (skipDomainCheck && req.method === "PUT") {
       return next()
     }
 
@@ -103,10 +85,19 @@ const createApiAuthMiddleware = ({ skipDomainCheck = false } = {}) => {
         if (payload?.email_verified === false) {
           return res.status(403).json({ error: "Email not verified" })
         }
+        const explicitRole = await prisma.role.findUnique({
+          where: { email },
+          select: { role: true },
+        })
+        if (explicitRole?.role === "blocked") {
+          return res.status(403).json({ error: "Forbidden" })
+        }
         if (!skipDomainCheck && allowedDomains.size) {
           const domain = email.split("@")[1] || ""
           if (!domain || !allowedDomains.has(domain)) {
-            return res.status(403).json({ error: "Forbidden" })
+            if (!explicitRole || explicitRole.role === "pending") {
+              return res.status(403).json({ error: "Forbidden" })
+            }
           }
         }
         req.user = {
@@ -120,7 +111,7 @@ const createApiAuthMiddleware = ({ skipDomainCheck = false } = {}) => {
             lastSeenAt: new Date().toISOString(),
             displayName: payload?.name ? String(payload.name) : undefined,
             photoUrl: payload?.picture ? String(payload.picture) : undefined,
-            acknowledged: skipDomainCheck ? undefined : true,
+            acknowledged: skipDomainCheck ? undefined : (explicitRole?.role && explicitRole.role !== "pending" ? true : undefined),
           })
         } catch (error) {
           console.warn("Failed to auto-upsert recent user from authenticated request", error?.message || error)
