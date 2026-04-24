@@ -8,7 +8,7 @@ type User = {
   sub: string // Google subject (user id)
 }
 
-export type UserRole = 'pending' | 'pit_scout' | 'drive_team' | 'scout_minus' | 'scout' | 'scout_plus' | 'lead' | 'tech_lead'
+export type UserRole = 'blocked' | 'pending' | 'pit_scout' | 'drive_team' | 'scout_minus' | 'scout' | 'scout_plus' | 'lead' | 'tech_lead'
 
 type RoleAssignments = Record<string, UserRole>
 
@@ -106,6 +106,18 @@ const PRIMARY_ALLIANCE_DOMAIN = ALLOWED_EMAIL_DOMAINS[0] || ''
 const emailMatchesAllowedDomain = (email: string) =>
   ALLOWED_EMAIL_DOMAINS.some((domain) => email.endsWith(`@${domain}`))
 
+const isAutoApprovedEmail = (email: string) => {
+  const normalized = normalizeEmail(email)
+  return ADMIN_EMAILS.includes(normalized) || ULTRA_ADMIN_EMAILS.includes(normalized)
+}
+
+const resolveDefaultRole = (email: string): UserRole => {
+  const normalized = normalizeEmail(email)
+  if (ULTRA_ADMIN_EMAILS.includes(normalized)) return 'tech_lead'
+  if (ADMIN_EMAILS.includes(normalized)) return 'lead'
+  return 'pending'
+}
+
 const DEFAULT_ADMIN_EMAILS: string[] = []
 
 const collectEmails = (...sources: Array<string | undefined>) =>
@@ -133,7 +145,7 @@ const ULTRA_ADMIN_EMAILS: string[] = collectEmails(
   import.meta.env.VITE_GOOGLE_ADMIN_EMAIL as string | undefined
 )
 
-const VALID_ROLES: UserRole[] = ['pending', 'pit_scout', 'drive_team', 'scout_minus', 'scout', 'scout_plus', 'lead', 'tech_lead']
+const VALID_ROLES: UserRole[] = ['blocked', 'pending', 'pit_scout', 'drive_team', 'scout_minus', 'scout', 'scout_plus', 'lead', 'tech_lead']
 const RESCOUTER_DEFAULT_ROLES: UserRole[] = ['scout_plus', 'lead', 'tech_lead']
 
 const isUserRole = (value: unknown): value is UserRole => VALID_ROLES.includes(value as UserRole)
@@ -294,6 +306,7 @@ const generateOpaqueString = () => {
 }
 
 const roleRank: Record<UserRole, number> = {
+  blocked: 0,
   pending: 0,
   pit_scout: 1,
   drive_team: 1,
@@ -353,6 +366,7 @@ const DEFAULT_ROUTE_BY_ROLE: Record<UserRole, string> = {
   scout_minus: '/',
   pit_scout: '/pit-scouting',
   drive_team: '/drive-scouting',
+  blocked: '/alliance-onboarding',
   pending: '/alliance-onboarding',
 }
 
@@ -385,7 +399,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const raw = localStorage.getItem(ROLE_STORAGE_KEY)
       if (!raw) return {}
       const parsed = JSON.parse(raw) as RoleAssignments
-      const validRoles = new Set<UserRole>(['pending', 'pit_scout', 'drive_team', 'scout_minus', 'scout', 'scout_plus', 'lead', 'tech_lead'])
+      const validRoles = new Set<UserRole>(VALID_ROLES)
       const normalizedAssignments = Object.entries(parsed).reduce<RoleAssignments>((acc, [email, role]) => {
         // Only keep valid roles
         if (validRoles.has(role)) {
@@ -509,7 +523,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(`${OAUTH_STATE_PREFIX}${stateValue}`, JSON.stringify(payload))
   }, [])
 
-  const ensureAdminPresence = useCallback((assignments: RoleAssignments, candidateEmail?: string): RoleAssignments => {
+  const ensureAdminPresence = useCallback((assignments: RoleAssignments): RoleAssignments => {
     const next = { ...assignments }
 
     // Ensure ultra admins always have tech_lead role
@@ -526,17 +540,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     })
 
-    const hasAdmin = Object.values(next).some((roleValue) => roleValue === 'lead' || roleValue === 'tech_lead')
-    if (!hasAdmin) {
-      if (candidateEmail) {
-        next[candidateEmail] = 'lead'
-      } else if (user) {
-        next[normalizeEmail(user.email)] = 'lead'
-      }
-    }
-
     return next
-  }, [user])
+  }, [])
 
   const clearStoredAuthSession = useCallback(() => {
     if (typeof window !== 'undefined') {
@@ -633,6 +638,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return started
   }, [startGoogleAuth])
 
+  const syncRecentUserRecord = useCallback(async (record: RecentUserRecord) => {
+    try {
+      await apiPut(`/recent-users/${encodeURIComponent(record.email)}`, {
+        email: record.email,
+        firstSeenAt: record.firstSeenAt,
+        lastSeenAt: record.lastSeenAt,
+        acknowledged: Boolean(record.acknowledged),
+        displayName: record.displayName || undefined,
+        photoUrl: record.photoUrl || undefined,
+      })
+    } catch (error) {
+      console.error("Failed to sync recent user record", error)
+    }
+  }, [])
+
+  const upsertRecentUser = useCallback(
+    (payload: { email: string; name?: string | null; picture?: string | null; acknowledged?: boolean }) => {
+      const normalizedEmail = normalizeEmail(payload.email)
+      if (!normalizedEmail) return
+
+      let syncedRecord: RecentUserRecord | null = null
+
+      setRecentUsers((prev) => {
+        const next = upsertRecentUserRecord(prev, {
+          email: normalizedEmail,
+          name: payload.name,
+          picture: payload.picture,
+          acknowledged: payload.acknowledged,
+        })
+        syncedRecord = next.find((record) => record.email === normalizedEmail) ?? null
+        return next
+      })
+
+      if (syncedRecord) {
+        void syncRecentUserRecord(syncedRecord)
+      }
+    },
+    [syncRecentUserRecord]
+  )
+
   useEffect(() => {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
     if (!clientId) {
@@ -671,7 +716,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           email: normalized,
           name: parsed.name,
           picture: parsed.picture,
-          acknowledged: true,
+          acknowledged: isAutoApprovedEmail(normalized),
         })
 
         // Covers the "returning user" path where processOAuthResponse is never called.
@@ -681,39 +726,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         })
 
         setRoleAssignments((prev) => {
-          const next = { ...prev }
-          let changed = false
-
-          const assignRole = (email: string, role: UserRole) => {
-            if (!email) return
-            const key = normalizeEmail(email)
-            if (next[key] !== role) {
-              next[key] = role
-              changed = true
-            }
-          }
-
-          ADMIN_EMAILS.forEach((adminEmail) => assignRole(adminEmail, 'lead'))
-
-          const existingRole = next[normalized]
-          const isConfiguredAdmin = ADMIN_EMAILS.includes(normalized)
-
-          if (!existingRole) {
-            assignRole(normalized, isConfiguredAdmin ? 'lead' : 'scout')
-          } else if (isConfiguredAdmin && existingRole !== 'lead') {
-            next[normalized] = 'lead'
-            changed = true
-          } else if (existingRole === 'pending') {
-            next[normalized] = 'scout'
-            changed = true
-          }
-
-          const hasAdmin = Object.values(next).some((roleValue) => roleValue === 'lead' || roleValue === 'tech_lead')
-          if (!hasAdmin) {
-            assignRole(normalized, 'lead')
-          }
-
-          return changed ? next : prev
+          const next = ensureAdminPresence(prev)
+          return areRoleAssignmentsEqual(prev, next) ? prev : next
         })
       } catch (error) {
         console.warn('Failed to restore saved user', error)
@@ -722,11 +736,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     setReady(true)
-  }, [attemptSilentReauth, cleanupExpiredOAuthState, clearStoredAuthSession])
+  }, [attemptSilentReauth, cleanupExpiredOAuthState, clearStoredAuthSession, ensureAdminPresence, upsertRecentUser])
 
   useEffect(() => {
     // Clean up any invalid roles from localStorage on mount
-    const validRoles = new Set<UserRole>(['pending', 'pit_scout', 'drive_team', 'scout', 'lead', 'tech_lead'])
+    const validRoles = new Set<UserRole>(VALID_ROLES)
     setRoleAssignments((prev) => {
       const cleaned = Object.entries(prev).reduce<RoleAssignments>((acc, [email, role]) => {
         if (validRoles.has(role)) {
@@ -778,6 +792,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return areRoleAssignmentsEqual(prev, next) ? prev : next
       })
     } catch (error) {
+      const status = typeof error === 'object' && error && 'status' in error ? (error as { status?: number }).status : undefined
+      if ((status === 401 || status === 403) && user?.email) {
+        try {
+          const response = await apiPost<{ email: string; role: UserRole }>('/recent-users/self-register-role', {})
+          const normalizedEmail = normalizeEmail(response.email || user.email)
+          const nextRole = isUserRole(response.role) ? response.role : resolveDefaultRole(normalizedEmail)
+
+          setRoleAssignments((prev) => {
+            const next: RoleAssignments = {
+              ...prev,
+              [normalizedEmail]: nextRole,
+            }
+            return areRoleAssignmentsEqual(prev, next) ? prev : next
+          })
+          return
+        } catch (fallbackError) {
+          console.error('Failed to fetch current user role from fallback endpoint', fallbackError)
+        }
+      }
       console.error('Failed to fetch role assignments from API', error)
       throw error
     }
@@ -834,20 +867,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw error
     }
   }, [])
-  const syncRecentUserRecord = useCallback(async (record: RecentUserRecord) => {
-    try {
-      await apiPut(`/recent-users/${encodeURIComponent(record.email)}`, {
-        email: record.email,
-        firstSeenAt: record.firstSeenAt,
-        lastSeenAt: record.lastSeenAt,
-        acknowledged: Boolean(record.acknowledged),
-        displayName: record.displayName || undefined,
-        photoUrl: record.photoUrl || undefined,
-      })
-    } catch (error) {
-      console.error("Failed to sync recent user record", error)
-    }
-  }, [])
 
   useEffect(() => {
     if (!ready) return
@@ -881,38 +900,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [ready, user, fetchRoleAssignmentsFromApi, fetchRescouterPermissions])
 
-  const upsertRecentUser = useCallback(
-    (payload: { email: string; name?: string | null; picture?: string | null; acknowledged?: boolean }) => {
-      const normalizedEmail = normalizeEmail(payload.email)
-      if (!normalizedEmail) return
-
-      let syncedRecord: RecentUserRecord | null = null
-
-      setRecentUsers((prev) => {
-        const next = upsertRecentUserRecord(prev, {
-          email: normalizedEmail,
-          name: payload.name,
-          picture: payload.picture,
-          acknowledged: payload.acknowledged,
-        })
-        syncedRecord = next.find((record) => record.email === normalizedEmail) ?? null
-        return next
-      })
-
-      if (syncedRecord) {
-        void syncRecentUserRecord(syncedRecord)
-      }
-    },
-    [syncRecentUserRecord]
-  )
-
   useEffect(() => {
     if (!ready || !user?.email) return
     upsertRecentUser({
       email: user.email,
       name: user.name,
       picture: user.picture,
-      acknowledged: true,
+      acknowledged: isAutoApprovedEmail(user.email),
     })
   }, [ready, user, upsertRecentUser])
 
@@ -977,7 +971,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const normalizedEmail = normalizeEmail(payload.email)
       const resolvedName = payload.name?.trim() || payload.email
-      const isConfiguredAdmin = ADMIN_EMAILS.includes(normalizedEmail)
       const existingProfile = allianceProfiles[normalizedEmail]
 
       const nextUser: User = {
@@ -996,26 +989,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email: normalizedEmail,
         name: resolvedName,
         picture: payload.picture,
-        acknowledged: true,
+        acknowledged: isAutoApprovedEmail(normalizedEmail),
       })
 
       setRoleAssignments((prev) => {
-        const next = { ...prev }
-        const existingRole = next[normalizedEmail]
-
-        if (existingRole) {
-          if (isConfiguredAdmin && existingRole !== 'lead') {
-            next[normalizedEmail] = 'lead'
-          } else if (existingRole === 'pending') {
-            next[normalizedEmail] = 'scout'
-          }
-        } else if (isConfiguredAdmin) {
-          next[normalizedEmail] = 'lead'
-        } else {
-          next[normalizedEmail] = 'scout'
-        }
-
-        return ensureAdminPresence(next, normalizedEmail)
+        const next = ensureAdminPresence(prev)
+        return areRoleAssignmentsEqual(prev, next) ? prev : next
       })
 
       if (existingProfile) {
@@ -1060,7 +1039,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         mode: storedState.mode || 'interactive',
       }
     }
-  }, [allianceProfiles, consumeOAuthState, ensureAdminPresence, fetchRoleAssignmentsFromApi, setAllianceProfiles, setRecentUsers, setRoleAssignments])
+  }, [allianceProfiles, consumeOAuthState, ensureAdminPresence, fetchRoleAssignmentsFromApi, setAllianceProfiles, setRoleAssignments, upsertRecentUser])
 
   useEffect(() => {
     const handleOAuthMessage = (event: MessageEvent) => {
@@ -1306,7 +1285,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         next[normalized] = role
       }
-      const ensured = ensureAdminPresence(next, normalized)
+      const ensured = ensureAdminPresence(next)
       return ensured
     })
     upsertRecentUser({
@@ -1352,6 +1331,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       return ensureAdminPresence(next)
     })
+    setRecentUsers((prev) =>
+      prev.map((record) =>
+        record.email === normalized
+          ? {
+              ...record,
+              acknowledged: false,
+            }
+          : record
+      )
+    )
     void (async () => {
       try {
         await apiDelete(`/roles/${encodeURIComponent(normalized)}`)
@@ -1437,15 +1426,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return 'scout_minus'
     }
 
+    if (assigned === 'blocked') {
+      return 'blocked'
+    }
+
     if (assigned === 'pending') {
-      return ADMIN_EMAILS.includes(normalized) ? 'lead' : 'scout'
+      return 'pending'
     }
 
-    if (ADMIN_EMAILS.includes(normalized)) {
-      return 'lead'
-    }
-
-    return 'scout'
+    return resolveDefaultRole(normalized)
   }, [roleAssignments, user])
 
   const canAccessPath = useCallback((path: string) => {
