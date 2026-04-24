@@ -21,20 +21,22 @@ const AllianceOnboardingPage = () => {
 
   // Redirect once approved
   useEffect(() => {
+    let cancelled = false
     if (role !== "pending" && role !== "blocked") {
       if (prevRoleRef.current === "pending" || prevRoleRef.current === "blocked") {
         toast.success("You've been approved! Welcome to the scouting app.")
         syncEventSettings()
           .catch(() => {})
           .finally(() => {
-            navigate(defaultRoute, { replace: true })
+            if (!cancelled) navigate(defaultRoute, { replace: true })
           })
       } else {
         navigate(defaultRoute, { replace: true })
       }
     }
     prevRoleRef.current = role
-  }, [role, defaultRoute, navigate])
+    return () => { cancelled = true }
+  }, [role, defaultRoute, navigate, syncEventSettings])
 
   // On mount: explicitly record this login in the DB so admins see the request
   useEffect(() => {
