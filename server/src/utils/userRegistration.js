@@ -11,7 +11,7 @@ const ensureScoutRegistration = async ({ email, displayName, photoUrl }) => {
     select: { role: true },
   })
 
-  let role = existingRole?.role || "scout"
+  let role = existingRole?.role || "pending"
   let changedRole = false
 
   if (!existingRole) {
@@ -19,26 +19,16 @@ const ensureScoutRegistration = async ({ email, displayName, photoUrl }) => {
     await prisma.role.create({
       data: {
         email: normalizedEmail,
-        role: "scout",
+        role: "pending",
         createdAt: timestamp,
         updatedAt: timestamp,
       },
     })
-    role = "scout"
-    changedRole = true
-  } else if (existingRole.role === "pending") {
-    await prisma.role.update({
-      where: { email: normalizedEmail },
-      data: {
-        role: "scout",
-        updatedAt: nowSeconds(),
-      },
-    })
-    role = "scout"
+    role = "pending"
     changedRole = true
   }
 
-  if (changedRole && role !== "pending") {
+  if (changedRole && role !== "pending" && role !== "blocked") {
     await prisma.verifiedUser.create({
       data: {
         email: normalizedEmail,
@@ -51,7 +41,7 @@ const ensureScoutRegistration = async ({ email, displayName, photoUrl }) => {
   await upsertRecentUser(prisma, {
     email: normalizedEmail,
     lastSeenAt: new Date().toISOString(),
-    acknowledged: true,
+    acknowledged: role !== "pending",
     displayName,
     photoUrl,
   })
