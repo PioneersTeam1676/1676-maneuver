@@ -110,7 +110,12 @@ router.get(
 router.put(
   "/settings",
   asyncHandler(async (req, res) => {
-    const requesterRole = await getRequesterRole(req.user?.email)
+    // Static API token requests do not carry user identity — Google auth required here
+    if (!req.user?.email) {
+      return res.status(403).json({ error: "Google authentication required" })
+    }
+
+    const requesterRole = await getRequesterRole(req.user.email)
     if (!LEAD_ROLES.has(requesterRole)) {
       return res.status(403).json({ error: "Lead access required" })
     }
