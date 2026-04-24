@@ -195,7 +195,7 @@ const registerRoutes = (prefix = "") => {
   app.use(resolvePath("/scouting"), apiAuthMiddleware, scoutingRouter)
   app.use(resolvePath("/pit"), apiAuthMiddleware, pitRouter)
   app.use(resolvePath("/game"), apiAuthMiddleware, gameRouter)
-  app.use(resolvePath("/events"), apiAuthMiddleware, eventsRouter)
+  app.use(resolvePath("/events"), openGoogleAuthMiddleware, eventsRouter)
   app.use(resolvePath("/recent-users"), openGoogleAuthMiddleware, recentUsersRouter)
   app.use(resolvePath("/verified-users"), apiAuthMiddleware, verifiedUsersRouter)
   app.use(resolvePath("/schedule"), apiAuthMiddleware, scheduleRouter)

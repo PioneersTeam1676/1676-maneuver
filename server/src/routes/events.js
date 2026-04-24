@@ -1,8 +1,20 @@
 const express = require("express")
 const router = express.Router()
+const { prisma } = require("../db")
 const { getSeasonPrisma, resolveSeasonSelector } = require("../seasonDb")
 const asyncHandler = require("../utils/asyncHandler")
 const { nowSeconds } = require("../utils/dbUtils")
+
+const LEAD_ROLES = new Set(["lead", "tech_lead"])
+
+const getRequesterRole = async (email) => {
+  if (!email) return null
+  const row = await prisma.role.findUnique({
+    where: { email: String(email).trim().toLowerCase() },
+    select: { role: true },
+  })
+  return row?.role || null
+}
 
 const normalizeString = (value) => (typeof value === "string" ? value.trim() : "")
 
@@ -98,6 +110,11 @@ router.get(
 router.put(
   "/settings",
   asyncHandler(async (req, res) => {
+    const requesterRole = await getRequesterRole(req.user?.email)
+    if (!LEAD_ROLES.has(requesterRole)) {
+      return res.status(403).json({ error: "Lead access required" })
+    }
+
     const { currentEvent, events, eventDisplayNames } = req.body || {}
 
     if (events !== undefined && !Array.isArray(events)) {
