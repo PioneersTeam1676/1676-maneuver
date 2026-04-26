@@ -827,11 +827,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           })
           return
         } catch (fallbackError) {
+          const fallbackStatus = typeof fallbackError === 'object' && fallbackError && 'status' in fallbackError
+            ? (fallbackError as { status?: number }).status
+            : undefined
+
           setRoleAssignments((prev) => {
             const withoutStaleRole = removeCachedRoleForUser(prev, normalizedCurrentEmail)
+            const inferredRole = fallbackStatus === 403 ? 'blocked' : resolveDefaultRole(normalizedCurrentEmail)
             const next = ensureAdminPresence({
               ...withoutStaleRole,
-              [normalizedCurrentEmail]: resolveDefaultRole(normalizedCurrentEmail),
+              [normalizedCurrentEmail]: inferredRole,
             })
             return areRoleAssignmentsEqual(prev, next) ? prev : next
           })
@@ -1307,25 +1312,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
       const next = { ...prev }
-      if (role === 'pending') {
-        delete next[normalized]
-      } else {
-        next[normalized] = role
-      }
+      next[normalized] = role
       const ensured = ensureAdminPresence(next)
       return ensured
     })
     upsertRecentUser({
       email: normalized,
-      acknowledged: true,
+      acknowledged: role !== 'pending',
     })
     void (async () => {
       try {
-        if (role === 'pending') {
-          await apiDelete(`/roles/${encodeURIComponent(normalized)}`)
-        } else {
-          await apiPut(`/roles/${encodeURIComponent(normalized)}`, { role })
-        }
+        await apiPut(`/roles/${encodeURIComponent(normalized)}`, { role })
         await fetchRoleAssignmentsFromApi()
       } catch (error) {
         console.error('Failed to update role on API', error)
