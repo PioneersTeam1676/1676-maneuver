@@ -108,7 +108,7 @@ const emailMatchesAllowedDomain = (email: string) =>
 
 const isAutoApprovedEmail = (email: string) => {
   const normalized = normalizeEmail(email)
-  return ADMIN_EMAILS.includes(normalized) || ULTRA_ADMIN_EMAILS.includes(normalized)
+  return emailMatchesAllowedDomain(normalized) || ADMIN_EMAILS.includes(normalized) || ULTRA_ADMIN_EMAILS.includes(normalized)
 }
 
 const resolveDefaultRole = (email: string): UserRole => {
@@ -160,6 +160,19 @@ const areRoleAssignmentsEqual = (a: RoleAssignments, b: RoleAssignments): boolea
     }
   }
   return true
+}
+
+const removeCachedRoleForUser = (assignments: RoleAssignments, email: string): RoleAssignments => {
+  const normalized = normalizeEmail(email)
+  if (!normalized || ULTRA_ADMIN_EMAILS.includes(normalized) || ADMIN_EMAILS.includes(normalized)) {
+    return assignments
+  }
+  if (!(normalized in assignments)) {
+    return assignments
+  }
+  const next = { ...assignments }
+  delete next[normalized]
+  return next
 }
 
 const SCOUT_POSITIONS = ['red-1', 'red-2', 'red-3', 'blue-1', 'blue-2', 'blue-3'] as const
@@ -712,6 +725,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return parsed
         })
 
+        setRoleAssignments((prev) => {
+          const next = ensureAdminPresence(removeCachedRoleForUser(prev, normalized))
+          return areRoleAssignmentsEqual(prev, next) ? prev : next
+        })
+
         upsertRecentUser({
           email: normalized,
           name: parsed.name,
@@ -794,6 +812,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       const status = typeof error === 'object' && error && 'status' in error ? (error as { status?: number }).status : undefined
       if ((status === 401 || status === 403) && user?.email) {
+        const normalizedCurrentEmail = normalizeEmail(user.email)
+        setRoleAssignments((prev) => {
+          const withoutStaleRole = removeCachedRoleForUser(prev, normalizedCurrentEmail)
+          const next = ensureAdminPresence({
+            ...withoutStaleRole,
+            [normalizedCurrentEmail]: resolveDefaultRole(normalizedCurrentEmail),
+          })
+          return areRoleAssignmentsEqual(prev, next) ? prev : next
+        })
+
         try {
           const response = await apiPost<{ email: string; role: UserRole }>('/recent-users/self-register-role', {})
           const normalizedEmail = normalizeEmail(response.email || user.email)
@@ -985,16 +1013,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem('auth_user', JSON.stringify(nextUser))
       localStorage.setItem(AUTH_ID_TOKEN_KEY, idToken)
 
+      setRoleAssignments((prev) => {
+        const next = ensureAdminPresence(removeCachedRoleForUser(prev, normalizedEmail))
+        return areRoleAssignmentsEqual(prev, next) ? prev : next
+      })
+
       upsertRecentUser({
         email: normalizedEmail,
         name: resolvedName,
         picture: payload.picture,
         acknowledged: isAutoApprovedEmail(normalizedEmail),
-      })
-
-      setRoleAssignments((prev) => {
-        const next = ensureAdminPresence(prev)
-        return areRoleAssignmentsEqual(prev, next) ? prev : next
       })
 
       if (existingProfile) {

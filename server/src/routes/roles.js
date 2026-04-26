@@ -10,6 +10,45 @@ const { ensureScoutRegistration } = require("../utils/userRegistration")
 const router = express.Router()
 
 const validRoles = new Set(["blocked", "pending", "pit_scout", "drive_team", "scout_minus", "scout", "scout_plus", "lead", "tech_lead"])
+const roleRank = {
+  blocked: 0,
+  pending: 0,
+  pit_scout: 1,
+  drive_team: 1,
+  scout_minus: 2,
+  scout: 2,
+  scout_plus: 2,
+  lead: 3,
+  tech_lead: 4,
+}
+const elevatedRoles = new Set(["lead", "tech_lead"])
+
+const getRequesterRole = async (email) => {
+  const normalizedEmail = sanitizeString(email).toLowerCase()
+  if (!normalizedEmail) return null
+  const row = await prisma.role.findUnique({
+    where: { email: normalizedEmail },
+    select: { role: true },
+  })
+  return row?.role || null
+}
+
+const requireRoleAtLeast = async (req, res, minimumRole) => {
+  const requesterEmail = sanitizeString(req.user?.email).toLowerCase()
+  if (!requesterEmail) {
+    res.status(401).json({ error: "Not authenticated" })
+    return null
+  }
+
+  const requesterRole = await getRequesterRole(requesterEmail)
+  if ((roleRank[requesterRole] ?? 0) < roleRank[minimumRole]) {
+    const label = minimumRole === "tech_lead" ? "Tech lead access required" : "Lead access required"
+    res.status(403).json({ error: label })
+    return null
+  }
+
+  return { email: requesterEmail, role: requesterRole }
+}
 
 const normalizeName = (value) =>
   sanitizeString(value)
@@ -47,7 +86,11 @@ const matchScoutNameFromEmail = (email, scoutNames) => {
 
 router.get(
   "/",
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    if (!(await requireRoleAtLeast(req, res, "lead"))) {
+      return
+    }
+
     const rows = await prisma.role.findMany({
       select: { email: true, role: true }
     })
@@ -63,7 +106,13 @@ router.get(
   "/:email",
   asyncHandler(async (req, res) => {
     const { email } = req.params
-    const row = await prisma.role.findUnique({ where: { email: email.toLowerCase() } })
+    const normalizedEmail = email.trim().toLowerCase()
+    const requesterEmail = sanitizeString(req.user?.email).toLowerCase()
+    if (requesterEmail !== normalizedEmail && !(await requireRoleAtLeast(req, res, "lead"))) {
+      return
+    }
+
+    const row = await prisma.role.findUnique({ where: { email: normalizedEmail } })
     if (!row) {
       return res.status(404).json({ error: "Role not found" })
     }
@@ -77,8 +126,6 @@ router.put(
     const { email } = req.params
     const { role } = req.body
 
-    console.log(`PUT /roles/${email}`, { body: req.body, role, validRoles: Array.from(validRoles) })
-
     if (!role) {
       return res.status(400).json({ error: "Role is required", received: req.body })
     }
@@ -91,7 +138,20 @@ router.put(
       })
     }
 
+    const requester = await requireRoleAtLeast(req, res, elevatedRoles.has(role) ? "tech_lead" : "lead")
+    if (!requester) {
+      return
+    }
+
     const normalizedEmail = email.trim().toLowerCase()
+    const existingTarget = await prisma.role.findUnique({
+      where: { email: normalizedEmail },
+      select: { role: true },
+    })
+    if (elevatedRoles.has(existingTarget?.role) && requester.role !== "tech_lead") {
+      return res.status(403).json({ error: "Tech lead access required" })
+    }
+
     const timestamp = nowSeconds()
 
     await prisma.role.upsert({
@@ -139,17 +199,47 @@ router.put(
 router.delete(
   "/:email",
   asyncHandler(async (req, res) => {
+    if (!(await requireRoleAtLeast(req, res, "lead"))) {
+      return
+    }
+
     const { email } = req.params
     const normalizedEmail = email.trim().toLowerCase()
-    const [info] = await prisma.$transaction([
+    const existingTarget = await prisma.role.findUnique({
+      where: { email: normalizedEmail },
+      select: { role: true },
+    })
+    if (elevatedRoles.has(existingTarget?.role)) {
+      const requester = await getRequesterRole(req.user?.email)
+      if (requester !== "tech_lead") {
+        return res.status(403).json({ error: "Tech lead access required" })
+      }
+    }
+
+    const [
+      roleDelete,
+      verifiedUserDelete,
+      recentUserDelete,
+      rescouterPermissionDelete,
+      pushSubscriptionDelete,
+    ] = await prisma.$transaction([
       prisma.role.deleteMany({ where: { email: normalizedEmail } }),
       prisma.verifiedUser.deleteMany({ where: { email: normalizedEmail } }),
-      prisma.recentUser.updateMany({
-        where: { email: normalizedEmail },
-        data: { acknowledged: false },
-      }),
+      prisma.recentUser.deleteMany({ where: { email: normalizedEmail } }),
+      prisma.rescouterPermission.deleteMany({ where: { email: normalizedEmail } }),
+      prisma.pushSubscription.deleteMany({ where: { email: normalizedEmail } }),
     ])
-    res.json({ success: info.count > 0 })
+    res.json({
+      success: roleDelete.count > 0 || recentUserDelete.count > 0,
+      email: normalizedEmail,
+      deleted: {
+        roles: roleDelete.count,
+        verifiedUsers: verifiedUserDelete.count,
+        recentUsers: recentUserDelete.count,
+        rescouterPermissions: rescouterPermissionDelete.count,
+        pushSubscriptions: pushSubscriptionDelete.count,
+      },
+    })
   })
 )
 
@@ -183,6 +273,10 @@ router.post(
 router.post(
   "/sync-from-entries",
   asyncHandler(async (req, res) => {
+    if (!(await requireRoleAtLeast(req, res, "lead"))) {
+      return
+    }
+
     const selector = resolveSeasonSelector({
       year: req.body?.year || req.query?.year,
       formId: req.body?.formId || req.query?.formId,

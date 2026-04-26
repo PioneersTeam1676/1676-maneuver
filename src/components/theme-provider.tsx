@@ -22,7 +22,6 @@ const ThemeProviderContext = createContext<ThemeProviderState>(initialState)
 
 export function ThemeProvider({
     children,
-    defaultTheme = "dark",
     storageKey = "vite-ui-theme",
     ...props
 }: ThemeProviderProps) {
@@ -43,7 +42,7 @@ export function ThemeProvider({
 
     const value = {
         theme: "dark" as Theme,
-        setTheme: (_theme: Theme) => {
+        setTheme: () => {
         localStorage.setItem(storageKey, "dark")
         setThemeState("dark")
         },

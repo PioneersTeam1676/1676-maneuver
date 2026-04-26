@@ -62,6 +62,12 @@ const formatTimestamp = (isoString?: string) => {
   return parsed.toLocaleString()
 }
 
+const matchesAllowedDomain = (email: string, domains: string[]) => {
+  if (!email) return false
+  const normalized = email.trim().toLowerCase()
+  return domains.some((domain) => domain && normalized.endsWith(`@${domain}`))
+}
+
 export default function AdminPanelPage() {
   const {
     user,
@@ -121,7 +127,9 @@ export default function AdminPanelPage() {
   )
 
   // Only show unacknowledged pending sign-ins
-  const pendingSignIns = recentUsersWithRoles.filter((r) => r.assignedRole === "pending" && !r.acknowledged)
+  const pendingSignIns = recentUsersWithRoles.filter(
+    (r) => r.assignedRole === "pending" && !r.acknowledged && !matchesAllowedDomain(r.email, allowedAllianceDomains)
+  )
 
   const allianceRequests = useMemo(
     () =>

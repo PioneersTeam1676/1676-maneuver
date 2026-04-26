@@ -8,13 +8,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { VerificationStatus } from "@/components/ui/verification-status"
 
 const matchesAllowedDomain = (email: string, domains: string[]) => {
@@ -35,13 +28,10 @@ const roleLabels: Record<UserRole, string> = {
   tech_lead: "Technical Lead",
 }
 
-type ApproveRole = Exclude<UserRole, "pending"> | "pending"
-
 export default function VerificationCenterPage() {
   const {
     user,
     isLead,
-    isAdmin,
     recentUsers,
     roleAssignments,
     allowedAllianceDomains,
@@ -52,7 +42,6 @@ export default function VerificationCenterPage() {
     refreshRoles,
   } = useAuth()
   const navigate = useNavigate()
-  const [roleSelections, setRoleSelections] = useState<Record<string, ApproveRole>>({})
   const [refreshing, setRefreshing] = useState(false)
 
   useEffect(() => {
@@ -188,30 +177,10 @@ export default function VerificationCenterPage() {
     )
   }
 
-  const handleRoleSelection = (email: string, role: ApproveRole) => {
-    setRoleSelections((prev) => ({
-      ...prev,
-      [email]: role,
-    }))
-  }
-
   const handleApprove = (email: string) => {
-    const selectedRole = roleSelections[email] ?? "scout"
-
-    if (selectedRole === "pending") {
-      acknowledgeRecentUser(email)
-      toast.success(`Marked ${email} as reviewed.`)
-      return
-    }
-
-    if (!isAdmin && selectedRole !== "scout") {
-      toast.error("Only admins can assign lead or admin roles.")
-      return
-    }
-
-    setRole(email, selectedRole as Exclude<UserRole, "pending">)
+    setRole(email, "scout")
     acknowledgeRecentUser(email)
-    toast.success(`Granted ${roleLabels[selectedRole as UserRole]} access to ${email}`)
+    toast.success(`Granted Scout access to ${email}`)
   }
 
   const handleDismiss = (email: string) => {
@@ -260,7 +229,6 @@ export default function VerificationCenterPage() {
           ) : (
             <div className="space-y-3">
               {pendingRecords.map((record) => {
-                const roleValue = roleSelections[record.email] ?? "scout"
                 const assignedRole = record.assignedRole
                 const initials = (record.displayName?.split(' ').map((part: string) => part[0]) ?? []).join('').slice(0, 2) || record.email[0]?.toUpperCase() || "?"
                 return (
@@ -285,21 +253,7 @@ export default function VerificationCenterPage() {
                     </div>
                     
                     <div className="flex items-center gap-2">
-                      {isAdmin ? (
-                        <Select value={roleValue} onValueChange={(val) => handleRoleSelection(record.email, val as ApproveRole)}>
-                          <SelectTrigger className="w-[130px]">
-                            <SelectValue placeholder="Choose role" />
-                          </SelectTrigger>
-                          <SelectContent>
-                          <SelectItem value="pit_scout">Pit Scout</SelectItem>
-                          <SelectItem value="drive_team">Drive Team</SelectItem>
-                          <SelectItem value="scout">Scout</SelectItem>
-                          <SelectItem value="lead">Lead</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <Badge variant="secondary" className="px-3 py-1">Scout</Badge>
-                      )}
+                      <Badge variant="secondary" className="px-3 py-1">Scout</Badge>
                       <Button size="sm" onClick={() => handleApprove(record.email)} className="px-4">
                         Approve
                       </Button>

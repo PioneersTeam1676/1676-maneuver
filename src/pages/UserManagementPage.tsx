@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { apiGet, apiDelete, apiPost, apiPatch, apiPut, ApiError } from "@/lib/apiClient"
+import { apiGet, apiDelete, apiPost, apiPut, ApiError } from "@/lib/apiClient"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { readScoutingSeason } from "@/lib/scoutingSeason"
 import {
@@ -457,11 +457,7 @@ export default function UserManagementPage() {
     try {
       const encodedEmail = encodeURIComponent(userToDelete.email)
 
-      await apiPatch(`/recent-users/${encodedEmail}`, { acknowledged: true }).catch(() => undefined)
-      await Promise.all([
-        apiDelete(`/roles/${encodedEmail}`),
-        apiDelete(`/recent-users/${encodedEmail}`).catch(() => undefined),
-      ])
+      await apiDelete(`/roles/${encodedEmail}`)
 
       toast.success(`Removed ${userToDelete.email}`)
       recordDeletedUserTombstone(userToDelete.email)
