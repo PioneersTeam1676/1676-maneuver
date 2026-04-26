@@ -17,6 +17,8 @@ export function NavUser() {
 
   const roleLabel = (() => {
     switch (role) {
+      case 'blocked':
+        return 'Access Revoked'
       case 'tech_lead':
         return 'Technical Lead'
       case 'lead':
@@ -91,12 +93,17 @@ export function NavUser() {
                     )}
                   </div>
                   <div className="text-muted-foreground truncate max-w-[160px]">{user.email}</div>
-                  <Badge variant={role === 'pending' ? 'outline' : 'secondary'} className="mt-1">
+                  <Badge variant={role === 'pending' || role === 'blocked' ? 'outline' : 'secondary'} className="mt-1">
                     {roleLabel}
                   </Badge>
                   {role === 'pending' && (
                     <p className="text-[10px] text-muted-foreground mt-1">
                       An admin needs to grant additional access.
+                    </p>
+                  )}
+                  {role === 'blocked' && (
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      This account has been blocked. Contact an admin if this should be restored.
                     </p>
                   )}
                   <div className="mt-2 flex flex-wrap gap-2">

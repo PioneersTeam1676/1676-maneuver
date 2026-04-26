@@ -1,19 +1,11 @@
-import { Binoculars, Calendar, ChevronRight, Wrench, Gamepad2, RotateCcw, type LucideIcon } from "lucide-react"
+import { Binoculars, Calendar, Wrench, Gamepad2, RotateCcw, type LucideIcon } from "lucide-react"
 import { useAuth, type UserRole } from "@/contexts/AuthContext"
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible"
 import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar"
 import { useNavigationConfirm } from "@/hooks/useNavigationConfirm";
@@ -21,6 +13,7 @@ import { NavigationConfirmDialog } from "@/components/NavigationConfirmDialog";
 import { toast } from "sonner";
 
 const roleWeights: Record<UserRole, number> = {
+  blocked: 0,
   pending: 0,
   pit_scout: 1,
   drive_team: 1,
@@ -32,17 +25,14 @@ const roleWeights: Record<UserRole, number> = {
 }
 
 export function NavMain({
-  items,
+  sections,
 }: {
-  items: {
-    title: string
-    url: string
-    icon?: LucideIcon
-    isActive?: boolean
-    minRole?: UserRole
-    items?: {
+  sections: {
+    label: string
+    items: {
       title: string
       url: string
+      icon?: LucideIcon
       minRole?: UserRole
     }[]
   }[]
@@ -76,21 +66,18 @@ export function NavMain({
         // If navigation was blocked, confirmNavigation will show the dialog
     };
 
-    // Handler for sub-menu clicks
-    const handleSubItemClick = (url: string) => {
-        const label = url.split('/').pop() || "this page";
+    const handleItemClick = (url: string, label?: string) => {
+        const destinationLabel = label || url.split('/').pop() || "this page";
         if (!canAccessPath(url)) {
           toast.error("You don’t have access to that page yet.");
           return;
         }
         
-        if (confirmNavigation(url, label)) {
-          // Navigation was allowed immediately
+        if (confirmNavigation(url, destinationLabel)) {
           if (isMobile) {
             setOpenMobile(false);
           }
         }
-        // If navigation was blocked, confirmNavigation will show the dialog
     };
 
     // Close sidebar when navigation is confirmed
@@ -101,88 +88,54 @@ export function NavMain({
       handleConfirm();
     };
 
+    const hasAccessForRole = (minRole?: UserRole) => !minRole || roleWeights[role] >= roleWeights[minRole]
+
+    const platformItems: Array<{ title: string; url: string; icon: LucideIcon; minRole?: UserRole; hidden?: boolean }> = [
+      { title: "Scout", url: "/game-start", icon: Binoculars },
+      { title: "Pit Scouting", url: "/pit-scouting", icon: Wrench, minRole: "pit_scout" },
+      { title: "Drive Team Scouting", url: "/drive-scouting", icon: Gamepad2, minRole: "drive_team" },
+      { title: "Schedule", url: "/schedule", icon: Calendar, minRole: "scout" },
+      { title: "Rescout", url: "/rescout", icon: RotateCcw, hidden: !canRescout },
+    ]
+
   return (
     <>
       <SidebarGroup>
         <SidebarGroupLabel>Platform</SidebarGroupLabel>
         <SidebarMenu>
-          {/* Home tab removed as requested */}
-          <SidebarMenuItem className="flex items-center gap-2">
-            <SidebarMenuButton tooltip={"Scout"} onClick={() => proceedClick("/game-start")}>
-              <Binoculars />
-              <span>Scout</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          {roleWeights[role] >= roleWeights['pit_scout'] && (
-            <SidebarMenuItem className="flex items-center gap-2">
-              <SidebarMenuButton tooltip={"Pit Scouting"} onClick={() => proceedClick("/pit-scouting")}>
-                <Wrench />
-                <span>Pit Scouting</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          )}
-          {roleWeights[role] >= roleWeights['drive_team'] && (
-            <SidebarMenuItem className="flex items-center gap-2">
-              <SidebarMenuButton tooltip={"Drive Team Scouting"} onClick={() => proceedClick("/drive-scouting")}>
-                <Gamepad2 />
-                <span>Drive Team Scouting</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          )}
-          {roleWeights[role] >= roleWeights['scout'] && (
-            <SidebarMenuItem className="flex items-center gap-2">
-              <SidebarMenuButton tooltip={"Schedule"} onClick={() => proceedClick("/schedule")}>
-                <Calendar />
-                <span>Schedule</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          )}
-          {canRescout && (
-            <SidebarMenuItem className="flex items-center gap-2">
-              <SidebarMenuButton tooltip={"Rescout"} onClick={() => proceedClick("/rescout")}>
-                <RotateCcw />
-                <span>Rescout</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          )}
-          {items
-            .filter((item) => !item.minRole || roleWeights[role] >= roleWeights[item.minRole])
+          {platformItems
+            .filter((item) => !item.hidden && hasAccessForRole(item.minRole))
             .map((item) => (
-            <Collapsible
-              key={item.title}
-              asChild
-              defaultOpen={item.isActive}
-              className="group/collapsible"
-            >
-              
-              <SidebarMenuItem>
-                <CollapsibleTrigger asChild>
-                  <SidebarMenuButton tooltip={item.title}>
-                    {item.icon && <item.icon />}
-                    <span>{item.title}</span>
-                    <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
-                  </SidebarMenuButton>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <SidebarMenuSub>
-                    {item.items
-                      ?.filter((subItem) => !subItem.minRole || roleWeights[role] >= roleWeights[subItem.minRole])
-                      .map((subItem) => (
-                        <SidebarMenuSubItem key={subItem.title}>
-                          <SidebarMenuSubButton asChild>
-                            <button onClick={() => handleSubItemClick(subItem.url)}>
-                              <span>{subItem.title}</span>
-                            </button>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      ))}
-                  </SidebarMenuSub>
-                </CollapsibleContent>
+              <SidebarMenuItem key={item.title} className="flex items-center gap-2">
+                <SidebarMenuButton tooltip={item.title} onClick={() => proceedClick(item.url)}>
+                  <item.icon />
+                  <span>{item.title}</span>
+                </SidebarMenuButton>
               </SidebarMenuItem>
-            </Collapsible>
-          ))}
+            ))}
         </SidebarMenu>
       </SidebarGroup>
+
+      {sections.map((section) => {
+        const visibleItems = section.items.filter((item) => hasAccessForRole(item.minRole))
+        if (visibleItems.length === 0) return null
+
+        return (
+          <SidebarGroup key={section.label}>
+            <SidebarGroupLabel>{section.label}</SidebarGroupLabel>
+            <SidebarMenu>
+              {visibleItems.map((item) => (
+                <SidebarMenuItem key={item.title} className="flex items-center gap-2">
+                  <SidebarMenuButton tooltip={item.title} onClick={() => handleItemClick(item.url, item.title)}>
+                    {item.icon && <item.icon />}
+                    <span>{item.title}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroup>
+        )
+      })}
       
       <NavigationConfirmDialog
         open={isConfirmDialogOpen}

@@ -5,10 +5,11 @@ const { nowSeconds } = require("../utils/dbUtils")
 const { getSeasonPrisma, resolveSeasonSelector } = require("../seasonDb")
 const { sanitizeString, upsertRecentUser } = require("../utils/recentUserUtils")
 const { ensureEntryIdentitySchema, normalizeEmail } = require("../utils/entryIdentity")
+const { ensureScoutRegistration } = require("../utils/userRegistration")
 
 const router = express.Router()
 
-const validRoles = new Set(["pending", "pit_scout", "drive_team", "scout_minus", "scout", "scout_plus", "lead", "tech_lead"])
+const validRoles = new Set(["blocked", "pending", "pit_scout", "drive_team", "scout_minus", "scout", "scout_plus", "lead", "tech_lead"])
 
 const normalizeName = (value) =>
   sanitizeString(value)
@@ -116,7 +117,7 @@ router.put(
       acknowledged,
     })
 
-    if (role !== "pending") {
+    if (role !== "pending" && role !== "blocked") {
       const verifiedAt = nowSeconds()
       await prisma.verifiedUser.create({
         data: {
@@ -124,6 +125,10 @@ router.put(
           role,
           verifiedAt,
         }
+      })
+    } else {
+      await prisma.verifiedUser.deleteMany({
+        where: { email: normalizedEmail },
       })
     }
 
@@ -136,7 +141,14 @@ router.delete(
   asyncHandler(async (req, res) => {
     const { email } = req.params
     const normalizedEmail = email.trim().toLowerCase()
-    const info = await prisma.role.deleteMany({ where: { email: normalizedEmail } })
+    const [info] = await prisma.$transaction([
+      prisma.role.deleteMany({ where: { email: normalizedEmail } }),
+      prisma.verifiedUser.deleteMany({ where: { email: normalizedEmail } }),
+      prisma.recentUser.updateMany({
+        where: { email: normalizedEmail },
+        data: { acknowledged: false },
+      }),
+    ])
     res.json({ success: info.count > 0 })
   })
 )
@@ -151,22 +163,17 @@ router.post(
       return res.status(401).json({ error: "Not authenticated" })
     }
 
-    const existing = await prisma.role.findUnique({ where: { email } })
-    if (existing) {
-      return res.json({ email, role: existing.role, registered: false })
-    }
-
-    const timestamp = nowSeconds()
-    await prisma.role.create({
-      data: { email, role: "scout", createdAt: timestamp, updatedAt: timestamp },
+    const existing = await prisma.role.findUnique({
+      where: { email },
+      select: { role: true },
     })
-    await upsertRecentUser(prisma, {
+    const role = await ensureScoutRegistration({
       email,
-      lastSeenAt: new Date().toISOString(),
-      acknowledged: true,
+      displayName: req.user?.name,
+      photoUrl: req.user?.picture,
     })
 
-    return res.json({ email, role: "scout", registered: true })
+    return res.json({ email, role, registered: !existing || existing.role === "pending" })
   })
 )
 

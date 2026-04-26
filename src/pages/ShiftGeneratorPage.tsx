@@ -202,7 +202,7 @@ const ShiftGeneratorPage = () => {
   // ─── Build attendee list from registered scouts ───────────────────────────
   const registeredScouts = useMemo(() => {
     const emails = Object.entries(roleAssignments)
-      .filter(([, role]) => role !== "pending")
+      .filter(([, role]) => role !== "pending" && role !== "blocked")
       .map(([email]) => email)
 
     return emails.map((email) => {

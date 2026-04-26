@@ -16,10 +16,18 @@ import { Outlet } from "react-router-dom"
 
 
 export default function Dashboard() {
-    const { role } = useAuth()
-    const isPending = role === 'pending'
+    const { role, user, authorizationReady } = useAuth()
+    const isPending = role === 'pending' || role === 'blocked'
+
+    if (user && !authorizationReady) {
+        return (
+            <div className="flex min-h-dvh w-full items-center justify-center bg-background">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+            </div>
+        )
+    }
     
-    // For unverified (pending) users, show minimal layout without sidebar
+    // For blocked/unverified users, show minimal layout without sidebar
     if (isPending) {
         return (
             <div className="flex h-dvh min-h-dvh flex-col overflow-hidden bg-background safe-area-bottom safe-area-top safe-area-inline">

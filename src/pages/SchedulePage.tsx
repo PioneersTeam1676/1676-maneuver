@@ -3,6 +3,7 @@ import { CalendarDays } from "lucide-react"
 
 import { useAuth } from "@/contexts/AuthContext"
 import { fetchRemoteSchedule, type RemoteScheduleState } from "@/lib/scheduleApi"
+import { fetchCurrentQualificationMatchNumber, resolveTbaApiKey } from "@/lib/tbaUtils"
 import {
   deriveScoutShiftBlocks,
   formatShiftRange,
@@ -28,6 +29,7 @@ export default function SchedulePage() {
   const [loading, setLoading] = useState(true)
   const [eventName, setEventName] = useState(() => localStorage.getItem(STORAGE_EVENT_NAME_KEY) ?? "")
   const [schedule, setSchedule] = useState<RemoteScheduleState | null>(null)
+  const [tbaLastCompletedMatch, setTbaLastCompletedMatch] = useState<number | null>(null)
 
   const refreshSchedule = useCallback(async (nextEventName = eventName) => {
     setLoading(true)
@@ -65,15 +67,34 @@ export default function SchedulePage() {
     void refreshSchedule()
   }, [refreshSchedule])
 
+  // One-shot TBA fetch so completed-match status is accurate even when the
+  // backend TBA watcher is not running.
+  useEffect(() => {
+    if (!eventName) return;
+    const resolvedKey = resolveTbaApiKey();
+    if (!resolvedKey) return;
+
+    fetchCurrentQualificationMatchNumber(eventName, resolvedKey)
+      .then((current) => {
+        if (typeof current === "number" && current > 0) {
+          setTbaLastCompletedMatch(current - 1);
+        }
+      })
+      .catch(() => {
+        // ignore — keep null, other fallbacks will apply
+      });
+  }, [eventName])
+
   const effectiveLastCompletedMatch = useMemo(() => {
     if (typeof schedule?.lastCompletedMatch === "number") return schedule.lastCompletedMatch;
+    if (typeof tbaLastCompletedMatch === "number") return tbaLastCompletedMatch;
     try {
       const stored = parseInt(localStorage.getItem("currentMatchNumber") ?? "", 10);
       return Number.isFinite(stored) && stored > 0 ? stored - 1 : null;
     } catch {
       return null;
     }
-  }, [schedule?.lastCompletedMatch])
+  }, [schedule?.lastCompletedMatch, tbaLastCompletedMatch])
 
   const shiftBlocks = useMemo(
     () =>

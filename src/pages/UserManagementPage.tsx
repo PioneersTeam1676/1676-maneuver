@@ -47,6 +47,7 @@ interface User {
 
 const roleColors: Record<string, string> = {
   activity_only: "bg-orange-500",
+  blocked: "bg-red-700",
   pending: "bg-gray-500",
   pit_scout: "bg-green-500",
   drive_team: "bg-cyan-500",
@@ -59,6 +60,7 @@ const roleColors: Record<string, string> = {
 
 const roleIcons: Record<string, LucideIcon> = {
   activity_only: Search,
+  blocked: UserX,
   pending: UserX,
   pit_scout: Wrench,
   drive_team: Gamepad2,
@@ -70,6 +72,7 @@ const roleIcons: Record<string, LucideIcon> = {
 }
 
 const ROLE_LABELS: Record<string, string> = {
+  blocked: "Blocked",
   pending: "Pending",
   pit_scout: "Pit Scout",
   drive_team: "Drive Team",
@@ -80,7 +83,7 @@ const ROLE_LABELS: Record<string, string> = {
   tech_lead: "Tech Lead",
 }
 
-const ASSIGNABLE_ROLES = ["pending", "pit_scout", "drive_team", "scout_minus", "scout", "scout_plus", "lead", "tech_lead"] as const
+const ASSIGNABLE_ROLES = ["blocked", "pending", "pit_scout", "drive_team", "scout_minus", "scout", "scout_plus", "lead", "tech_lead"] as const
 
 type RecentUserApiRecord = {
   email?: string
@@ -409,7 +412,7 @@ export default function UserManagementPage() {
       )
 
       // Sort by role importance, then by email
-      const roleOrder = ["tech_lead", "lead", "scout", "pit_scout", "drive_team", "activity_only", "pending"]
+      const roleOrder = ["tech_lead", "lead", "scout", "pit_scout", "drive_team", "activity_only", "blocked", "pending"]
       const combinedUsers = [...usersWithActivity, ...entryOnlyUsers]
       combinedUsers.sort((a, b) => {
         const roleCompare =

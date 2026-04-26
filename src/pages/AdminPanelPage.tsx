@@ -39,9 +39,10 @@ import { toast } from "sonner"
 import { sendManualNotification } from "@/lib/pushNotifications"
 import { clearAllScoutingData } from "@/lib/dexieDB"
 
-const ROLE_OPTIONS: Array<Exclude<UserRole, "pending">> = ["pit_scout", "drive_team", "scout_minus", "scout", "scout_plus", "lead", "tech_lead"]
+const ROLE_OPTIONS: Array<Exclude<UserRole, "pending">> = ["blocked", "pit_scout", "drive_team", "scout_minus", "scout", "scout_plus", "lead", "tech_lead"]
 
 const roleLabels: Record<UserRole, string> = {
+  blocked: "Blocked",
   pending: "Pending approval",
   pit_scout: "Pit Scout",
   drive_team: "Drive Team",
@@ -68,7 +69,6 @@ export default function AdminPanelPage() {
     isUltraAdmin,
     roleAssignments,
     setRole,
-    removeRole,
     recentUsers,
     allianceProfiles,
     allowedAllianceDomain,
@@ -115,8 +115,7 @@ export default function AdminPanelPage() {
   const recentUsersWithRoles = useMemo(
     () =>
       recentUsers
-        .filter((r) => roleAssignments[r.email])
-        .map((r) => ({ ...r, assignedRole: roleAssignments[r.email] as UserRole }))
+        .map((r) => ({ ...r, assignedRole: (roleAssignments[r.email] ?? "pending") as UserRole }))
         .sort((a, b) => b.lastSeenAt.localeCompare(a.lastSeenAt)),
     [recentUsers, roleAssignments]
   )
@@ -210,8 +209,8 @@ export default function AdminPanelPage() {
       toast.error("Add another lead before removing this account.")
       return
     }
-    removeRole(addr)
-    toast.success(`Removed stored role for ${addr}`)
+    setRole(addr, "blocked")
+    toast.success(`Revoked access for ${addr}`)
   }
 
   const handleSendNotification = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -481,7 +480,7 @@ export default function AdminPanelPage() {
       <Card>
         <CardHeader>
           <CardTitle>Approved accounts</CardTitle>
-          <CardDescription>Adjust or revoke access whenever roles change.</CardDescription>
+          <CardDescription>Adjust roles here. Revoke access blocks the account and keeps it from re-requesting access on refresh.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <Table>
@@ -526,7 +525,7 @@ export default function AdminPanelPage() {
                           (assignedRole === "lead" && adminCount <= 1)
                         }
                       >
-                        Remove
+                        Revoke access
                       </Button>
                     </TableCell>
                   </TableRow>

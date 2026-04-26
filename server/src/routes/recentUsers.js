@@ -6,6 +6,7 @@ const { sanitizeString, upsertRecentUser } = require("../utils/recentUserUtils")
 const { ensureScoutRegistration } = require("../utils/userRegistration")
 
 const MAX_RECENT_USERS = 200
+const LEAD_ROLES = new Set(["lead", "tech_lead"])
 
 const mapRowToRecord = (row) => ({
   email: row.email,
@@ -16,9 +17,32 @@ const mapRowToRecord = (row) => ({
   photoUrl: row.photoUrl || null,
 })
 
+const getRequesterRole = async (email) => {
+  const normalizedEmail = sanitizeString(email).toLowerCase()
+  if (!normalizedEmail) return null
+  const row = await prisma.role.findUnique({
+    where: { email: normalizedEmail },
+    select: { role: true },
+  })
+  return row?.role || null
+}
+
+const requireLeadAccess = async (req, res) => {
+  const requesterRole = await getRequesterRole(req.user?.email)
+  if (!LEAD_ROLES.has(requesterRole)) {
+    res.status(403).json({ error: "Lead access required" })
+    return false
+  }
+  return true
+}
+
 router.get(
   "/",
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    if (!(await requireLeadAccess(req, res))) {
+      return
+    }
+
     const rows = await prisma.recentUser.findMany({
       orderBy: { lastSeenAt: "desc" },
       take: MAX_RECENT_USERS,
@@ -37,22 +61,36 @@ router.put(
       return res.status(400).json({ error: "Email is required" })
     }
 
+    const requesterEmail = sanitizeString(req.user?.email).toLowerCase()
+    const requesterRole = await getRequesterRole(requesterEmail)
+    const isLead = LEAD_ROLES.has(requesterRole)
+    if (!requesterEmail) {
+      return res.status(401).json({ error: "Not authenticated" })
+    }
+    if (!isLead && requesterEmail !== normalizedEmail) {
+      return res.status(403).json({ error: "You can only update your own verification request" })
+    }
+
     const {
       firstSeenAt,
       lastSeenAt,
-      acknowledged = false,
+      acknowledged,
       displayName,
       photoUrl,
     } = req.body || {}
 
+    const resolvedAcknowledged = typeof acknowledged === "undefined"
+      ? (isLead ? undefined : false)
+      : (isLead ? acknowledged : false)
+
     const existing = await prisma.recentUser.findUnique({ where: { email: normalizedEmail } })
 
     if (!existing) {
-      const created = await upsertRecentUser(prisma, {
+      await upsertRecentUser(prisma, {
         email: normalizedEmail,
         firstSeenAt,
         lastSeenAt,
-        acknowledged,
+        acknowledged: resolvedAcknowledged,
         displayName,
         photoUrl,
       })
@@ -63,14 +101,15 @@ router.put(
         photoUrl,
       })
 
-      return res.json({ recentUser: mapRowToRecord(created) })
+      const row = await prisma.recentUser.findUnique({ where: { email: normalizedEmail } })
+      return res.json({ recentUser: mapRowToRecord(row) })
     }
 
-    const updated = await upsertRecentUser(prisma, {
+    await upsertRecentUser(prisma, {
       email: normalizedEmail,
       firstSeenAt,
       lastSeenAt,
-      acknowledged,
+      acknowledged: resolvedAcknowledged,
       displayName,
       photoUrl,
     })
@@ -81,7 +120,8 @@ router.put(
       photoUrl,
     })
 
-    res.json({ recentUser: mapRowToRecord(updated) })
+    const row = await prisma.recentUser.findUnique({ where: { email: normalizedEmail } })
+    res.json({ recentUser: mapRowToRecord(row) })
   })
 )
 
@@ -119,6 +159,10 @@ router.patch(
       return res.status(400).json({ error: "Email is required" })
     }
 
+    if (!(await requireLeadAccess(req, res))) {
+      return
+    }
+
     const { acknowledged } = req.body || {}
     if (typeof acknowledged === "undefined") {
       return res.status(400).json({ error: "acknowledged field required" })
@@ -149,6 +193,10 @@ router.delete(
     const normalizedEmail = sanitizeString(email).toLowerCase()
     if (!normalizedEmail) {
       return res.status(400).json({ error: "Email is required" })
+    }
+
+    if (!(await requireLeadAccess(req, res))) {
+      return
     }
 
     const info = await prisma.recentUser.deleteMany({

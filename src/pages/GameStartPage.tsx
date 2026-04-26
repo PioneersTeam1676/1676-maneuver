@@ -79,7 +79,8 @@ const GameStartPage = () => {
     }
   });
   const [myAssignments, setMyAssignments] = useState<MyAssignment[]>([]);
-  const myAssignmentsRef = useRef<MyAssignment[]>([]);
+  // null = not yet loaded; [] = loaded but empty (no assignments)
+  const myAssignmentsRef = useRef<MyAssignment[] | null>(null);
   const manualMatchOverrideRef = useRef(Boolean(states?.inputs?.matchNumber));
   const previousEventNameRef = useRef(eventName);
   // Debounce matchNumber for team selection
@@ -100,6 +101,8 @@ const GameStartPage = () => {
       })
       .catch((err: unknown) => {
         console.warn("Failed to fetch schedule assignments:", err);
+        // Treat fetch error as no assignments so TBA auto-advance is not blocked
+        myAssignmentsRef.current = [];
       });
   }, [eventName]);
 
@@ -184,6 +187,10 @@ const GameStartPage = () => {
 
         const nextMatchNumber = String(officialMatchNumber);
         if (manualMatchOverrideRef.current) {
+          return;
+        }
+        // Block auto-advance until assignments have loaded (null = still loading)
+        if (myAssignmentsRef.current === null) {
           return;
         }
         // Don't advance past the scout's last assigned match

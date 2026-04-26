@@ -1,5 +1,4 @@
 import * as React from "react"
-import { ClipboardList, Settings, Users2, UserCog, Activity } from "lucide-react"
 
 // import { NavDocuments } from "@/components/DashboardComponents/nav-documents"
 import { NavMain } from "@/components/DashboardComponents/nav-main"
@@ -22,12 +21,9 @@ import { haptics } from "@/lib/haptics"
 import type { UserRole } from "@/contexts/AuthContext"
 
 const data = {
-  navMain: [
+  navSections: [
     {
-      title: "Scouting Ops",
-      url: "#",
-      icon: ClipboardList,
-      minRole: "lead" as UserRole,
+      label: "Operations",
       items: [
         {
           title: "Event Settings",
@@ -49,17 +45,24 @@ const data = {
           url: "/outliers",
           minRole: "lead" as UserRole,
         },
+        {
+          title: "Scout Activity",
+          url: "/scout-activity",
+          minRole: "lead" as UserRole,
+        },
       ],
     },
     {
-      title: "People & Access",
-      url: "#",
-      icon: Users2,
-      minRole: "lead" as UserRole,
+      label: "People & Access",
       items: [
         {
           title: "Verification Center",
           url: "/verification-center",
+          minRole: "lead" as UserRole,
+        },
+        {
+          title: "User Management",
+          url: "/user-management",
           minRole: "lead" as UserRole,
         },
         {
@@ -72,19 +75,21 @@ const data = {
           url: "/pi-panel",
           minRole: "lead" as UserRole,
         },
-        {
-          title: "Achievements",
-          url: "/achievements",
-          minRole: "lead" as UserRole,
-        },
       ],
     },
     {
-      title: "Data Tools",
-      url: "#",
-      icon: Settings,
-      minRole: "lead" as UserRole,
+      label: "System Tools",
       items: [
+        {
+          title: "Admin Panel",
+          url: "/admin",
+          minRole: "tech_lead" as UserRole,
+        },
+        {
+          title: "JSON Data Transfer",
+          url: "/json-transfer",
+          minRole: "lead" as UserRole,
+        },
         {
           title: "Data Management",
           url: "/data-management",
@@ -96,31 +101,9 @@ const data = {
           minRole: "tech_lead" as UserRole,
         },
         {
-          title: "JSON Data Transfer",
-          url: "/json-transfer",
-          minRole: "lead" as UserRole,
-        },
-        {
           title: "Clear Data",
           url: "/clear-data",
           minRole: "tech_lead" as UserRole,
-        },
-        {
-          title: "Admin Panel",
-          url: "/admin",
-          minRole: "tech_lead" as UserRole,
-        },
-        {
-          title: "User Management",
-          url: "/user-management",
-          icon: UserCog,
-          minRole: "lead" as UserRole,
-        },
-        {
-          title: "Scout Activity",
-          url: "/scout-activity",
-          icon: Activity,
-          minRole: "lead" as UserRole,
         },
         ...(import.meta.env.DEV
           ? [{
@@ -247,7 +230,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
-        <NavMain items={data.navMain} />
+        <NavMain sections={data.navSections} />
       </SidebarContent>
       <SidebarFooter>
         <div className="px-2 py-1">

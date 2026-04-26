@@ -24,6 +24,7 @@ const matchesAllowedDomain = (email: string, domains: string[]) => {
 }
 
 const roleLabels: Record<UserRole, string> = {
+  blocked: "Blocked",
   pending: "Pending",
   pit_scout: "Pit Scout",
   drive_team: "Drive Team",
@@ -46,7 +47,6 @@ export default function VerificationCenterPage() {
     allowedAllianceDomains,
     acknowledgeRecentUser,
     setRole,
-    removeRole,
     removeAllianceProfile,
     refreshRecentUsers,
     refreshRoles,
@@ -92,7 +92,7 @@ export default function VerificationCenterPage() {
 
     recentUsers.forEach((record) => {
       const email = normalize(record.email)
-      const assignedRole = roleAssignments[email]
+      const assignedRole = (roleAssignments[email] ?? "pending") as UserRole
       if (assignedRole !== "pending") {
         return
       }
@@ -149,7 +149,8 @@ export default function VerificationCenterPage() {
         const isAllowed = matchesAllowedDomain(record.email, allowedDomains)
         // Show acknowledged records with assigned roles from the past 7 days
         return record.acknowledged && 
-               record.assignedRole !== "pending" && 
+               record.assignedRole !== "pending" &&
+               record.assignedRole !== "blocked" &&
                !isAllowed &&
                record.lastSeenAt >= sevenDaysAgoISO
       })
@@ -219,11 +220,16 @@ export default function VerificationCenterPage() {
   }
 
   const handleDeny = (email: string) => {
-    // Remove any submitted alliance profile and role assignment, and mark as reviewed
+    // Remove any submitted alliance profile and block the account from re-requesting on refresh.
     removeAllianceProfile(email)
-    removeRole(email)
+    setRole(email, "blocked")
     acknowledgeRecentUser(email)
-    toast.error(`Denied and deleted account for ${email}`)
+    toast.error(`Denied access for ${email}`)
+  }
+
+  const handleRevoke = (email: string) => {
+    setRole(email, "blocked")
+    toast.error(`Revoked access for ${email}`)
   }
 
   return (
@@ -316,13 +322,13 @@ export default function VerificationCenterPage() {
         <Card>
           <CardHeader>
             <CardTitle>Recent approvals</CardTitle>
-            <CardDescription>External accounts approved in the past 7 days.</CardDescription>
+            <CardDescription>External accounts approved in the past 7 days. Use revoke access to send someone back to pending review.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {recentlyCleared.map((record) => {
               const assignedRole = (roleAssignments[record.email] ?? "pending") as UserRole
               return (
-                <div key={record.email} className="flex items-center justify-between rounded-md border border-border/60 bg-card/80 p-4">
+                <div key={record.email} className="flex flex-col gap-3 rounded-md border border-border/60 bg-card/80 p-4 md:flex-row md:items-center md:justify-between">
                   <div className="flex items-center gap-3">
                     <Avatar className="h-8 w-8">
                       <AvatarImage src={record.photoUrl} alt={record.displayName ?? record.email} referrerPolicy="no-referrer" />
@@ -340,7 +346,12 @@ export default function VerificationCenterPage() {
                       />
                     </div>
                   </div>
-                  <span className="text-xs text-muted-foreground">{new Date(record.lastSeenAt).toLocaleString()}</span>
+                  <div className="flex items-center gap-3 md:justify-end">
+                    <span className="text-xs text-muted-foreground">{new Date(record.lastSeenAt).toLocaleString()}</span>
+                    <Button size="sm" variant="outline" onClick={() => handleRevoke(record.email)}>
+                      Revoke access
+                    </Button>
+                  </div>
                 </div>
               )
             })}

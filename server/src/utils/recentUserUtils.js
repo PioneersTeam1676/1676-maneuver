@@ -53,7 +53,7 @@ const upsertRecentUser = async (
 
   const nextFirst = existingFirst <= incomingFirst ? existing.firstSeenAt : firstSeen
   const nextLast = existingLast >= incomingLast ? existing.lastSeenAt : lastSeen
-  const nextAck = hasAcknowledgedValue ? existing.acknowledged || ackValue : existing.acknowledged
+  const nextAck = hasAcknowledgedValue ? ackValue : existing.acknowledged
 
   return prisma.recentUser.update({
     where: { email: normalizedEmail },
