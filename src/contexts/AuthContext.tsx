@@ -813,15 +813,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const status = typeof error === 'object' && error && 'status' in error ? (error as { status?: number }).status : undefined
       if ((status === 401 || status === 403) && user?.email) {
         const normalizedCurrentEmail = normalizeEmail(user.email)
-        setRoleAssignments((prev) => {
-          const withoutStaleRole = removeCachedRoleForUser(prev, normalizedCurrentEmail)
-          const next = ensureAdminPresence({
-            ...withoutStaleRole,
-            [normalizedCurrentEmail]: resolveDefaultRole(normalizedCurrentEmail),
-          })
-          return areRoleAssignmentsEqual(prev, next) ? prev : next
-        })
-
         try {
           const response = await apiPost<{ email: string; role: UserRole }>('/recent-users/self-register-role', {})
           const normalizedEmail = normalizeEmail(response.email || user.email)
@@ -836,6 +827,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           })
           return
         } catch (fallbackError) {
+          setRoleAssignments((prev) => {
+            const withoutStaleRole = removeCachedRoleForUser(prev, normalizedCurrentEmail)
+            const next = ensureAdminPresence({
+              ...withoutStaleRole,
+              [normalizedCurrentEmail]: resolveDefaultRole(normalizedCurrentEmail),
+            })
+            return areRoleAssignmentsEqual(prev, next) ? prev : next
+          })
           console.error('Failed to fetch current user role from fallback endpoint', fallbackError)
         }
       }
