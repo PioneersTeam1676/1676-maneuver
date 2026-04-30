@@ -23,9 +23,10 @@ const webhookSyncRouter = require("./routes/webhookSync")
 const rescoutRouter = require("./routes/rescout")
 const { createApiAuthMiddleware } = require("./middleware/apiAuth")
 const { scheduleBackups } = require("./backupManager")
-const { databaseInfo } = require("./db")
+const { prisma, databaseInfo } = require("./db")
 const { initWebhookSync } = require("./webhookSyncManager")
 const { imageStorageDir } = require("./utils/imagePermalinkStore")
+const { ensureRecentUserProfileSchema } = require("./utils/recentUserUtils")
 
 const compression = require("compression")
 
@@ -57,6 +58,10 @@ EXTRA_API_PREFIXES.split(",")
   })
 
 const routePrefixes = Array.from(prefixSet)
+
+ensureRecentUserProfileSchema(prisma).catch((error) => {
+  console.warn("Failed to ensure recent user profile columns", error?.message || error)
+})
 
 const parseCorsOrigins = (value) => {
   if (!value) return true

@@ -3,7 +3,7 @@ const { nowSeconds } = require("./dbUtils")
 const { sanitizeString, upsertRecentUser } = require("./recentUserUtils")
 const { emailMatchesAllowedDomain } = require("./authDomains")
 
-const ensureScoutRegistration = async ({ email, displayName, photoUrl }) => {
+const ensureScoutRegistration = async ({ email, displayName, photoUrl, firstName, lastName, teamNumber }) => {
   const normalizedEmail = sanitizeString(email).toLowerCase()
   if (!normalizedEmail) return null
 
@@ -56,6 +56,9 @@ const ensureScoutRegistration = async ({ email, displayName, photoUrl }) => {
     acknowledged: role !== "pending",
     displayName,
     photoUrl,
+    firstName,
+    lastName,
+    teamNumber,
   })
 
   return role

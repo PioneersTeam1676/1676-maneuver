@@ -89,8 +89,14 @@ CREATE TABLE IF NOT EXISTS recent_users (
   last_seen_at VARCHAR(255) NOT NULL,
   acknowledged BOOLEAN NOT NULL DEFAULT FALSE,
   display_name VARCHAR(255),
-  photo_url VARCHAR(255)
+  photo_url VARCHAR(255),
+  first_name VARCHAR(255),
+  last_name VARCHAR(255),
+  team_number VARCHAR(255)
 );
+ALTER TABLE recent_users ADD COLUMN IF NOT EXISTS first_name VARCHAR(255) NULL AFTER photo_url;
+ALTER TABLE recent_users ADD COLUMN IF NOT EXISTS last_name VARCHAR(255) NULL AFTER first_name;
+ALTER TABLE recent_users ADD COLUMN IF NOT EXISTS team_number VARCHAR(255) NULL AFTER last_name;
 CREATE INDEX idx_recent_users_ack ON recent_users(acknowledged);
 CREATE INDEX idx_recent_users_last_seen ON recent_users(last_seen_at);
 

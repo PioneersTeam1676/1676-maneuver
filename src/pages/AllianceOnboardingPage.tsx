@@ -1,10 +1,12 @@
 import { useAuth } from "@/contexts/AuthContext"
 import { useNavigate } from "react-router-dom"
-import { useEffect, useRef, useState } from "react"
+import { type FormEvent, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { ShieldCheck, RefreshCw, CheckCircle2 } from "lucide-react"
 import { apiPut } from "@/lib/apiClient"
 import { syncEventSettings } from "@/lib/eventSettingsClient"
@@ -12,12 +14,24 @@ import { syncEventSettings } from "@/lib/eventSettingsClient"
 const POLL_INTERVAL_MS = 30_000
 
 const AllianceOnboardingPage = () => {
-  const { user, role, defaultRoute, refreshRoles } = useAuth()
+  const { user, role, defaultRoute, refreshRoles, recentUsers, allianceProfile, submitAllianceProfile } = useAuth()
   const navigate = useNavigate()
   const [lastChecked, setLastChecked] = useState<Date | null>(null)
   const [checking, setChecking] = useState(false)
   const [registered, setRegistered] = useState(false)
+  const [firstName, setFirstName] = useState("")
+  const [lastName, setLastName] = useState("")
+  const [teamNumber, setTeamNumber] = useState("")
+  const [profileSubmitted, setProfileSubmitted] = useState(false)
   const prevRoleRef = useRef(role)
+
+  const recentUser = user
+    ? recentUsers.find((record) => record.email === user.email.trim().toLowerCase())
+    : undefined
+  const savedFirstName = allianceProfile?.firstName || recentUser?.firstName || ""
+  const savedLastName = allianceProfile?.lastName || recentUser?.lastName || ""
+  const savedTeamNumber = allianceProfile?.teamNumber || recentUser?.teamNumber || ""
+  const hasProfileDetails = Boolean(savedFirstName && savedLastName && savedTeamNumber)
 
   // Redirect once approved
   useEffect(() => {
@@ -36,7 +50,7 @@ const AllianceOnboardingPage = () => {
     }
     prevRoleRef.current = role
     return () => { cancelled = true }
-  }, [role, defaultRoute, navigate, syncEventSettings])
+  }, [role, defaultRoute, navigate])
 
   // On mount: explicitly record this login in the DB so admins see the request
   useEffect(() => {
@@ -59,6 +73,14 @@ const AllianceOnboardingPage = () => {
         // Silent — server may be offline; the login attempt was already recorded on sign-in
       })
   }, [role, user])
+
+  useEffect(() => {
+    if (!user) return
+    const nameParts = user.name?.trim().split(/\s+/).filter(Boolean) ?? []
+    setFirstName(savedFirstName || nameParts[0] || "")
+    setLastName(savedLastName || (nameParts.length > 1 ? nameParts.slice(1).join(" ") : ""))
+    setTeamNumber(savedTeamNumber)
+  }, [savedFirstName, savedLastName, savedTeamNumber, user])
 
   // Poll for role approval every 30 seconds
   useEffect(() => {
@@ -91,8 +113,27 @@ const AllianceOnboardingPage = () => {
     }
   }
 
+  const handleProfileSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const result = submitAllianceProfile({
+      firstName,
+      lastName,
+      teamNumber,
+      confirmedAlliance: true,
+    })
+
+    if (!result.success) {
+      toast.error(result.message || "Could not save your profile details.")
+      return
+    }
+
+    setProfileSubmitted(true)
+    setRegistered(true)
+    toast.success("Profile details saved for admin review.")
+  }
+
   return (
-    <div className="container mx-auto max-w-3xl space-y-6 py-12">
+    <div className="container mx-auto max-w-3xl space-y-6 px-4 py-8 sm:py-12">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-2xl">
@@ -106,6 +147,53 @@ const AllianceOnboardingPage = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
+          {role !== "blocked" && !hasProfileDetails && !profileSubmitted && (
+            <form className="space-y-4 rounded-md border bg-card p-4" onSubmit={handleProfileSubmit}>
+              <div>
+                <h2 className="text-base font-semibold">Tell us who you are</h2>
+                <p className="text-sm text-muted-foreground">
+                  Admins use this to verify your request and set your scouting display name.
+                </p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="firstName">First name</Label>
+                  <Input
+                    id="firstName"
+                    value={firstName}
+                    onChange={(event) => setFirstName(event.target.value)}
+                    autoComplete="given-name"
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="lastName">Last name</Label>
+                  <Input
+                    id="lastName"
+                    value={lastName}
+                    onChange={(event) => setLastName(event.target.value)}
+                    autoComplete="family-name"
+                    required
+                  />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="teamNumber">Team number</Label>
+                <Input
+                  id="teamNumber"
+                  value={teamNumber}
+                  onChange={(event) => setTeamNumber(event.target.value.replace(/[^0-9]/g, ""))}
+                  inputMode="numeric"
+                  autoComplete="off"
+                  required
+                />
+              </div>
+              <Button type="submit" className="w-full sm:w-auto">
+                Save profile details
+              </Button>
+            </form>
+          )}
+
           <div className="rounded-md border border-dashed border-muted-foreground/40 bg-muted/20 p-4 text-sm text-muted-foreground">
             <p>
               {role === "blocked"
@@ -129,6 +217,14 @@ const AllianceOnboardingPage = () => {
                 <li className="flex items-center gap-1.5 text-green-600 dark:text-green-400">
                   <CheckCircle2 className="h-3.5 w-3.5" />
                   <span>Request sent to verification center</span>
+                </li>
+              )}
+              {(hasProfileDetails || profileSubmitted) && role !== "blocked" && (
+                <li className="flex items-center gap-1.5 text-green-600 dark:text-green-400">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  <span>
+                    Profile saved as {`${firstName} ${lastName}`.trim()} for Team {teamNumber}
+                  </span>
                 </li>
               )}
             </ul>

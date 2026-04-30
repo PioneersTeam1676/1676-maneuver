@@ -15,6 +15,9 @@ const mapRowToRecord = (row) => ({
   acknowledged: row.acknowledged === true,
   displayName: row.displayName || null,
   photoUrl: row.photoUrl || null,
+  firstName: row.firstName || null,
+  lastName: row.lastName || null,
+  teamNumber: row.teamNumber || null,
 })
 
 const getRequesterRole = async (email) => {
@@ -77,6 +80,9 @@ router.put(
       acknowledged,
       displayName,
       photoUrl,
+      firstName,
+      lastName,
+      teamNumber,
     } = req.body || {}
 
     const resolvedAcknowledged = typeof acknowledged === "undefined"
@@ -93,12 +99,18 @@ router.put(
         acknowledged: resolvedAcknowledged,
         displayName,
         photoUrl,
+        firstName,
+        lastName,
+        teamNumber,
       })
 
       await ensureScoutRegistration({
         email: normalizedEmail,
         displayName,
         photoUrl,
+        firstName,
+        lastName,
+        teamNumber,
       })
 
       const row = await prisma.recentUser.findUnique({ where: { email: normalizedEmail } })
@@ -112,12 +124,18 @@ router.put(
       acknowledged: resolvedAcknowledged,
       displayName,
       photoUrl,
+      firstName,
+      lastName,
+      teamNumber,
     })
 
     await ensureScoutRegistration({
       email: normalizedEmail,
       displayName,
       photoUrl,
+      firstName,
+      lastName,
+      teamNumber,
     })
 
     const row = await prisma.recentUser.findUnique({ where: { email: normalizedEmail } })

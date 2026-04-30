@@ -37,6 +37,9 @@ type RecentUserRecord = {
   acknowledged?: boolean
   displayName?: string
   photoUrl?: string
+  firstName?: string
+  lastName?: string
+  teamNumber?: string
 }
 
 type RecentUserApiRecord = Partial<RecentUserRecord> & {
@@ -44,6 +47,9 @@ type RecentUserApiRecord = Partial<RecentUserRecord> & {
   last_seen_at?: string
   display_name?: string
   photo_url?: string
+  first_name?: string
+  last_name?: string
+  team_number?: string
 }
 
 type AuthContextValue = {
@@ -216,6 +222,9 @@ const coerceRecentUserRecord = (entry: Partial<RecentUserRecord>): RecentUserRec
     acknowledged: entry.acknowledged ?? false,
     displayName: entry.displayName?.trim() || undefined,
     photoUrl: entry.photoUrl || undefined,
+    firstName: entry.firstName?.trim() || undefined,
+    lastName: entry.lastName?.trim() || undefined,
+    teamNumber: entry.teamNumber?.trim() || undefined,
   }
 }
 
@@ -236,13 +245,26 @@ const parseStoredRecentUsers = (raw: string | null): RecentUserRecord[] => {
 
 const upsertRecentUserRecord = (
   existing: RecentUserRecord[],
-  payload: { email: string; name?: string | null; picture?: string | null; acknowledged?: boolean }
+  payload: {
+    email: string
+    name?: string | null
+    picture?: string | null
+    acknowledged?: boolean
+    firstName?: string | null
+    lastName?: string | null
+    teamNumber?: string | null
+  }
 ): RecentUserRecord[] => {
   const email = normalizeEmail(payload.email)
   if (!email) return existing
 
   const timestamp = new Date().toISOString()
   const index = existing.findIndex((item) => item.email === email)
+  const firstName = payload.firstName?.trim()
+  const lastName = payload.lastName?.trim()
+  const teamNumber = payload.teamNumber?.trim()
+  const profileDisplayName = firstName || lastName ? `${firstName || ''} ${lastName || ''}`.trim() : ''
+  const displayName = payload.name?.trim() || profileDisplayName
 
   if (index >= 0) {
     const updated = [...existing]
@@ -250,8 +272,11 @@ const upsertRecentUserRecord = (
     updated[index] = {
       ...current,
       lastSeenAt: timestamp,
-      displayName: payload.name?.trim() || current.displayName,
+      displayName: displayName || current.displayName,
       photoUrl: payload.picture || current.photoUrl,
+      firstName: firstName || current.firstName,
+      lastName: lastName || current.lastName,
+      teamNumber: teamNumber || current.teamNumber,
       acknowledged: payload.acknowledged ?? current.acknowledged,
     }
     return updated.sort((a, b) => b.lastSeenAt.localeCompare(a.lastSeenAt))
@@ -262,8 +287,11 @@ const upsertRecentUserRecord = (
     firstSeenAt: timestamp,
     lastSeenAt: timestamp,
     acknowledged: payload.acknowledged ?? false,
-    displayName: payload.name?.trim() || undefined,
+    displayName: displayName || undefined,
     photoUrl: payload.picture || undefined,
+    firstName: firstName || undefined,
+    lastName: lastName || undefined,
+    teamNumber: teamNumber || undefined,
   }
 
   return [nextRecord, ...existing].slice(0, MAX_RECENT_USERS)
@@ -660,6 +688,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         acknowledged: Boolean(record.acknowledged),
         displayName: record.displayName || undefined,
         photoUrl: record.photoUrl || undefined,
+        firstName: record.firstName || undefined,
+        lastName: record.lastName || undefined,
+        teamNumber: record.teamNumber || undefined,
       })
     } catch (error) {
       console.error("Failed to sync recent user record", error)
@@ -667,7 +698,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const upsertRecentUser = useCallback(
-    (payload: { email: string; name?: string | null; picture?: string | null; acknowledged?: boolean }) => {
+    (payload: {
+      email: string
+      name?: string | null
+      picture?: string | null
+      acknowledged?: boolean
+      firstName?: string | null
+      lastName?: string | null
+      teamNumber?: string | null
+    }) => {
       const normalizedEmail = normalizeEmail(payload.email)
       if (!normalizedEmail) return
 
@@ -679,6 +718,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           name: payload.name,
           picture: payload.picture,
           acknowledged: payload.acknowledged,
+          firstName: payload.firstName,
+          lastName: payload.lastName,
+          teamNumber: payload.teamNumber,
         })
         syncedRecord = next.find((record) => record.email === normalizedEmail) ?? null
         return next
@@ -873,6 +915,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             acknowledged: entry.acknowledged,
             displayName: entry.displayName ?? entry.display_name,
             photoUrl: entry.photoUrl ?? entry.photo_url,
+            firstName: entry.firstName ?? entry.first_name,
+            lastName: entry.lastName ?? entry.last_name,
+            teamNumber: entry.teamNumber ?? entry.team_number,
           })
         )
         .filter((record): record is RecentUserRecord => Boolean(record))
@@ -887,7 +932,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             current.lastSeenAt === record.lastSeenAt &&
             Boolean(current.acknowledged) === Boolean(record.acknowledged) &&
             (current.displayName || "") === (record.displayName || "") &&
-            (current.photoUrl || "") === (record.photoUrl || "")
+            (current.photoUrl || "") === (record.photoUrl || "") &&
+            (current.firstName || "") === (record.firstName || "") &&
+            (current.lastName || "") === (record.lastName || "") &&
+            (current.teamNumber || "") === (record.teamNumber || "")
           )
         })) {
           return prev
@@ -1002,8 +1050,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const normalizedEmail = normalizeEmail(payload.email)
-      const resolvedName = payload.name?.trim() || payload.email
       const existingProfile = allianceProfiles[normalizedEmail]
+      const resolvedName = existingProfile?.displayName?.trim() || payload.name?.trim() || payload.email
 
       const nextUser: User = {
         name: resolvedName,
@@ -1257,11 +1305,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const normalized = normalizeEmail(user.email)
     const timestamp = new Date().toISOString()
+    const displayName = `${firstName} ${lastName}`.trim()
     const profile: AllianceProfile = {
       email: normalized,
       firstName,
       lastName,
-      displayName: `${firstName} ${lastName}`.trim() || undefined,
+      displayName: displayName || undefined,
       teamNumber,
       confirmedAlliance: true,
       submittedAt: timestamp,
@@ -1272,9 +1321,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       ...prev,
       [normalized]: profile,
     }))
+    setUser((current) => {
+      if (!current || normalizeEmail(current.email) !== normalized || !displayName) {
+        return current
+      }
+      const updated = { ...current, name: displayName }
+      localStorage.setItem('auth_user', JSON.stringify(updated))
+      return updated
+    })
+    upsertRecentUser({
+      email: normalized,
+      name: displayName,
+      picture: user.picture,
+      acknowledged: false,
+      firstName,
+      lastName,
+      teamNumber,
+    })
     setRequiresAllianceConfirmation(false)
     return { success: true, message: 'Alliance confirmation submitted.' }
-  }, [user])
+  }, [upsertRecentUser, user])
 
   const removeAllianceProfile = useCallback((email: string) => {
     const normalized = normalizeEmail(email)

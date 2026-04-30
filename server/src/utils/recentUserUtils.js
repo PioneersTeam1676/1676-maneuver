@@ -8,6 +8,13 @@ const parseIso = (value) => {
   return Number.isNaN(date.getTime()) ? null : date
 }
 
+const ensureRecentUserProfileSchema = async (prisma) => {
+  if (!prisma?.$executeRawUnsafe) return
+  await prisma.$executeRawUnsafe("ALTER TABLE recent_users ADD COLUMN IF NOT EXISTS first_name VARCHAR(255) NULL AFTER photo_url")
+  await prisma.$executeRawUnsafe("ALTER TABLE recent_users ADD COLUMN IF NOT EXISTS last_name VARCHAR(255) NULL AFTER first_name")
+  await prisma.$executeRawUnsafe("ALTER TABLE recent_users ADD COLUMN IF NOT EXISTS team_number VARCHAR(255) NULL AFTER last_name")
+}
+
 const upsertRecentUser = async (
   prisma,
   {
@@ -17,6 +24,9 @@ const upsertRecentUser = async (
     acknowledged,
     displayName,
     photoUrl,
+    firstName,
+    lastName,
+    teamNumber,
   }
 ) => {
   const normalizedEmail = sanitizeString(email).toLowerCase()
@@ -28,6 +38,9 @@ const upsertRecentUser = async (
   const lastSeen = sanitizeString(lastSeenAt) || firstSeen
   const trimmedName = sanitizeString(displayName)
   const trimmedPhoto = sanitizeString(photoUrl)
+  const trimmedFirstName = sanitizeString(firstName)
+  const trimmedLastName = sanitizeString(lastName)
+  const trimmedTeamNumber = sanitizeString(teamNumber)
   const hasAcknowledgedValue = typeof acknowledged !== "undefined"
   const ackValue = acknowledged === true || acknowledged === "true" || acknowledged === 1
 
@@ -42,6 +55,9 @@ const upsertRecentUser = async (
         acknowledged: hasAcknowledgedValue ? ackValue : false,
         displayName: trimmedName || null,
         photoUrl: trimmedPhoto || null,
+        firstName: trimmedFirstName || null,
+        lastName: trimmedLastName || null,
+        teamNumber: trimmedTeamNumber || null,
       },
     })
   }
@@ -63,6 +79,9 @@ const upsertRecentUser = async (
       acknowledged: nextAck,
       displayName: trimmedName || existing.displayName,
       photoUrl: trimmedPhoto || existing.photoUrl,
+      firstName: trimmedFirstName || existing.firstName,
+      lastName: trimmedLastName || existing.lastName,
+      teamNumber: trimmedTeamNumber || existing.teamNumber,
     },
   })
 }
@@ -70,5 +89,6 @@ const upsertRecentUser = async (
 module.exports = {
   sanitizeString,
   parseIso,
+  ensureRecentUserProfileSchema,
   upsertRecentUser,
 }

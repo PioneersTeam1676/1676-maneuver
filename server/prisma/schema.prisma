@@ -113,6 +113,9 @@ model RecentUser {
   acknowledged Boolean @default(false)
   displayName  String? @map("display_name") @db.VarChar(255)
   photoUrl     String? @map("photo_url") @db.VarChar(255)
+  firstName    String? @map("first_name") @db.VarChar(255)
+  lastName     String? @map("last_name") @db.VarChar(255)
+  teamNumber   String? @map("team_number") @db.VarChar(255)
 
   @@index([acknowledged], map: "idx_recent_users_ack")
   @@index([lastSeenAt], map: "idx_recent_users_last_seen")

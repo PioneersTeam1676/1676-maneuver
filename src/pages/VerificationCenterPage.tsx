@@ -73,6 +73,9 @@ export default function VerificationCenterPage() {
       acknowledged: boolean
       displayName: string | null
       photoUrl: string | null
+      firstName: string | null
+      lastName: string | null
+      teamNumber: string | null
       assignedRole: UserRole
     }
 
@@ -92,6 +95,9 @@ export default function VerificationCenterPage() {
         acknowledged: Boolean(record.acknowledged),
         displayName: record.displayName ?? null,
         photoUrl: record.photoUrl ?? null,
+        firstName: record.firstName ?? null,
+        lastName: record.lastName ?? null,
+        teamNumber: record.teamNumber ?? null,
         assignedRole: "pending",
       })
     })
@@ -112,6 +118,9 @@ export default function VerificationCenterPage() {
         acknowledged: false,
         displayName: null,
         photoUrl: null,
+        firstName: null,
+        lastName: null,
+        teamNumber: null,
         assignedRole: "pending",
       })
     })
@@ -201,16 +210,21 @@ export default function VerificationCenterPage() {
     toast.error(`Revoked access for ${email}`)
   }
 
+  const formatRecordName = (record: { displayName?: string | null; firstName?: string | null; lastName?: string | null; email: string }) => {
+    const profileName = `${record.firstName || ""} ${record.lastName || ""}`.trim()
+    return record.displayName || profileName || "Unknown user"
+  }
+
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Verification Center</h1>
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Verification Center</h1>
           <p className="text-muted-foreground">
             Review Google sign-ins from outside the scouting domain. Approve them when you confirm their identity so they can access the platform.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing} className="shrink-0 mt-1">
+        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing} className="w-full shrink-0 sm:mt-1 sm:w-auto">
           <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
           Refresh
         </Button>
@@ -230,19 +244,21 @@ export default function VerificationCenterPage() {
             <div className="space-y-3">
               {pendingRecords.map((record) => {
                 const assignedRole = record.assignedRole
-                const initials = (record.displayName?.split(' ').map((part: string) => part[0]) ?? []).join('').slice(0, 2) || record.email[0]?.toUpperCase() || "?"
+                const displayName = formatRecordName(record)
+                const initials = (displayName.split(' ').map((part: string) => part[0]) ?? []).join('').slice(0, 2) || record.email[0]?.toUpperCase() || "?"
                 return (
-                  <div key={record.email} className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 shadow-sm md:flex-row md:items-center md:justify-between">
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-12 w-12">
-                        <AvatarImage src={record.photoUrl ?? undefined} alt={record.displayName ?? record.email} referrerPolicy="no-referrer" />
+                  <div key={record.email} className="flex flex-col gap-4 rounded-lg border border-border bg-card p-3 shadow-sm sm:p-4 md:flex-row md:items-center md:justify-between">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <Avatar className="h-11 w-11 shrink-0 sm:h-12 sm:w-12">
+                        <AvatarImage src={record.photoUrl ?? undefined} alt={displayName} referrerPolicy="no-referrer" />
                         <AvatarFallback className="text-sm">{initials}</AvatarFallback>
                       </Avatar>
-                      <div className="flex flex-col gap-1">
-                        <span className="font-semibold">{record.displayName || "Unknown user"}</span>
-                        <span className="text-sm font-mono text-muted-foreground">{record.email}</span>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <div className="flex min-w-0 flex-col gap-1">
+                        <span className="font-semibold">{displayName}</span>
+                        <span className="break-all font-mono text-sm text-muted-foreground">{record.email}</span>
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                           <span>Last seen: {new Date(record.lastSeenAt).toLocaleString()}</span>
+                          {record.teamNumber && <Badge variant="outline">Team {record.teamNumber}</Badge>}
                           <VerificationStatus
                             value={assignedRole !== "pending"}
                             yesLabel="Verified"
@@ -252,8 +268,8 @@ export default function VerificationCenterPage() {
                       </div>
                     </div>
                     
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary" className="px-3 py-1">Scout</Badge>
+                    <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end">
+                      <Badge variant="secondary" className="justify-center px-3 py-1 sm:inline-flex">Scout</Badge>
                       <Button size="sm" onClick={() => handleApprove(record.email)} className="px-4">
                         Approve
                       </Button>
@@ -281,17 +297,20 @@ export default function VerificationCenterPage() {
           <CardContent className="space-y-3">
             {recentlyCleared.map((record) => {
               const assignedRole = (roleAssignments[record.email] ?? "pending") as UserRole
+              const displayName = formatRecordName(record)
               return (
-                <div key={record.email} className="flex flex-col gap-3 rounded-md border border-border/60 bg-card/80 p-4 md:flex-row md:items-center md:justify-between">
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage src={record.photoUrl} alt={record.displayName ?? record.email} referrerPolicy="no-referrer" />
+                <div key={record.email} className="flex flex-col gap-3 rounded-md border border-border/60 bg-card/80 p-3 sm:p-4 md:flex-row md:items-center md:justify-between">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <Avatar className="h-8 w-8 shrink-0">
+                      <AvatarImage src={record.photoUrl} alt={displayName} referrerPolicy="no-referrer" />
                       <AvatarFallback>
-                        {record.displayName?.split(' ').map((part) => part[0]).join('').slice(0, 2) || record.email[0]?.toUpperCase() || "?"}
+                        {displayName.split(' ').map((part) => part[0]).join('').slice(0, 2) || record.email[0]?.toUpperCase() || "?"}
                       </AvatarFallback>
                     </Avatar>
-                    <div className="flex flex-col">
-                      <span className="font-medium">{record.displayName || record.email}</span>
+                    <div className="flex min-w-0 flex-col gap-1">
+                      <span className="font-medium">{displayName}</span>
+                      <span className="break-all font-mono text-xs text-muted-foreground">{record.email}</span>
+                      {record.teamNumber && <span className="text-xs text-muted-foreground">Team {record.teamNumber}</span>}
                       <VerificationStatus
                         value={assignedRole !== "pending"}
                         yesLabel={roleLabels[assignedRole]}
@@ -300,9 +319,9 @@ export default function VerificationCenterPage() {
                       />
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 md:justify-end">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
                     <span className="text-xs text-muted-foreground">{new Date(record.lastSeenAt).toLocaleString()}</span>
-                    <Button size="sm" variant="outline" onClick={() => handleRevoke(record.email)}>
+                    <Button size="sm" variant="outline" onClick={() => handleRevoke(record.email)} className="w-full sm:w-auto">
                       Revoke access
                     </Button>
                   </div>
