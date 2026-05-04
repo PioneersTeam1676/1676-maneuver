@@ -53,23 +53,34 @@ let activeBaseIndex = 0
 const reportedFailures = new Set<string>()
 const AUTH_TOKEN_EXPIRY_SKEW_MS = 60_000
 const API_AUTH_FAILURE_EVENT = "api-auth-failure"
+const AUTH_REFRESHED_EVENT = "auth-session-refreshed"
 let lastAuthFailureEventAt = 0
 
 type JwtPayload = {
   exp?: number
 }
 
-const fetchWithFallback = async (path: string, init: RequestInit): Promise<Response> => {
+const FETCH_TIMEOUT_MS = 8_000
+
+export type ApiRequestInit = RequestInit & { timeoutMs?: number }
+
+const fetchWithFallback = async (path: string, init: ApiRequestInit): Promise<Response> => {
   let lastError: unknown
+  const { timeoutMs, ...fetchInit } = init
+  const effectiveTimeout = typeof timeoutMs === 'number' && timeoutMs > 0 ? timeoutMs : FETCH_TIMEOUT_MS
 
   for (let offset = 0; offset < BASE_URL_CANDIDATES.length; offset += 1) {
     const index = (activeBaseIndex + offset) % BASE_URL_CANDIDATES.length
     const base = BASE_URL_CANDIDATES[index]
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), effectiveTimeout)
     try {
-      const response = await fetch(`${base}${path}`, init)
+      const response = await fetch(`${base}${path}`, { ...fetchInit, signal: controller.signal })
+      clearTimeout(timeoutId)
       activeBaseIndex = index
       return response
     } catch (error) {
+      clearTimeout(timeoutId)
       lastError = error
       if (error instanceof TypeError) {
         if (!reportedFailures.has(base)) {
@@ -78,6 +89,7 @@ const fetchWithFallback = async (path: string, init: RequestInit): Promise<Respo
         }
         continue
       }
+      // AbortError (timeout) or any other error — don't try remaining candidates
       throw error
     }
   }
@@ -195,7 +207,7 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return body as T
 }
 
-export async function apiGet<T>(path: string, init?: RequestInit): Promise<T> {
+export async function apiGet<T>(path: string, init?: ApiRequestInit): Promise<T> {
   const response = await fetchWithFallback(path, {
     method: "GET",
     headers: withAuthHeaders(init?.headers),
@@ -204,7 +216,7 @@ export async function apiGet<T>(path: string, init?: RequestInit): Promise<T> {
   return handleResponse<T>(response)
 }
 
-export async function apiPost<T>(path: string, body?: unknown, init?: RequestInit): Promise<T> {
+export async function apiPost<T>(path: string, body?: unknown, init?: ApiRequestInit): Promise<T> {
   const response = await fetchWithFallback(path, {
     method: "POST",
     headers: withAuthHeaders({
@@ -217,7 +229,7 @@ export async function apiPost<T>(path: string, body?: unknown, init?: RequestIni
   return handleResponse<T>(response)
 }
 
-export async function apiPut<T>(path: string, body?: unknown, init?: RequestInit): Promise<T> {
+export async function apiPut<T>(path: string, body?: unknown, init?: ApiRequestInit): Promise<T> {
   const response = await fetchWithFallback(path, {
     method: "PUT",
     headers: withAuthHeaders({
@@ -230,7 +242,7 @@ export async function apiPut<T>(path: string, body?: unknown, init?: RequestInit
   return handleResponse<T>(response)
 }
 
-export async function apiPatch<T>(path: string, body?: unknown, init?: RequestInit): Promise<T> {
+export async function apiPatch<T>(path: string, body?: unknown, init?: ApiRequestInit): Promise<T> {
   const response = await fetchWithFallback(path, {
     method: "PATCH",
     headers: withAuthHeaders({
@@ -243,7 +255,7 @@ export async function apiPatch<T>(path: string, body?: unknown, init?: RequestIn
   return handleResponse<T>(response)
 }
 
-export async function apiDelete<T>(path: string, body?: unknown, init?: RequestInit): Promise<T> {
+export async function apiDelete<T>(path: string, body?: unknown, init?: ApiRequestInit): Promise<T> {
   const response = await fetchWithFallback(path, {
     method: "DELETE",
     headers: withAuthHeaders(body ? {
@@ -268,7 +280,7 @@ export const setApiAuthToken = (token: string | null): void => {
 }
 
 export { ApiError }
-export { API_AUTH_FAILURE_EVENT }
+export { API_AUTH_FAILURE_EVENT, AUTH_REFRESHED_EVENT }
 
 export type ApiHealth = {
   status?: string

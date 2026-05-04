@@ -10,9 +10,35 @@ const parseIso = (value) => {
 
 const ensureRecentUserProfileSchema = async (prisma) => {
   if (!prisma?.$executeRawUnsafe) return
-  await prisma.$executeRawUnsafe("ALTER TABLE recent_users ADD COLUMN IF NOT EXISTS first_name VARCHAR(255) NULL AFTER photo_url")
-  await prisma.$executeRawUnsafe("ALTER TABLE recent_users ADD COLUMN IF NOT EXISTS last_name VARCHAR(255) NULL AFTER first_name")
-  await prisma.$executeRawUnsafe("ALTER TABLE recent_users ADD COLUMN IF NOT EXISTS team_number VARCHAR(255) NULL AFTER last_name")
+  try {
+    await prisma.$executeRawUnsafe("ALTER TABLE recent_users ADD COLUMN IF NOT EXISTS first_name VARCHAR(255) NULL AFTER photo_url")
+    await prisma.$executeRawUnsafe("ALTER TABLE recent_users ADD COLUMN IF NOT EXISTS last_name VARCHAR(255) NULL AFTER first_name")
+    await prisma.$executeRawUnsafe("ALTER TABLE recent_users ADD COLUMN IF NOT EXISTS team_number VARCHAR(255) NULL AFTER last_name")
+    return
+  } catch (error) {
+    // Some local/dev databases do not support MySQL's IF NOT EXISTS/AFTER syntax.
+  }
+
+  const isDuplicateColumnError = (error) => {
+    const message = String(error?.message || error || "").toLowerCase()
+    return message.includes("duplicate column") || message.includes("already exists")
+  }
+
+  const columns = [
+    ["first_name", "VARCHAR(255)"],
+    ["last_name", "VARCHAR(255)"],
+    ["team_number", "VARCHAR(255)"],
+  ]
+
+  for (const [column, type] of columns) {
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE recent_users ADD COLUMN ${column} ${type} NULL`)
+    } catch (error) {
+      if (!isDuplicateColumnError(error)) {
+        throw error
+      }
+    }
+  }
 }
 
 const upsertRecentUser = async (
@@ -70,6 +96,11 @@ const upsertRecentUser = async (
   const nextFirst = existingFirst <= incomingFirst ? existing.firstSeenAt : firstSeen
   const nextLast = existingLast >= incomingLast ? existing.lastSeenAt : lastSeen
   const nextAck = hasAcknowledgedValue ? ackValue : existing.acknowledged
+  const hasExistingSubmittedProfile = Boolean(existing.firstName && existing.lastName && existing.teamNumber)
+  const hasIncomingSubmittedProfile = Boolean(trimmedFirstName && trimmedLastName && trimmedTeamNumber)
+  const nextDisplayName = hasExistingSubmittedProfile && !hasIncomingSubmittedProfile
+    ? existing.displayName
+    : (trimmedName || existing.displayName)
 
   return prisma.recentUser.update({
     where: { email: normalizedEmail },
@@ -77,7 +108,7 @@ const upsertRecentUser = async (
       firstSeenAt: nextFirst,
       lastSeenAt: nextLast,
       acknowledged: nextAck,
-      displayName: trimmedName || existing.displayName,
+      displayName: nextDisplayName,
       photoUrl: trimmedPhoto || existing.photoUrl,
       firstName: trimmedFirstName || existing.firstName,
       lastName: trimmedLastName || existing.lastName,

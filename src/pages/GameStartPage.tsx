@@ -16,8 +16,15 @@ import {
   resolveTbaApiKey,
   MATCH_DATA_UPDATED_EVENT,
 } from "@/lib/tbaUtils";
-import { fetchMyAssignments, type MyAssignment } from "@/lib/scheduleApi";
+import {
+  deriveMyAssignmentsFromSchedule,
+  fetchMyAssignments,
+  fetchRemoteSchedule,
+  type MyAssignment,
+} from "@/lib/scheduleApi";
+import { useAuth } from "@/contexts/AuthContext";
 import { haptics } from "@/lib/haptics";
+import { setDraftScoutingInputs, clearDraftScoutingInputs } from "@/lib/scoutingDraftStore";
 // import { ACTIVE_FORM_UPDATED_EVENT, getActiveFormId, syncActiveFormConfig } from "@/lib/activeForm";
 
 const MATCH_PROGRESS_POLL_MS = 15_000;
@@ -25,6 +32,7 @@ const MATCH_PROGRESS_POLL_MS = 15_000;
 const GameStartPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const states = location.state;
 
   const parsePlayerStation = () => {
@@ -93,18 +101,47 @@ const GameStartPage = () => {
 
   // Fetch scout's assignments for the current event
   useEffect(() => {
-    if (!eventName) return;
-    fetchMyAssignments(eventName)
-      .then((assignments) => {
+    myAssignmentsRef.current = null;
+    setMyAssignments([]);
+    if (!eventName) {
+      myAssignmentsRef.current = [];
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadAssignments = async () => {
+      let assignments: MyAssignment[] = [];
+      try {
+        assignments = await fetchMyAssignments(eventName);
+      } catch (err: unknown) {
+        console.warn("Failed to fetch schedule assignments:", err);
+      }
+
+      if (assignments.length === 0 && user?.email) {
+        try {
+          const schedule = await fetchRemoteSchedule(eventName);
+          assignments = deriveMyAssignmentsFromSchedule({
+            email: user.email,
+            schedule,
+          });
+        } catch (err: unknown) {
+          console.warn("Failed to derive schedule assignments from published schedule:", err);
+        }
+      }
+
+      if (!cancelled) {
         myAssignmentsRef.current = assignments;
         setMyAssignments(assignments);
-      })
-      .catch((err: unknown) => {
-        console.warn("Failed to fetch schedule assignments:", err);
-        // Treat fetch error as no assignments so TBA auto-advance is not blocked
-        myAssignmentsRef.current = [];
-      });
-  }, [eventName]);
+      }
+    };
+
+    void loadAssignments();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [eventName, user?.email]);
 
   // Derive the assignment for the currently selected match number
   const currentAssignment = useMemo(() => {
@@ -408,17 +445,16 @@ const GameStartPage = () => {
 
     haptics.success();
     const nextRoute = "/scout-form";
-    navigate(nextRoute, {
-      state: {
-        inputs: {
-          matchNumber,
-          alliance,
-          scoutName: currentScout,
-          selectTeam,
-          eventName,
-        },
-      },
-    });
+    const inputs = {
+      matchNumber,
+      alliance,
+      scoutName: currentScout,
+      selectTeam,
+      eventName,
+    };
+    clearDraftScoutingInputs();
+    setDraftScoutingInputs(inputs);
+    navigate(nextRoute, { state: { inputs } });
   };
 
   const handleGoBack = () => {

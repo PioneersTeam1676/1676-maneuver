@@ -1,8 +1,25 @@
 import Dexie, { type Table } from 'dexie';
+import { toast } from 'sonner';
 import type { ScoutingDataWithId } from './scoutingDataUtils';
 import type { PitScoutingEntry } from './pitScoutingTypes';
 import { apiDelete, apiGet, apiPatch, apiPost } from './apiClient';
 import { withScoutingSeasonBody, withScoutingSeasonParams } from '@/lib/scoutingSeason';
+
+const SLOW_SYNC_WARN_MS = 6_000;
+const SLOW_SYNC_TOAST_ID = 'slow-sync-warning';
+
+const startSlowSyncWarning = (label: string): (() => void) => {
+	const timer = setTimeout(() => {
+		toast.message(`${label} sync slow — staying queued offline-safe`, {
+			id: SLOW_SYNC_TOAST_ID,
+			duration: Infinity,
+		});
+	}, SLOW_SYNC_WARN_MS);
+	return () => {
+		clearTimeout(timer);
+		toast.dismiss(SLOW_SYNC_TOAST_ID);
+	};
+};
 
 export interface Scout {
 	name: string;
@@ -175,26 +192,47 @@ const enhanceEntry = (entry: ScoutingDataWithId): ScoutingEntryDB => {
 	};
 };
 
+// MySQL utf8mb3 columns reject 4-byte UTF-8 (emoji, supplementary-plane chars).
+// Strip surrogate pairs from any string before sync so server upserts don't fail.
+const SUPPLEMENTARY_PLANE_RE = /[\uD800-\uDBFF][\uDC00-\uDFFF]/g;
+const stripSupplementaryChars = <T>(value: T): T => {
+	if (typeof value === 'string') {
+		return value.replace(SUPPLEMENTARY_PLANE_RE, '') as T;
+	}
+	if (Array.isArray(value)) {
+		return value.map(stripSupplementaryChars) as T;
+	}
+	if (value && typeof value === 'object') {
+		const out: Record<string, unknown> = {};
+		for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+			out[k] = stripSupplementaryChars(v);
+		}
+		return out as T;
+	}
+	return value;
+};
+
 const normalizeScoutingEntry = (entry: ScoutingEntryDB): ScoutingEntryDB => {
 	const hasClientId = typeof entry.clientId === 'string' && entry.clientId.length > 0;
 	const serverId = hasClientId ? Number(entry.id) : entry.serverId;
 
-	return {
+	return stripSupplementaryChars({
 		...entry,
 		id: entry.clientId ?? entry.id,
 		serverId: Number.isFinite(serverId) ? serverId : entry.serverId,
 		data: entry.data ?? {},
 		synced: entry.synced ?? true,
-	};
+	});
 };
 
 type PitEntryWithData = PitScoutingEntry & { data?: Record<string, unknown> };
 type PitSaveResponse = { success?: boolean; entry?: PitEntryWithData };
 
-const pitEntryPayload = (entry: PitScoutingEntry): PitEntryWithData => ({
-	...entry,
-	data: { ...entry },
-});
+const pitEntryPayload = (entry: PitScoutingEntry): PitEntryWithData =>
+	stripSupplementaryChars({
+		...entry,
+		data: { ...entry },
+	});
 
 const mergePitEntry = (entry: PitEntryWithData): PitScoutingEntry => {
 	const { data: nestedData, ...rest } = entry;
@@ -343,17 +381,58 @@ export const syncCachedScoutingEntries = async (): Promise<void> => {
 	}
 
 	scoutingSyncPromise = (async () => {
+		let dismissSlowWarning: (() => void) | null = null;
 		try {
 			const localEntries = await db.scoutingData.toArray();
 			const pendingEntries = localEntries.filter((entry) => entry.synced === false);
 			if (!pendingEntries.length) return;
-			await apiPost('/scouting/bulk', withScoutingSeasonBody({
-				entries: pendingEntries.map(normalizeScoutingEntry),
-			}));
-			await db.scoutingData.bulkPut(pendingEntries.map((entry) => ({ ...entry, synced: true })));
+			dismissSlowWarning = startSlowSyncWarning('Scouting');
+			try {
+				await apiPost('/scouting/bulk', withScoutingSeasonBody({
+					entries: pendingEntries.map(normalizeScoutingEntry),
+				}), { timeoutMs: 45_000 });
+				await db.scoutingData.bulkPut(pendingEntries.map((entry) => ({ ...entry, synced: true })));
+				return;
+			} catch (bulkError) {
+				handleApiError('bulk scouting sync failed; falling back to per-entry', bulkError);
+			}
+			const results = await Promise.allSettled(
+				pendingEntries.map((entry) =>
+					apiPost('/scouting', withScoutingSeasonBody({ entry: normalizeScoutingEntry(entry) }), { timeoutMs: 30_000 })
+						.then(() => entry),
+				),
+			);
+			const successes: ScoutingEntryDB[] = [];
+			const failures: { entry: ScoutingEntryDB; reason: unknown }[] = [];
+			results.forEach((result, idx) => {
+				if (result.status === 'fulfilled') {
+					successes.push(pendingEntries[idx]);
+				} else {
+					failures.push({ entry: pendingEntries[idx], reason: result.reason });
+					handleApiError(
+						`failed to sync entry ${pendingEntries[idx].id} (team ${pendingEntries[idx].teamNumber} match ${pendingEntries[idx].matchNumber})`,
+						result.reason,
+					);
+				}
+			});
+			if (successes.length) {
+				await db.scoutingData.bulkPut(successes.map((entry) => ({ ...entry, synced: true })));
+			}
+			if (failures.length > 0) {
+				const sample = failures[0];
+				const reason = sample.reason instanceof Error ? sample.reason.message : String(sample.reason);
+				const status = sample.reason && typeof sample.reason === 'object' && 'status' in sample.reason
+					? ` [HTTP ${(sample.reason as { status?: number }).status}]`
+					: '';
+				throw new Error(
+					`${failures.length} of ${pendingEntries.length} scouting entries failed: ${reason}${status} (entry ${sample.entry.id}, team ${sample.entry.teamNumber}, match ${sample.entry.matchNumber})`,
+				);
+			}
 		} catch (error) {
 			handleApiError('failed to sync cached scouting entries', error);
+			throw error;
 		} finally {
+			dismissSlowWarning?.();
 			scoutingSyncPromise = null;
 		}
 	})();
@@ -374,17 +453,58 @@ export const syncCachedPitScoutingEntries = async (): Promise<void> => {
 	}
 
 	pitSyncPromise = (async () => {
+		let dismissSlowWarning: (() => void) | null = null;
 		try {
 			const localEntries = await pitDB.pitScoutingData.toArray();
 			const pendingEntries = localEntries.filter((entry) => entry.synced === false);
 			if (!pendingEntries.length) return;
-			await apiPost('/pit/bulk', withScoutingSeasonBody({
-				entries: pendingEntries.map(pitEntryPayload),
-			}));
-			await pitDB.pitScoutingData.bulkPut(pendingEntries.map((entry) => ({ ...entry, synced: true })));
+			dismissSlowWarning = startSlowSyncWarning('Pit');
+			try {
+				await apiPost('/pit/bulk', withScoutingSeasonBody({
+					entries: pendingEntries.map(pitEntryPayload),
+				}), { timeoutMs: 45_000 });
+				await pitDB.pitScoutingData.bulkPut(pendingEntries.map((entry) => ({ ...entry, synced: true })));
+				return;
+			} catch (bulkError) {
+				handleApiError('bulk pit sync failed; falling back to per-entry', bulkError);
+			}
+			const results = await Promise.allSettled(
+				pendingEntries.map((entry) =>
+					apiPost('/pit', withScoutingSeasonBody({ entry: pitEntryPayload(entry) }), { timeoutMs: 30_000 })
+						.then(() => entry),
+				),
+			);
+			const successes: PitScoutingEntry[] = [];
+			const failures: { entry: PitScoutingEntry; reason: unknown }[] = [];
+			results.forEach((result, idx) => {
+				if (result.status === 'fulfilled') {
+					successes.push(pendingEntries[idx]);
+				} else {
+					failures.push({ entry: pendingEntries[idx], reason: result.reason });
+					handleApiError(
+						`failed to sync pit entry ${pendingEntries[idx].id} (team ${pendingEntries[idx].teamNumber})`,
+						result.reason,
+					);
+				}
+			});
+			if (successes.length) {
+				await pitDB.pitScoutingData.bulkPut(successes.map((entry) => ({ ...entry, synced: true })));
+			}
+			if (failures.length > 0) {
+				const sample = failures[0];
+				const reason = sample.reason instanceof Error ? sample.reason.message : String(sample.reason);
+				const status = sample.reason && typeof sample.reason === 'object' && 'status' in sample.reason
+					? ` [HTTP ${(sample.reason as { status?: number }).status}]`
+					: '';
+				throw new Error(
+					`${failures.length} of ${pendingEntries.length} pit entries failed: ${reason}${status} (entry ${sample.entry.id}, team ${sample.entry.teamNumber})`,
+				);
+			}
 		} catch (error) {
 			handleApiError('failed to sync cached pit entries', error);
+			throw error;
 		} finally {
+			dismissSlowWarning?.();
 			pitSyncPromise = null;
 		}
 	})();
@@ -487,19 +607,31 @@ gameDB.open().catch((error) => {
 	console.error('Failed to open Scout Profile database:', error);
 });
 
-export const saveScoutingEntry = async (entry: ScoutingDataWithId): Promise<void> => {
+export interface SaveScoutingEntryResult {
+	syncedRemote: boolean;
+	error?: { name?: string; message?: string };
+}
+
+export const saveScoutingEntry = async (entry: ScoutingDataWithId): Promise<SaveScoutingEntryResult> => {
 	const enhancedEntry = enhanceEntry(entry);
 	await db.scoutingData.put(enhancedEntry);
 
-	// Sync to server in background — local save already guarantees data safety
-	void (async () => {
-		try {
-			await apiPost('/scouting', withScoutingSeasonBody({ entry: enhancedEntry }));
-			await db.scoutingData.update(enhancedEntry.id, { synced: true });
-		} catch (error) {
-			handleApiError('failed to persist scouting entry remotely', error);
-		}
-	})();
+	if (typeof navigator !== 'undefined' && !navigator.onLine) {
+		return { syncedRemote: false, error: { name: 'Offline', message: 'Device offline' } };
+	}
+
+	try {
+		await apiPost('/scouting', withScoutingSeasonBody({ entry: normalizeScoutingEntry(enhancedEntry) }));
+		await db.scoutingData.update(enhancedEntry.id, { synced: true });
+		return { syncedRemote: true };
+	} catch (error) {
+		handleApiError('failed to persist scouting entry remotely', error);
+		const e = error as Error & { status?: number };
+		return {
+			syncedRemote: false,
+			error: { name: e?.name, message: e?.message },
+		};
+	}
 };
 
 export const saveScoutingEntries = async (entries: ScoutingDataWithId[]): Promise<void> => {

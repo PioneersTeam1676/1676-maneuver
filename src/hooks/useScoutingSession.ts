@@ -9,8 +9,9 @@ export function useScoutingSession() {
   
   // Define routes that are considered "middle of scouting" where data loss would occur
   const scoutingRoutes = [
+    '/scout-form',
     '/auto-start',
-    '/auto-scoring', 
+    '/auto-scoring',
     '/teleop-scoring',
     '/endgame'
   ];

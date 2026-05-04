@@ -13,6 +13,15 @@ const POSITION_DETAILS = {
   "blue-3": { alliance: "blue", label: "Blue 3", slotIndex: 2 },
 }
 const POSITION_KEYS = Object.keys(POSITION_DETAILS)
+const normalizeAssignmentPosition = (position) => {
+  if (typeof position !== "string") return position
+  if (POSITION_DETAILS[position]) return position
+  const previousMatch = position.match(/^(.+)-prev$/)
+  if (previousMatch && POSITION_DETAILS[previousMatch[1]]) {
+    return previousMatch[1]
+  }
+  return position
+}
 
 const MATCH_LOOKAHEAD_DEFAULT = 5
 const parsePositiveInteger = (value) => {
@@ -1006,11 +1015,12 @@ const getMyAssignments = async ({ eventKey, email }) => {
     .sort((a, b) => (a.matchOrder ?? Number.MAX_SAFE_INTEGER) - (b.matchOrder ?? Number.MAX_SAFE_INTEGER))
 
   return effectiveAssignments.map((a) => {
-    const positionDetails = POSITION_DETAILS[a.position] || {}
+    const position = normalizeAssignmentPosition(a.position)
+    const positionDetails = POSITION_DETAILS[position] || {}
     return {
       matchNumber: a.matchNumber,
       matchOrder: a.matchOrder,
-      position: a.position,
+      position,
       alliance: positionDetails.alliance ?? null,
       slotIndex: positionDetails.slotIndex ?? null, // 0-based; +1 = teamPosition (1,2,3)
     }

@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS scouting_entries (
   scout_name VARCHAR(255),
   scout_email VARCHAR(255),
   event_name VARCHAR(255),
-  data LONGTEXT NOT NULL,
+  data LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   timestamp BIGINT NOT NULL
 );
 CREATE INDEX idx_scouting_team ON scouting_entries(team_number);
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS pit_entries (
   event_name VARCHAR(255),
   scout_name VARCHAR(255),
   scout_email VARCHAR(255),
-  data LONGTEXT NOT NULL,
+  data LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   timestamp BIGINT NOT NULL
 );
 CREATE INDEX idx_pit_team ON pit_entries(team_number);
@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS scout_achievements (
 CREATE TABLE IF NOT EXISTS event_settings (
   id INT PRIMARY KEY,
   current_event VARCHAR(255),
-  events_json LONGTEXT NOT NULL DEFAULT '[]',
+  events_json LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '[]',
   updated_at INT NOT NULL
 );
 
@@ -114,8 +114,8 @@ CREATE TABLE IF NOT EXISTS scout_schedule_matches (
   event_key VARCHAR(255) NOT NULL,
   match_number VARCHAR(255) NOT NULL,
   start_time VARCHAR(255),
-  red_teams LONGTEXT,
-  blue_teams LONGTEXT,
+  red_teams LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  blue_teams LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   created_at INT NOT NULL,
   updated_at INT NOT NULL,
   PRIMARY KEY (event_key, match_number)
@@ -171,7 +171,7 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
   endpoint VARCHAR(1024) NOT NULL UNIQUE,
   p256dh VARCHAR(512),
   auth VARCHAR(512),
-  data_json LONGTEXT,
+  data_json LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   user_agent VARCHAR(512),
   created_at INT NOT NULL,
   last_used INT NOT NULL
@@ -190,7 +190,7 @@ CREATE TABLE IF NOT EXISTS form_definitions (
   db_user VARCHAR(255),
   db_pass VARCHAR(255),
   db_engine VARCHAR(64) NOT NULL DEFAULT 'mysql',
-  schema_json LONGTEXT NOT NULL,
+  schema_json LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   created_at INT NOT NULL,
   updated_at INT NOT NULL
 );

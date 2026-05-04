@@ -16,6 +16,15 @@ import { SpecialMultipleChoice } from "@/components/ui/special-multiple-choice"
 
 import { addIdsToScoutingData } from "@/lib/scoutingDataUtils"
 import { saveScoutingEntry } from "@/lib/dexieDB"
+import { enqueuePendingSubmission } from "@/lib/pendingScoutingQueue"
+import {
+  clearDraftScoutingFormValues,
+  clearDraftScoutingInputs,
+  getDraftScoutingFormValues,
+  getDraftScoutingInputs,
+  setDraftScoutingFormValues,
+  setDraftScoutingInputs,
+} from "@/lib/scoutingDraftStore"
 import { splitSpecialChoiceOption } from "@/lib/specialChoiceOptions"
 import { cn } from "@/lib/utils"
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard"
@@ -1585,9 +1594,12 @@ export default function ScoutFormPage() {
   const location = useLocation()
   const state = location.state as LocationState | null
   useUnsavedChangesGuard(true)
-  const inputs = state?.inputs
+  const inputs = state?.inputs ?? getDraftScoutingInputs<ScoutInputs>() ?? undefined
   const form = HARDCODED_MATCH_FORM
-  const [values, setValues] = useState<Record<string, unknown>>(buildInitialMatchValues)
+  const [values, setValues] = useState<Record<string, unknown>>(() => {
+    const draft = getDraftScoutingFormValues<Record<string, unknown>>()
+    return draft && typeof draft === "object" ? { ...buildInitialMatchValues(), ...draft } : buildInitialMatchValues()
+  })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [loading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -1598,7 +1610,12 @@ export default function ScoutFormPage() {
       navigate("/game-start", { replace: true })
       return
     }
+    setDraftScoutingInputs(inputs)
   }, [inputs, navigate])
+
+  useEffect(() => {
+    setDraftScoutingFormValues(values)
+  }, [values])
 
   const pages = useMemo(() => coercePages(form?.schema), [form])
   const uiConfig = useMemo(() => normalizeUiConfig(form?.schema?.ui), [form])
@@ -1926,10 +1943,43 @@ export default function ScoutFormPage() {
       }
       const submission = buildSubmission(form, inputs, submissionValues)
       const [entry] = addIdsToScoutingData([submission])
-      if (entry) {
-        await saveScoutingEntry(entry)
+      if (!entry) {
+        toast.error("Could not build scouting entry.")
+        return
       }
-      toast.success("Scouting entry saved.")
+
+      let savedToDexie = true
+      let syncedRemote = false
+      let syncError: { name?: string; message?: string } | undefined
+      try {
+        const result = await saveScoutingEntry(entry)
+        syncedRemote = result.syncedRemote
+        syncError = result.error
+      } catch (error) {
+        savedToDexie = false
+        const e = error as Error
+        console.error("Failed to save scouting entry to local DB", error)
+        enqueuePendingSubmission(entry, { name: e?.name, message: e?.message })
+        toast.error(
+          `Match saved to backup queue. Local DB error: ${e?.name ?? "Unknown"}${e?.message ? `: ${e.message}` : ""}`,
+          { duration: 12000 },
+        )
+      }
+
+      if (savedToDexie && !syncedRemote) {
+        enqueuePendingSubmission(entry, syncError)
+      }
+
+      if (savedToDexie && syncedRemote) {
+        toast.success("Scouting entry synced.")
+      } else if (savedToDexie) {
+        toast.warning(
+          `Entry saved on device — not yet synced${syncError?.message ? ` (${syncError.message})` : ""}. Will retry automatically.`,
+          { duration: 10000 },
+        )
+      }
+      clearDraftScoutingInputs()
+      clearDraftScoutingFormValues()
 
       const nextMatchNumber = Number(inputs.matchNumber) + 1
       navigate("/game-start", {
@@ -1942,8 +1992,9 @@ export default function ScoutFormPage() {
         },
       })
     } catch (error) {
-      console.error("Failed to save scouting entry", error)
-      toast.error("Failed to save scouting entry.")
+      console.error("Failed to build scouting submission", error)
+      const e = error as Error
+      toast.error(`Could not submit match: ${e?.name ?? "Error"}${e?.message ? `: ${e.message}` : ""}`)
     } finally {
       setSaving(false)
     }

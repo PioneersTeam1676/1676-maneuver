@@ -8,21 +8,29 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ShieldCheck, RefreshCw, CheckCircle2 } from "lucide-react"
-import { apiPut } from "@/lib/apiClient"
 import { syncEventSettings } from "@/lib/eventSettingsClient"
 
 const POLL_INTERVAL_MS = 30_000
 
 const AllianceOnboardingPage = () => {
-  const { user, role, defaultRoute, refreshRoles, recentUsers, allianceProfile, submitAllianceProfile } = useAuth()
+  const {
+    user,
+    role,
+    ready,
+    defaultRoute,
+    refreshRoles,
+    recentUsers,
+    allianceProfile,
+    submitAllianceProfile,
+  } = useAuth()
   const navigate = useNavigate()
   const [lastChecked, setLastChecked] = useState<Date | null>(null)
   const [checking, setChecking] = useState(false)
-  const [registered, setRegistered] = useState(false)
   const [firstName, setFirstName] = useState("")
   const [lastName, setLastName] = useState("")
   const [teamNumber, setTeamNumber] = useState("")
   const [profileSubmitted, setProfileSubmitted] = useState(false)
+  const [profileSubmitting, setProfileSubmitting] = useState(false)
   const prevRoleRef = useRef(role)
 
   const recentUser = user
@@ -32,6 +40,12 @@ const AllianceOnboardingPage = () => {
   const savedLastName = allianceProfile?.lastName || recentUser?.lastName || ""
   const savedTeamNumber = allianceProfile?.teamNumber || recentUser?.teamNumber || ""
   const hasProfileDetails = Boolean(savedFirstName && savedLastName && savedTeamNumber)
+  const requestSubmitted = role !== "blocked" && (hasProfileDetails || profileSubmitted)
+
+  // Session expired while on this page — send to landing page so they can sign in again
+  useEffect(() => {
+    if (ready && !user) navigate('/', { replace: true })
+  }, [ready, user, navigate])
 
   // Redirect once approved
   useEffect(() => {
@@ -51,28 +65,6 @@ const AllianceOnboardingPage = () => {
     prevRoleRef.current = role
     return () => { cancelled = true }
   }, [role, defaultRoute, navigate])
-
-  // On mount: explicitly record this login in the DB so admins see the request
-  useEffect(() => {
-    if (!user) return
-    if (role === "blocked") {
-      setRegistered(false)
-      return
-    }
-
-    apiPut(`/recent-users/${encodeURIComponent(user.email)}`, {
-      email: user.email,
-      firstSeenAt: new Date().toISOString(),
-      lastSeenAt: new Date().toISOString(),
-      acknowledged: false,
-      displayName: user.name || undefined,
-      photoUrl: user.picture || undefined,
-    })
-      .then(() => setRegistered(true))
-      .catch(() => {
-        // Silent — server may be offline; the login attempt was already recorded on sign-in
-      })
-  }, [role, user])
 
   useEffect(() => {
     if (!user) return
@@ -113,14 +105,15 @@ const AllianceOnboardingPage = () => {
     }
   }
 
-  const handleProfileSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleProfileSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const result = submitAllianceProfile({
+    setProfileSubmitting(true)
+    const result = await submitAllianceProfile({
       firstName,
       lastName,
       teamNumber,
       confirmedAlliance: true,
-    })
+    }).finally(() => setProfileSubmitting(false))
 
     if (!result.success) {
       toast.error(result.message || "Could not save your profile details.")
@@ -128,7 +121,6 @@ const AllianceOnboardingPage = () => {
     }
 
     setProfileSubmitted(true)
-    setRegistered(true)
     toast.success("Profile details saved for admin review.")
   }
 
@@ -188,8 +180,8 @@ const AllianceOnboardingPage = () => {
                   required
                 />
               </div>
-              <Button type="submit" className="w-full sm:w-auto">
-                Save profile details
+              <Button type="submit" className="w-full sm:w-auto" disabled={profileSubmitting}>
+                {profileSubmitting ? "Saving..." : "Save profile details"}
               </Button>
             </form>
           )}
@@ -213,7 +205,7 @@ const AllianceOnboardingPage = () => {
                 <span className="font-medium text-foreground">Access level:</span>{" "}
                 <Badge variant="secondary">{role === "blocked" ? "Access revoked" : "Pending approval"}</Badge>
               </li>
-              {registered && role !== "blocked" && (
+              {requestSubmitted && (
                 <li className="flex items-center gap-1.5 text-green-600 dark:text-green-400">
                   <CheckCircle2 className="h-3.5 w-3.5" />
                   <span>Request sent to verification center</span>

@@ -2,6 +2,8 @@ import Dashboard from "@/pages/Dashboard";
 import LandingPage from "@/pages/LandingPage";
 import { Toaster } from "@/components/ui/sonner";
 import MatchReminderBackground from "@/components/MatchReminderBackground";
+import SessionRenewalBanner from "@/components/SessionRenewalBanner";
+import PendingScoutingBanner from "@/components/PendingScoutingBanner";
 import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -49,6 +51,8 @@ const MainLayout = () => {
   return (
     <AppErrorBoundary>
       <div className="flex min-h-dvh w-full flex-col bg-background">
+        <PendingScoutingBanner />
+        <SessionRenewalBanner />
         <Dashboard />
         <MatchReminderBackground />
         <Toaster />

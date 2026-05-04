@@ -4,6 +4,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { apiGet, apiDelete, apiPost, apiPut, ApiError } from "@/lib/apiClient"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -26,7 +27,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { toast } from "sonner"
-import { Trash2, Search, UserX, User, Users, Crown, Wrench, Gamepad2, RefreshCw, type LucideIcon } from "lucide-react"
+import { Trash2, Search, UserX, User, Users, Crown, Wrench, Gamepad2, RefreshCw, Pencil, type LucideIcon } from "lucide-react"
 
 interface User {
   email: string
@@ -120,6 +121,17 @@ type SyncResult = {
   unmatched: string[]
 }
 
+type RenameScoutResult = {
+  counts?: {
+    scoutingEntries?: number
+    pitEntries?: number
+    predictions?: number
+    achievements?: number
+    scoutProfile?: number
+    recentUsers?: number
+  }
+}
+
 const DELETED_USERS_STORAGE_KEY = "user_management_deleted_users"
 
 const normalizeScoutName = (value: string) =>
@@ -175,6 +187,10 @@ export default function UserManagementPage() {
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null)
   const [syncDialogOpen, setSyncDialogOpen] = useState(false)
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false)
+  const [userToRename, setUserToRename] = useState<User | null>(null)
+  const [renameName, setRenameName] = useState("")
+  const [renaming, setRenaming] = useState(false)
   const buildSeasonUrl = (path: string, params?: Record<string, string>) => {
     const search = new URLSearchParams(params)
     const season = readScoutingSeason()
@@ -183,6 +199,15 @@ export default function UserManagementPage() {
     }
     const query = search.toString()
     return query ? `${path}?${query}` : path
+  }
+
+  const getUserDisplayName = (user?: User | null) => {
+    if (!user) return ""
+    return (
+      user.displayName ||
+      (user.firstName || user.lastName ? `${user.firstName || ""} ${user.lastName || ""}`.trim() : "") ||
+      ""
+    )
   }
 
   useEffect(() => {
@@ -514,6 +539,60 @@ export default function UserManagementPage() {
     setDetailDialogOpen(true)
   }
 
+  const openRenameDialog = (user: User) => {
+    setUserToRename(user)
+    setRenameName(getUserDisplayName(user))
+    setRenameDialogOpen(true)
+  }
+
+  const handleRenameScout = async () => {
+    if (!userToRename) return
+
+    const newName = renameName.trim()
+    const oldName = getUserDisplayName(userToRename).trim()
+    if (!newName) {
+      toast.error("Scout name is required")
+      return
+    }
+    if (oldName && oldName === newName) {
+      toast.error("Enter a different scout name")
+      return
+    }
+
+    setRenaming(true)
+    try {
+      const payload: { oldName?: string; newName: string; email?: string } = { newName }
+      if (oldName) payload.oldName = oldName
+      if (!userToRename.isEntryOnly) payload.email = userToRename.email
+
+      const result = await apiPost<RenameScoutResult>(buildSeasonUrl("/roles/rename-scout"), payload)
+      const updatedEntries = (result.counts?.scoutingEntries || 0) + (result.counts?.pitEntries || 0)
+      const updatedGameRows =
+        (result.counts?.predictions || 0) +
+        (result.counts?.achievements || 0) +
+        (result.counts?.scoutProfile || 0)
+
+      toast.success(
+        `Renamed ${oldName || userToRename.email} to ${newName}` +
+          (updatedEntries || updatedGameRows ? ` (${updatedEntries + updatedGameRows} DB rows updated)` : "")
+      )
+      setRenameDialogOpen(false)
+      setUserToRename(null)
+      setRenameName("")
+      await fetchUsers()
+      setSelectedUser((prev) => prev && prev.email === userToRename.email ? { ...prev, displayName: newName } : prev)
+    } catch (error) {
+      console.error("Failed to rename scout:", error)
+      if (error instanceof ApiError && error.status === 409) {
+        toast.error("A scout profile already exists with that name")
+      } else {
+        toast.error("Failed to rename scout")
+      }
+    } finally {
+      setRenaming(false)
+    }
+  }
+
   const handleRoleChange = async (user: User, newRole: string) => {
     if (user.isEntryOnly || !user.email) return
     try {
@@ -633,7 +712,7 @@ export default function UserManagementPage() {
         <CardHeader>
           <CardTitle>Search Users</CardTitle>
           <CardDescription>
-            Filter by email or role
+            Filter by name, email, or role
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -641,7 +720,7 @@ export default function UserManagementPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               type="text"
-              placeholder="Search by email or role..."
+              placeholder="Search by name, email, or role..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -673,6 +752,7 @@ export default function UserManagementPage() {
                 const RoleIcon = roleIcons[user.role] || User
                 const isSelf = user.email === currentUser?.email
                 const canDeleteUser = !isSelf && !user.isEntryOnly
+                const canRenameUser = Boolean(getUserDisplayName(user) || !user.isEntryOnly)
 
                 return (
                   <div
@@ -759,19 +839,33 @@ export default function UserManagementPage() {
                         </div>
                       </div>
                     )}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        confirmDelete(user)
-                      }}
-                      disabled={!canDeleteUser}
-                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                      title={user.isEntryOnly ? "No linked account to remove yet" : isSelf ? "Cannot delete your own account" : "Remove user"}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center gap-1 ml-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          openRenameDialog(user)
+                        }}
+                        disabled={!canRenameUser}
+                        title="Rename scout in the database"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          confirmDelete(user)
+                        }}
+                        disabled={!canDeleteUser}
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        title={user.isEntryOnly ? "No linked account to remove yet" : isSelf ? "Cannot delete your own account" : "Remove user"}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 )
               })}
@@ -918,6 +1012,14 @@ export default function UserManagementPage() {
               {/* Actions */}
               <div className="flex gap-2 pt-4 border-t">
                 <Button
+                  variant="outline"
+                  onClick={() => openRenameDialog(selectedUser)}
+                  disabled={!getUserDisplayName(selectedUser) && selectedUser.isEntryOnly}
+                >
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Rename Scout
+                </Button>
+                <Button
                   variant="destructive"
                   onClick={() => {
                     setDetailDialogOpen(false)
@@ -938,6 +1040,47 @@ export default function UserManagementPage() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Rename Scout Dialog */}
+      <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Rename Scout</DialogTitle>
+            <DialogDescription>
+              Update this scout name in the selected season database and linked user record.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2 text-sm">
+              <span className="text-muted-foreground">Current name:</span>
+              <p className="font-medium">{getUserDisplayName(userToRename) || userToRename?.email}</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="rename-scout-name">New scout name</Label>
+              <Input
+                id="rename-scout-name"
+                value={renameName}
+                onChange={(e) => setRenameName(e.target.value)}
+                placeholder="Enter scout name"
+                disabled={renaming}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    void handleRenameScout()
+                  }
+                }}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setRenameDialogOpen(false)} disabled={renaming}>
+                Cancel
+              </Button>
+              <Button onClick={handleRenameScout} disabled={renaming || !renameName.trim()}>
+                {renaming ? "Renaming..." : "Rename"}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 

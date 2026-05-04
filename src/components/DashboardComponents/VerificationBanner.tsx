@@ -5,12 +5,7 @@ import { ShieldAlert } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/AuthContext"
-
-const matchesAllowedDomain = (email: string, domains: string[]) => {
-  if (!email) return false
-  const normalized = email.trim().toLowerCase()
-  return domains.some((domain) => domain && normalized.endsWith(`@${domain}`))
-}
+import { isPendingVerificationRequest } from "@/lib/verificationRequest"
 
 export function VerificationBanner() {
   const {
@@ -25,11 +20,12 @@ export function VerificationBanner() {
     if (!isLead) return []
     const domains = allowedAllianceDomains.filter(Boolean)
 
-    return recentUsers.filter((record) => {
-      const role = roleAssignments[record.email] ?? "pending"
-      const isAllowed = matchesAllowedDomain(record.email, domains)
-      return !record.acknowledged && role === "pending" && !isAllowed
-    })
+    return recentUsers.filter((record) =>
+      isPendingVerificationRequest({
+        ...record,
+        assignedRole: roleAssignments[record.email] ?? "pending",
+      }, domains)
+    )
   }, [isLead, recentUsers, roleAssignments, allowedAllianceDomains])
 
   if (!isLead || pendingVerifications.length === 0) {

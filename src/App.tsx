@@ -10,9 +10,10 @@ import { analytics } from '@/lib/analytics';
 import { syncEventSettings } from '@/lib/eventSettingsClient'
 import { ensureMatchScheduleCached } from '@/lib/tbaUtils'
 import { syncCachedPitScoutingEntries, syncCachedScoutingEntries } from '@/lib/dexieDB'
+import { replayPendingSubmissions } from '@/lib/pendingScoutingQueue'
 import { getForm } from '@/lib/formBuilderApi'
 import { syncActiveFormConfig } from '@/lib/activeForm'
-import { hasUsableAuthToken } from '@/lib/apiClient'
+import { AUTH_REFRESHED_EVENT, hasUsableAuthToken } from '@/lib/apiClient'
 
 import MainLayout from "@/layouts/MainLayout";
 import NotFoundPage from "@/pages/NotFoundPage";
@@ -222,32 +223,50 @@ function App() {
       })()
     }
 
+    const replayPendingScouting = () => {
+      void replayPendingSubmissions().catch((error) => {
+        console.warn('Failed to replay pending scouting submissions', error)
+      })
+    }
+
     runEventSync()
     syncOnlineCaches()
+    replayPendingScouting()
 
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
         runEventSync()
+        syncOnlineCaches()
+        replayPendingScouting()
       }
     }
 
     const handleFocus = () => {
       runEventSync()
+      syncOnlineCaches()
+      replayPendingScouting()
     }
 
     const handleOnline = () => {
       syncOnlineCaches()
       runEventSync()
+      replayPendingScouting()
+    }
+
+    const handleAuthRefreshed = () => {
+      syncOnlineCaches()
     }
 
     window.addEventListener('focus', handleFocus)
     document.addEventListener('visibilitychange', handleVisibility)
     window.addEventListener('online', handleOnline)
+    window.addEventListener(AUTH_REFRESHED_EVENT, handleAuthRefreshed)
 
     return () => {
       window.removeEventListener('focus', handleFocus)
       document.removeEventListener('visibilitychange', handleVisibility)
       window.removeEventListener('online', handleOnline)
+      window.removeEventListener(AUTH_REFRESHED_EVENT, handleAuthRefreshed)
     }
 
   }, []);

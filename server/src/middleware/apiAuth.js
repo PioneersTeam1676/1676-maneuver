@@ -50,7 +50,7 @@ const extractToken = (req) => {
   return null
 }
 
-const createApiAuthMiddleware = ({ skipDomainCheck = false } = {}) => {
+const createApiAuthMiddleware = ({ skipDomainCheck = false, allowBlocked = false, allowPendingRole = false } = {}) => {
   const tokens = resolveAuthTokens()
   const disableGoogleAuth = normalizeToken(process.env.DISABLE_GOOGLE_ID_AUTH)
   const googleClientId = normalizeToken(process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID)
@@ -89,13 +89,13 @@ const createApiAuthMiddleware = ({ skipDomainCheck = false } = {}) => {
           where: { email },
           select: { role: true },
         })
-        if (explicitRole?.role === "blocked") {
+        if (explicitRole?.role === "blocked" && !allowBlocked) {
           return res.status(403).json({ error: "Forbidden" })
         }
         if (!skipDomainCheck && allowedDomains.size) {
           const domain = email.split("@")[1] || ""
           if (!domain || !allowedDomains.has(domain)) {
-            if (!explicitRole || explicitRole.role === "pending") {
+            if (!allowPendingRole && (!explicitRole || explicitRole.role === "pending")) {
               return res.status(403).json({ error: "Forbidden" })
             }
           }

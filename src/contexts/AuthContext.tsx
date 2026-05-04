@@ -1,5 +1,10 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { API_AUTH_FAILURE_EVENT, apiDelete, apiGet, apiPatch, apiPost, apiPut, hasUsableAuthToken } from '@/lib/apiClient'
+import { AUTH_REFRESHED_EVENT, apiDelete, apiGet, apiPatch, apiPost, apiPut, hasUsableAuthToken } from '@/lib/apiClient'
+import { emailMatchesAllowedDomain as emailMatchesAllowedDomainHelper, mergeCurrentUserRole, parseAllowedEmailDomains, resolveDefaultRoleForEmail, resolveRoleAfterRefreshFailure, retainSessionStartRole } from '@/lib/authRoleDefaults'
+import { resolveOAuthErrorRecovery } from '@/lib/authSessionRecovery'
+import { resetVerificationState } from '@/lib/authVerificationReset'
+import { buildCanonicalGoogleAuthRestartUrl, resolveGoogleRedirectUri } from '@/lib/googleOAuthRedirect'
+import { findStoredVerificationProfile, hasCompletedOnboarding } from '@/lib/verificationRequest'
 
 type User = {
   name: string
@@ -52,6 +57,13 @@ type RecentUserApiRecord = Partial<RecentUserRecord> & {
   team_number?: string
 }
 
+type StoredVerificationSyncPayload = {
+  name?: string
+  firstName?: string
+  lastName?: string
+  teamNumber?: string
+}
+
 type AuthContextValue = {
   user: User | null
   role: UserRole
@@ -63,6 +75,7 @@ type AuthContextValue = {
   roleAssignments: RoleAssignments
   setRole: (email: string, role: UserRole) => void
   removeRole: (email: string) => void
+  resetVerification: (email: string) => void
   canDelete: boolean
   canAccessPath: (path: string) => boolean
   isAdmin: boolean
@@ -71,8 +84,9 @@ type AuthContextValue = {
   recentUsers: RecentUserRecord[]
   allianceProfile: AllianceProfile | null
   allianceProfiles: Record<string, AllianceProfile>
-  submitAllianceProfile: (input: AllianceProfileInput) => { success: boolean; message?: string }
+  submitAllianceProfile: (input: AllianceProfileInput) => Promise<{ success: boolean; message?: string }>
   removeAllianceProfile: (email: string) => void
+  clearAllianceProfileSubmission: (email: string) => void
   requiresAllianceConfirmation: boolean
   allowedAllianceDomain: string
   allowedAllianceDomains: string[]
@@ -83,6 +97,7 @@ type AuthContextValue = {
   canRescout: boolean
   rescouterPermissions: Record<string, boolean>
   setRescouter: (email: string, enabled: boolean) => Promise<void>
+  renewSession: (options?: { returnTo?: string }) => boolean
 }
 
 const ROLE_STORAGE_KEY = 'auth_roles'
@@ -94,23 +109,21 @@ const AUTH_ID_TOKEN_KEY = 'auth_id_token'
 const ALLIANCE_PROFILE_STORAGE_KEY = 'auth_alliance_profiles'
 const MAX_RECENT_USERS = 150
 const AUTH_CALLBACK_PATH = '/auth/google/callback'
-const AUTH_TOKEN_EXPIRY_SKEW_MS = 60_000
+const GOOGLE_AUTH_START_PARAM = 'authStart'
+const GOOGLE_AUTH_START_VALUE = 'google'
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase()
 
 const parseAllowedDomains = () => {
   const domainsEnv = (import.meta.env.VITE_ALLOWED_EMAIL_DOMAINS || import.meta.env.VITE_ALLOWED_EMAIL_DOMAIN || 'pascack.org') as string
-  return domainsEnv
-    .split(',')
-    .map((domain) => domain.trim().toLowerCase())
-    .filter(Boolean)
+  return parseAllowedEmailDomains(domainsEnv)
 }
 
 const ALLOWED_EMAIL_DOMAINS = parseAllowedDomains()
 const PRIMARY_ALLIANCE_DOMAIN = ALLOWED_EMAIL_DOMAINS[0] || ''
 
 const emailMatchesAllowedDomain = (email: string) =>
-  ALLOWED_EMAIL_DOMAINS.some((domain) => email.endsWith(`@${domain}`))
+  emailMatchesAllowedDomainHelper(email, ALLOWED_EMAIL_DOMAINS)
 
 const isAutoApprovedEmail = (email: string) => {
   const normalized = normalizeEmail(email)
@@ -118,10 +131,11 @@ const isAutoApprovedEmail = (email: string) => {
 }
 
 const resolveDefaultRole = (email: string): UserRole => {
-  const normalized = normalizeEmail(email)
-  if (ULTRA_ADMIN_EMAILS.includes(normalized)) return 'tech_lead'
-  if (ADMIN_EMAILS.includes(normalized)) return 'lead'
-  return 'pending'
+  return resolveDefaultRoleForEmail(email, {
+    allowedDomains: ALLOWED_EMAIL_DOMAINS,
+    adminEmails: ADMIN_EMAILS,
+    ultraAdminEmails: ULTRA_ADMIN_EMAILS,
+  })
 }
 
 const DEFAULT_ADMIN_EMAILS: string[] = []
@@ -166,19 +180,6 @@ const areRoleAssignmentsEqual = (a: RoleAssignments, b: RoleAssignments): boolea
     }
   }
   return true
-}
-
-const removeCachedRoleForUser = (assignments: RoleAssignments, email: string): RoleAssignments => {
-  const normalized = normalizeEmail(email)
-  if (!normalized || ULTRA_ADMIN_EMAILS.includes(normalized) || ADMIN_EMAILS.includes(normalized)) {
-    return assignments
-  }
-  if (!(normalized in assignments)) {
-    return assignments
-  }
-  const next = { ...assignments }
-  delete next[normalized]
-  return next
 }
 
 const SCOUT_POSITIONS = ['red-1', 'red-2', 'red-3', 'blue-1', 'blue-2', 'blue-3'] as const
@@ -240,6 +241,28 @@ const parseStoredRecentUsers = (raw: string | null): RecentUserRecord[] => {
   } catch (error) {
     console.warn('Failed to parse stored recent users', error)
     return []
+  }
+}
+
+const readStoredVerificationSyncPayload = (
+  email: string,
+  profilesByEmail: Record<string, AllianceProfile>,
+): StoredVerificationSyncPayload => {
+  if (typeof window === 'undefined') return {}
+
+  const profile = findStoredVerificationProfile(
+    email,
+    profilesByEmail,
+    parseStoredRecentUsers(localStorage.getItem(RECENT_STORAGE_KEY))
+  )
+
+  if (!profile) return {}
+
+  return {
+    name: profile.displayName,
+    firstName: profile.firstName,
+    lastName: profile.lastName,
+    teamNumber: profile.teamNumber,
   }
 }
 
@@ -313,29 +336,21 @@ const decodeIdToken = (token: string): GoogleIdTokenPayload => {
   return JSON.parse(payload) as GoogleIdTokenPayload
 }
 
-const readStoredIdToken = (): string | null => {
-  if (typeof window === 'undefined') return null
-  const stored = localStorage.getItem(AUTH_ID_TOKEN_KEY)
-  const trimmed = stored?.trim()
-  return trimmed || null
-}
-
-const isIdTokenFresh = (token: string | null, minRemainingMs = AUTH_TOKEN_EXPIRY_SKEW_MS): boolean => {
-  if (!token) return false
-  try {
-    const payload = decodeIdToken(token)
-    if (typeof payload.exp !== 'number') {
-      return true
-    }
-    return payload.exp * 1000 > Date.now() + minRemainingMs
-  } catch {
-    return false
-  }
-}
-
 const readCurrentAppPath = () => {
   if (typeof window === 'undefined') return '/'
   return `${window.location.pathname}${window.location.search}${window.location.hash}`
+}
+
+const readSavedUserEmail = () => {
+  if (typeof window === 'undefined') return null
+  const saved = localStorage.getItem('auth_user')
+  if (!saved) return null
+  try {
+    const parsed = JSON.parse(saved) as Partial<User>
+    return parsed.email ? normalizeEmail(parsed.email) : null
+  } catch {
+    return null
+  }
 }
 
 const generateOpaqueString = () => {
@@ -357,6 +372,8 @@ const roleRank: Record<UserRole, number> = {
   lead: 3,
   tech_lead: 4,
 }
+
+const isLeadRole = (roleValue: UserRole) => roleRank[roleValue] >= roleRank.lead
 
 const routePermissions: Array<{ pattern: RegExp; minRole: UserRole | null }> = [
   { pattern: /^\/$/, minRole: 'scout' }, // Home page for verified users only
@@ -516,6 +533,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   })
   const [requiresAllianceConfirmation, setRequiresAllianceConfirmation] = useState(false)
   const silentRefreshStartedRef = useRef(false)
+  const silentRefreshPopupRef = useRef<Window | null>(null)
 
   const cleanupExpiredOAuthState = useCallback(() => {
     const now = Date.now()
@@ -601,6 +619,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     returnTo?: string
     loginHint?: string
     replace?: boolean
+    popup?: boolean
   }) => {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
     if (!clientId) {
@@ -610,29 +629,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const configuredRedirect = import.meta.env.VITE_GOOGLE_REDIRECT_URI
     const currentOrigin = window.location.origin
-    let redirectUri = `${currentOrigin}${AUTH_CALLBACK_PATH}`
+    const mode = options?.mode || 'interactive'
+    const canonicalRestartUrl =
+      mode === 'interactive'
+        ? buildCanonicalGoogleAuthRestartUrl({
+            configuredRedirect,
+            currentHref: window.location.href,
+            currentOrigin,
+            authStartParam: GOOGLE_AUTH_START_PARAM,
+            authStartValue: GOOGLE_AUTH_START_VALUE,
+          })
+        : null
 
-    if (configuredRedirect) {
-      try {
-        const parsed = new URL(configuredRedirect)
-        if (parsed.origin === currentOrigin) {
-          redirectUri = parsed.toString()
-        } else {
-          console.warn(
-            `Configured Google redirect (${parsed.origin}) does not match current origin (${currentOrigin}); using current origin callback instead. ` +
-            `Add ${redirectUri} to the OAuth client in Google Cloud to avoid this fallback.`,
-          )
-        }
-      } catch (error) {
-        console.warn('Invalid VITE_GOOGLE_REDIRECT_URI; falling back to current origin callback.', error)
-      }
+    if (canonicalRestartUrl) {
+      window.location.assign(canonicalRestartUrl)
+      return true
     }
+
+    const redirectResolution = resolveGoogleRedirectUri({
+      configuredRedirect,
+      currentOrigin,
+      callbackPath: AUTH_CALLBACK_PATH,
+    })
+
+    if (configuredRedirect && !redirectResolution.configuredRedirectOrigin) {
+      console.warn('Invalid VITE_GOOGLE_REDIRECT_URI; falling back to current origin callback.')
+    } else if (configuredRedirect && !redirectResolution.usesConfiguredRedirect) {
+      console.warn(
+        `Configured Google redirect (${redirectResolution.configuredRedirectOrigin}) does not match current origin (${currentOrigin}); using ${redirectResolution.currentCallbackUri}. ` +
+        `Add this exact callback URL to the OAuth client in Google Cloud to avoid Google error 400.`,
+      )
+    }
+    const redirectUri = redirectResolution.redirectUri
 
     const stateValue = generateOpaqueString()
     const nonce = generateOpaqueString()
     storeOAuthState(stateValue, nonce, {
       returnTo: options?.returnTo || readCurrentAppPath(),
-      mode: options?.mode || 'interactive',
+      mode,
     })
 
     const params = new URLSearchParams({
@@ -650,7 +684,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`
-    if (options?.replace) {
+    if (options?.popup) {
+      try { silentRefreshPopupRef.current?.close() } catch { /* ignore */ }
+      const popup = window.open(authUrl, 'silent-auth', 'width=500,height=600,menubar=no,toolbar=no')
+      if (popup) {
+        silentRefreshPopupRef.current = popup
+        // Reset flag when popup closes without a successful auth message
+        const pollClose = setInterval(() => {
+          try {
+            if (popup.closed) {
+              clearInterval(pollClose)
+              silentRefreshStartedRef.current = false
+              silentRefreshPopupRef.current = null
+            }
+          } catch {
+            clearInterval(pollClose)
+          }
+        }, 500)
+      } else {
+        // Popup blocked (common on iOS PWA) — reset so future attempts can try
+        silentRefreshStartedRef.current = false
+      }
+    } else if (options?.replace) {
       window.location.replace(authUrl)
     } else {
       window.location.assign(authUrl)
@@ -658,42 +713,67 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return true
   }, [storeOAuthState])
 
-  const attemptSilentReauth = useCallback((loginHint?: string | null) => {
-    if (typeof window === 'undefined') return false
-    if (window.location.pathname === AUTH_CALLBACK_PATH) return false
-    if (silentRefreshStartedRef.current) return false
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (window.location.pathname === AUTH_CALLBACK_PATH) return
 
-    const normalizedHint = loginHint ? normalizeEmail(loginHint) : undefined
-    const started = startGoogleAuth({
-      prompt: 'none',
-      mode: 'silent',
-      returnTo: readCurrentAppPath(),
-      loginHint: normalizedHint,
+    const url = new URL(window.location.href)
+    if (url.searchParams.get(GOOGLE_AUTH_START_PARAM) !== GOOGLE_AUTH_START_VALUE) return
+
+    url.searchParams.delete(GOOGLE_AUTH_START_PARAM)
+    const returnTo = `${url.pathname}${url.search}${url.hash}`
+    window.history.replaceState({}, document.title, returnTo)
+
+    startGoogleAuth({
+      prompt: 'consent select_account',
+      mode: 'interactive',
+      returnTo,
       replace: true,
     })
-
-    if (started) {
-      silentRefreshStartedRef.current = true
-    }
-
-    return started
   }, [startGoogleAuth])
 
-  const syncRecentUserRecord = useCallback(async (record: RecentUserRecord) => {
+  const syncRecentUserPayload = useCallback(async (payload: {
+    email: string
+    name?: string | null
+    picture?: string | null
+    acknowledged?: boolean
+    firstName?: string | null
+    lastName?: string | null
+    teamNumber?: string | null
+  }) => {
+    const normalizedEmail = normalizeEmail(payload.email)
+    if (!normalizedEmail) return
+
+    const firstName = payload.firstName?.trim()
+    const lastName = payload.lastName?.trim()
+    const teamNumber = payload.teamNumber?.trim()
+    const profileDisplayName = firstName || lastName ? `${firstName || ''} ${lastName || ''}`.trim() : ''
+    const displayName = payload.name?.trim() || profileDisplayName
+    const shouldDeferPendingRequest = !isAutoApprovedEmail(normalizedEmail) && !hasCompletedOnboarding({
+      firstName,
+      lastName,
+      teamNumber,
+    })
+
+    if (shouldDeferPendingRequest) {
+      return true
+    }
+
     try {
-      await apiPut(`/recent-users/${encodeURIComponent(record.email)}`, {
-        email: record.email,
-        firstSeenAt: record.firstSeenAt,
-        lastSeenAt: record.lastSeenAt,
-        acknowledged: Boolean(record.acknowledged),
-        displayName: record.displayName || undefined,
-        photoUrl: record.photoUrl || undefined,
-        firstName: record.firstName || undefined,
-        lastName: record.lastName || undefined,
-        teamNumber: record.teamNumber || undefined,
+      await apiPut(`/recent-users/${encodeURIComponent(normalizedEmail)}`, {
+        email: normalizedEmail,
+        lastSeenAt: new Date().toISOString(),
+        ...(typeof payload.acknowledged === 'undefined' ? {} : { acknowledged: payload.acknowledged }),
+        displayName: displayName || undefined,
+        photoUrl: payload.picture || undefined,
+        firstName: firstName || undefined,
+        lastName: lastName || undefined,
+        teamNumber: teamNumber || undefined,
       })
+      return true
     } catch (error) {
       console.error("Failed to sync recent user record", error)
+      return false
     }
   }, [])
 
@@ -710,10 +790,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const normalizedEmail = normalizeEmail(payload.email)
       if (!normalizedEmail) return
 
-      let syncedRecord: RecentUserRecord | null = null
-
       setRecentUsers((prev) => {
-        const next = upsertRecentUserRecord(prev, {
+        return upsertRecentUserRecord(prev, {
           email: normalizedEmail,
           name: payload.name,
           picture: payload.picture,
@@ -722,15 +800,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           lastName: payload.lastName,
           teamNumber: payload.teamNumber,
         })
-        syncedRecord = next.find((record) => record.email === normalizedEmail) ?? null
-        return next
       })
 
-      if (syncedRecord) {
-        void syncRecentUserRecord(syncedRecord)
-      }
+      void syncRecentUserPayload({
+        ...payload,
+        email: normalizedEmail,
+      })
     },
-    [syncRecentUserRecord]
+    [syncRecentUserPayload]
   )
 
   useEffect(() => {
@@ -750,15 +827,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const parsed = JSON.parse(saved) as User
         const normalized = normalizeEmail(parsed.email)
-        const storedToken = readStoredIdToken()
-
-        if (!isIdTokenFresh(storedToken)) {
-          if (!attemptSilentReauth(normalized)) {
-            clearStoredAuthSession()
-            setReady(true)
-          }
-          return
-        }
 
         setUser((current) => {
           if (current && normalizeEmail(current.email) === normalized) {
@@ -768,21 +836,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         })
 
         setRoleAssignments((prev) => {
-          const next = ensureAdminPresence(removeCachedRoleForUser(prev, normalized))
+          const next = ensureAdminPresence(retainSessionStartRole({ email: normalized, assignments: prev }))
           return areRoleAssignmentsEqual(prev, next) ? prev : next
-        })
-
-        upsertRecentUser({
-          email: normalized,
-          name: parsed.name,
-          picture: parsed.picture,
-          acknowledged: isAutoApprovedEmail(normalized),
-        })
-
-        // Covers the "returning user" path where processOAuthResponse is never called.
-        // Safe: the endpoint is a no-op when they already have a non-pending role.
-        void apiPost('/recent-users/self-register-role', {}).catch(() => {
-          // Silent refresh listener handles token expiry/re-auth.
         })
 
         setRoleAssignments((prev) => {
@@ -796,7 +851,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     setReady(true)
-  }, [attemptSilentReauth, cleanupExpiredOAuthState, clearStoredAuthSession, ensureAdminPresence, upsertRecentUser])
+  }, [cleanupExpiredOAuthState, clearStoredAuthSession, ensureAdminPresence])
 
   useEffect(() => {
     // Clean up any invalid roles from localStorage on mount
@@ -835,17 +890,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!hasUsableAuthToken()) {
       throw new Error('No usable auth token')
     }
+    if (!user?.email) {
+      throw new Error('No signed-in user')
+    }
+    const normalizedCurrentEmail = normalizeEmail(user.email)
     try {
-      const response = await apiGet<{ roleAssignments?: Record<string, string> }>('/roles')
+      const currentRoleResponse = await apiGet<{ email: string; role: string }>('/roles/me')
+      const currentRole = isUserRole(currentRoleResponse.role)
+        ? currentRoleResponse.role
+        : resolveDefaultRole(normalizedCurrentEmail)
 
-      const remoteAssignments = Object.entries(response.roleAssignments || {}).reduce<RoleAssignments>((acc, [email, roleValue]) => {
-        const normalizedEmail = normalizeEmail(email)
-        if (!normalizedEmail || !isUserRole(roleValue)) {
+      setRoleAssignments((prev) => {
+        const next = ensureAdminPresence(mergeCurrentUserRole({
+          email: currentRoleResponse.email || normalizedCurrentEmail,
+          role: currentRole,
+          assignments: prev,
+        }))
+        return areRoleAssignmentsEqual(prev, next) ? prev : next
+      })
+
+      if (!isLeadRole(currentRole)) {
+        return
+      }
+
+      const response = await apiGet<{ roleAssignments?: Record<string, string> }>('/roles')
+      const remoteAssignments = Object.entries(response.roleAssignments || {}).reduce<RoleAssignments>(
+        (acc, [email, roleValue]) => {
+          const normalizedEmail = normalizeEmail(email)
+          if (!normalizedEmail || !isUserRole(roleValue)) {
+            return acc
+          }
+          acc[normalizedEmail] = roleValue
           return acc
-        }
-        acc[normalizedEmail] = roleValue
-        return acc
-      }, {})
+        },
+        {}
+      )
 
       setRoleAssignments((prev) => {
         const next = ensureAdminPresence(remoteAssignments)
@@ -853,38 +932,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })
     } catch (error) {
       const status = typeof error === 'object' && error && 'status' in error ? (error as { status?: number }).status : undefined
-      if ((status === 401 || status === 403) && user?.email) {
-        const normalizedCurrentEmail = normalizeEmail(user.email)
-        try {
-          const response = await apiPost<{ email: string; role: UserRole }>('/recent-users/self-register-role', {})
-          const normalizedEmail = normalizeEmail(response.email || user.email)
-          const nextRole = isUserRole(response.role) ? response.role : resolveDefaultRole(normalizedEmail)
-
-          setRoleAssignments((prev) => {
-            const next: RoleAssignments = {
-              ...prev,
-              [normalizedEmail]: nextRole,
-            }
-            return areRoleAssignmentsEqual(prev, next) ? prev : next
-          })
-          return
-        } catch (fallbackError) {
-          const fallbackStatus = typeof fallbackError === 'object' && fallbackError && 'status' in fallbackError
-            ? (fallbackError as { status?: number }).status
-            : undefined
-
-          setRoleAssignments((prev) => {
-            const withoutStaleRole = removeCachedRoleForUser(prev, normalizedCurrentEmail)
-            const inferredRole = fallbackStatus === 403 ? 'blocked' : resolveDefaultRole(normalizedCurrentEmail)
-            const next = ensureAdminPresence({
-              ...withoutStaleRole,
-              [normalizedCurrentEmail]: inferredRole,
-            })
-            return areRoleAssignmentsEqual(prev, next) ? prev : next
-          })
-          console.error('Failed to fetch current user role from fallback endpoint', fallbackError)
-        }
-      }
+      setRoleAssignments((prev) => {
+        const inferredRole = resolveRoleAfterRefreshFailure({
+          existingRole: prev[normalizedCurrentEmail],
+          fallbackStatus: status,
+          defaultRole: resolveDefaultRole(normalizedCurrentEmail),
+        })
+        const next = ensureAdminPresence(mergeCurrentUserRole({
+          email: normalizedCurrentEmail,
+          role: inferredRole,
+          assignments: prev,
+        }))
+        return areRoleAssignmentsEqual(prev, next) ? prev : next
+      })
       console.error('Failed to fetch role assignments from API', error)
       throw error
     }
@@ -954,9 +1014,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setAuthorizationReady(true)
       return
     }
+    if (!hasUsableAuthToken()) {
+      setAuthorizationReady(true)
+      return
+    }
 
     setAuthorizationReady(false)
     let cancelled = false
+
+    // Safety net: if the role fetch hangs (congested event WiFi, unreachable server),
+    // unblock the UI after 10 s using cached roles from localStorage.
+    const timeoutId = setTimeout(() => {
+      if (!cancelled) {
+        setAuthorizationReady(true)
+      }
+    }, 10_000)
 
     const run = async () => {
       try {
@@ -967,6 +1039,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.error('Failed to load roles from API', error)
         }
       } finally {
+        clearTimeout(timeoutId)
         if (!cancelled) {
           setAuthorizationReady(true)
         }
@@ -977,46 +1050,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       cancelled = true
+      clearTimeout(timeoutId)
     }
   }, [ready, user, fetchRoleAssignmentsFromApi, fetchRescouterPermissions])
-
-  useEffect(() => {
-    if (!ready || !user?.email) return
-    upsertRecentUser({
-      email: user.email,
-      name: user.name,
-      picture: user.picture,
-      acknowledged: isAutoApprovedEmail(user.email),
-    })
-  }, [ready, user, upsertRecentUser])
-
-  useEffect(() => {
-    if (!ready || !user?.email) return
-
-    let cancelled = false
-
-    const ensureBackendUser = async () => {
-      if (!hasUsableAuthToken()) {
-        return
-      }
-      try {
-        await apiPost('/recent-users/self-register-role', {})
-        if (!cancelled) {
-          await fetchRoleAssignmentsFromApi()
-        }
-      } catch (error) {
-        if (!cancelled) {
-          console.warn('Failed to ensure backend scout role on app open', error)
-        }
-      }
-    }
-
-    void ensureBackendUser()
-
-    return () => {
-      cancelled = true
-    }
-  }, [ready, user, fetchRoleAssignmentsFromApi])
 
   useEffect(() => {
     localStorage.setItem(RECENT_STORAGE_KEY, JSON.stringify(recentUsers))
@@ -1051,7 +1087,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const normalizedEmail = normalizeEmail(payload.email)
       const existingProfile = allianceProfiles[normalizedEmail]
-      const resolvedName = existingProfile?.displayName?.trim() || payload.name?.trim() || payload.email
+      const storedVerificationProfile = readStoredVerificationSyncPayload(normalizedEmail, allianceProfiles)
+      const resolvedName =
+        storedVerificationProfile.name?.trim() ||
+        existingProfile?.displayName?.trim() ||
+        payload.name?.trim() ||
+        payload.email
 
       const nextUser: User = {
         name: resolvedName,
@@ -1061,12 +1102,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       silentRefreshStartedRef.current = false
+      try { silentRefreshPopupRef.current?.close() } catch { /* ignore */ }
+      silentRefreshPopupRef.current = null
       setUser(nextUser)
       localStorage.setItem('auth_user', JSON.stringify(nextUser))
       localStorage.setItem(AUTH_ID_TOKEN_KEY, idToken)
+      window.dispatchEvent(new CustomEvent(AUTH_REFRESHED_EVENT))
 
       setRoleAssignments((prev) => {
-        const next = ensureAdminPresence(removeCachedRoleForUser(prev, normalizedEmail))
+        const next = ensureAdminPresence(retainSessionStartRole({ email: normalizedEmail, assignments: prev }))
         return areRoleAssignmentsEqual(prev, next) ? prev : next
       })
 
@@ -1075,6 +1119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         name: resolvedName,
         picture: payload.picture,
         acknowledged: isAutoApprovedEmail(normalizedEmail),
+        ...storedVerificationProfile,
       })
 
       if (existingProfile) {
@@ -1140,16 +1185,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         const storedState = state ? consumeOAuthState(state) : null
         const mode = storedState?.mode || 'interactive'
-        if (mode === 'silent') {
-          clearStoredAuthSession()
-        } else {
-          silentRefreshStartedRef.current = false
-        }
-        result = {
-          success: false,
-          message: errorDescription || error || 'Google sign-in failed.',
-          returnTo: mode === 'silent' ? '/' : (storedState?.returnTo || '/'),
+        const savedEmail = normalizeEmail(user?.email || readSavedUserEmail() || '')
+        const recovery = resolveOAuthErrorRecovery({
           mode,
+          hasSavedUser: Boolean(savedEmail),
+          returnTo: storedState?.returnTo,
+        })
+
+        if (recovery === 'preserve-session') {
+          silentRefreshStartedRef.current = false
+          result = {
+            success: true,
+            message: 'Session restored.',
+            returnTo: storedState?.returnTo || readCurrentAppPath(),
+            mode,
+          }
+        } else {
+          if (recovery === 'clear-session') {
+            clearStoredAuthSession()
+          } else {
+            silentRefreshStartedRef.current = false
+          }
+          result = {
+            success: false,
+            message: errorDescription || error || 'Google sign-in failed.',
+            returnTo: mode === 'silent' ? '/' : (storedState?.returnTo || '/'),
+            mode,
+          }
         }
       }
 
@@ -1175,35 +1237,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       window.removeEventListener('message', handleOAuthMessage)
     }
-  }, [clearStoredAuthSession, consumeOAuthState, processOAuthResponse])
+  }, [clearStoredAuthSession, consumeOAuthState, processOAuthResponse, user])
 
-  useEffect(() => {
-    const handleApiAuthFailure = () => {
-      if (window.location.pathname === AUTH_CALLBACK_PATH) return
+  const renewSession = useCallback((options?: { returnTo?: string }): boolean => {
+    if (typeof window === 'undefined') return false
+    if (window.location.pathname === AUTH_CALLBACK_PATH) return false
 
-      const saved = localStorage.getItem('auth_user')
-      const currentEmail = user?.email || (saved ? (() => {
-        try {
-          const parsed = JSON.parse(saved) as User
-          return parsed.email
-        } catch {
-          return null
-        }
-      })() : null)
-
-      if (!currentEmail) return
-      if (isIdTokenFresh(readStoredIdToken())) return
-
-      if (!attemptSilentReauth(currentEmail)) {
-        clearStoredAuthSession()
+    const saved = localStorage.getItem('auth_user')
+    const currentEmail = user?.email || (saved ? (() => {
+      try {
+        const parsed = JSON.parse(saved) as User
+        return parsed.email
+      } catch {
+        return null
       }
-    }
+    })() : null)
+    if (!currentEmail) return false
+    if (silentRefreshStartedRef.current) return false
 
-    window.addEventListener(API_AUTH_FAILURE_EVENT, handleApiAuthFailure as EventListener)
-    return () => {
-      window.removeEventListener(API_AUTH_FAILURE_EVENT, handleApiAuthFailure as EventListener)
-    }
-  }, [attemptSilentReauth, clearStoredAuthSession, user])
+    silentRefreshStartedRef.current = true
+    return startGoogleAuth({
+      prompt: 'none',
+      mode: 'silent',
+      loginHint: currentEmail,
+      returnTo: options?.returnTo || readCurrentAppPath(),
+      replace: true,
+    })
+  }, [user, startGoogleAuth])
 
   useEffect(() => {
     if (!user) {
@@ -1288,7 +1348,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearStoredAuthSession()
   }, [clearStoredAuthSession])
 
-  const submitAllianceProfile = useCallback((input: AllianceProfileInput) => {
+  const submitAllianceProfile = useCallback(async (input: AllianceProfileInput) => {
     if (!user) {
       return { success: false, message: 'Sign in before submitting alliance details.' }
     }
@@ -1317,6 +1377,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       lastSeenAt: timestamp,
     }
 
+    const synced = await syncRecentUserPayload({
+      email: normalized,
+      name: displayName,
+      picture: user.picture,
+      acknowledged: false,
+      firstName,
+      lastName,
+      teamNumber,
+    })
+
+    if (!synced) {
+      return { success: false, message: 'Could not send your request to the server. Please refresh and try again.' }
+    }
+
     setAllianceProfiles((prev) => ({
       ...prev,
       [normalized]: profile,
@@ -1329,18 +1403,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem('auth_user', JSON.stringify(updated))
       return updated
     })
-    upsertRecentUser({
-      email: normalized,
-      name: displayName,
-      picture: user.picture,
-      acknowledged: false,
-      firstName,
-      lastName,
-      teamNumber,
-    })
+    setRecentUsers((prev) =>
+      upsertRecentUserRecord(prev, {
+        email: normalized,
+        name: displayName,
+        picture: user.picture,
+        acknowledged: false,
+        firstName,
+        lastName,
+        teamNumber,
+      })
+    )
     setRequiresAllianceConfirmation(false)
     return { success: true, message: 'Alliance confirmation submitted.' }
-  }, [upsertRecentUser, user])
+  }, [syncRecentUserPayload, user])
 
   const removeAllianceProfile = useCallback((email: string) => {
     const normalized = normalizeEmail(email)
@@ -1350,6 +1426,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       delete next[normalized]
       return next
     })
+  }, [])
+
+  const clearAllianceProfileSubmission = useCallback((email: string) => {
+    const normalized = normalizeEmail(email)
+    setAllianceProfiles((prev) => resetVerificationState({
+      email: normalized,
+      roles: {},
+      recentUsers: [],
+      allianceProfiles: prev,
+    }).allianceProfiles)
+    setRecentUsers((prev) => resetVerificationState({
+      email: normalized,
+      roles: {},
+      recentUsers: prev,
+      allianceProfiles: {},
+    }).recentUsers)
   }, [])
 
   const setRole = useCallback((email: string, role: UserRole) => {
@@ -1440,6 +1532,68 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     })()
   }, [ensureAdminPresence, fetchRoleAssignmentsFromApi])
+
+  const resetVerification = useCallback((email: string) => {
+    const normalized = normalizeEmail(email)
+    const isAdminRole = (roleValue: string | undefined) => roleValue === 'lead' || roleValue === 'tech_lead'
+
+    if (ULTRA_ADMIN_EMAILS.includes(normalized)) {
+      console.warn('Ultra admin verification cannot be reset')
+      return
+    }
+
+    if (ADMIN_EMAILS.includes(normalized)) {
+      console.warn('Configured admin verification cannot be reset')
+      return
+    }
+
+    if (isAdminRole(roleAssignments[normalized])) {
+      const remainingAdmins = Object.entries(roleAssignments).filter(([emailKey, roleValue]) => {
+        return emailKey !== normalized && isAdminRole(roleValue)
+      }).length
+      if (remainingAdmins < 1) {
+        console.warn('Cannot reset the last admin role assignment')
+        return
+      }
+    }
+
+    setRoleAssignments((prev) => {
+      return ensureAdminPresence(resetVerificationState({
+        email: normalized,
+        roles: prev,
+        recentUsers: [],
+        allianceProfiles: {},
+      }).roles)
+    })
+    setRecentUsers((prev) => resetVerificationState({
+      email: normalized,
+      roles: {},
+      recentUsers: prev,
+      allianceProfiles: {},
+    }).recentUsers)
+    setAllianceProfiles((prev) => resetVerificationState({
+      email: normalized,
+      roles: {},
+      recentUsers: [],
+      allianceProfiles: prev,
+    }).allianceProfiles)
+
+    void (async () => {
+      try {
+        await apiDelete(`/roles/${encodeURIComponent(normalized)}`)
+        await Promise.all([
+          fetchRoleAssignmentsFromApi().catch((error) => {
+            console.error('Failed to refresh roles after verification reset', error)
+          }),
+          fetchRecentUsersFromApi().catch((error) => {
+            console.error('Failed to refresh recent users after verification reset', error)
+          }),
+        ])
+      } catch (error) {
+        console.error('Failed to reset verification on API', error)
+      }
+    })()
+  }, [ensureAdminPresence, fetchRecentUsersFromApi, fetchRoleAssignmentsFromApi, roleAssignments])
 
   const acknowledgeRecentUser = useCallback((email: string) => {
     const normalized = normalizeEmail(email)
@@ -1644,6 +1798,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     roleAssignments,
     setRole,
     removeRole,
+    resetVerification,
     canDelete,
     canAccessPath,
     isAdmin,
@@ -1653,7 +1808,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     allianceProfile,
     allianceProfiles,
     submitAllianceProfile,
-  removeAllianceProfile,
+    removeAllianceProfile,
+    clearAllianceProfileSubmission,
     requiresAllianceConfirmation,
     allowedAllianceDomain: PRIMARY_ALLIANCE_DOMAIN,
     allowedAllianceDomains: ALLOWED_EMAIL_DOMAINS,
@@ -1664,6 +1820,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     canRescout,
     rescouterPermissions,
     setRescouter,
+    renewSession,
   }), [
     user,
     role,
@@ -1675,6 +1832,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     roleAssignments,
     setRole,
     removeRole,
+    resetVerification,
     canDelete,
     canAccessPath,
     isAdmin,
@@ -1684,7 +1842,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     allianceProfile,
     allianceProfiles,
     submitAllianceProfile,
-  removeAllianceProfile,
+    removeAllianceProfile,
+    clearAllianceProfileSubmission,
     requiresAllianceConfirmation,
     isAllowedDomainUser,
     acknowledgeRecentUser,
@@ -1693,6 +1852,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     canRescout,
     rescouterPermissions,
     setRescouter,
+    renewSession,
   ])
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

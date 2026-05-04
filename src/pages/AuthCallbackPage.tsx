@@ -86,6 +86,14 @@ const AuthCallbackPage = () => {
     window.history.replaceState({}, document.title, window.location.pathname + window.location.search)
   }, [params, hasOpener])
 
+  // Escape hatch: if retry-interactive fired and window.location.replace never navigated
+  // (iOS PWA limitation), we'd be stuck here forever. Bail out to landing page.
+  useEffect(() => {
+    if (!sent || status !== "pending") return
+    const id = setTimeout(() => navigate("/", { replace: true }), 8000)
+    return () => clearTimeout(id)
+  }, [sent, status, navigate])
+
   useEffect(() => {
     const handler = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return

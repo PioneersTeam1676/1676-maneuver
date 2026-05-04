@@ -38,6 +38,7 @@ const express = require('express')
 const http = require('http')
 const rolesRouter = require('../roles')
 const { prisma } = require('../../db')
+const { getSeasonPrisma } = require('../../seasonDb')
 
 const createApp = (user) => {
   const app = express()
@@ -101,6 +102,18 @@ describe('roles routes', () => {
         'scout@example.com': 'scout',
       },
     })
+  })
+
+  it('returns the authenticated user role without updating recent user activity', async () => {
+    prisma.role.findUnique.mockResolvedValue({ role: 'scout' })
+
+    const response = await request(createApp({ email: 'scout@example.com' }), '/roles/me')
+
+    expect(response.status).toBe(200)
+    expect(response.body).toEqual({ email: 'scout@example.com', role: 'scout' })
+    expect(prisma.recentUser.create).not.toHaveBeenCalled()
+    expect(prisma.recentUser.update).not.toHaveBeenCalled()
+    expect(prisma.recentUser.updateMany).not.toHaveBeenCalled()
   })
 
   it('rejects role changes from authenticated users below lead', async () => {
@@ -181,5 +194,93 @@ describe('roles routes', () => {
       },
     })
     expect(prisma.recentUser.updateMany).not.toHaveBeenCalled()
+  })
+
+  it('renames a scout across season records and linked recent user display name', async () => {
+    prisma.role.findUnique.mockResolvedValue({ role: 'lead' })
+    prisma.recentUser.updateMany.mockResolvedValue({ count: 1 })
+
+    const oldScout = {
+      name: 'Old Scout',
+      pis: 4,
+      pisFromPredictions: 2,
+      totalPredictions: 3,
+      correctPredictions: 1,
+      currentStreak: 1,
+      longestStreak: 2,
+      createdAt: BigInt(10),
+      lastUpdated: BigInt(20),
+    }
+    const seasonPrisma = {
+      scout: {
+        findUnique: jest.fn()
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce(oldScout),
+        create: jest.fn().mockResolvedValue({}),
+        delete: jest.fn().mockResolvedValue({}),
+      },
+      prediction: {
+        updateMany: jest.fn().mockResolvedValue({ count: 2 }),
+      },
+      scoutAchievement: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      scoutingEntry: {
+        updateMany: jest.fn().mockResolvedValue({ count: 5 }),
+      },
+      pitEntry: {
+        updateMany: jest.fn().mockResolvedValue({ count: 2 }),
+      },
+      $transaction: jest.fn(async (operations) => Promise.all(operations)),
+    }
+    getSeasonPrisma.mockResolvedValue({ prisma: seasonPrisma })
+
+    const response = await request(createApp({ email: 'lead@example.com' }), '/roles/rename-scout?year=2026', {
+      method: 'POST',
+      body: JSON.stringify({
+        oldName: 'Old Scout',
+        newName: 'New Scout',
+        email: 'scout@example.com',
+      }),
+    })
+
+    expect(response.status).toBe(200)
+    expect(response.body).toEqual({
+      success: true,
+      oldName: 'Old Scout',
+      newName: 'New Scout',
+      counts: {
+        scoutingEntries: 5,
+        pitEntries: 2,
+        predictions: 2,
+        achievements: 1,
+        scoutProfile: 1,
+        recentUsers: 1,
+      },
+    })
+    expect(seasonPrisma.scoutingEntry.updateMany).toHaveBeenCalledWith({
+      where: { scoutName: 'Old Scout' },
+      data: { scoutName: 'New Scout' },
+    })
+    expect(seasonPrisma.pitEntry.updateMany).toHaveBeenCalledWith({
+      where: { scoutName: 'Old Scout' },
+      data: { scoutName: 'New Scout' },
+    })
+    expect(seasonPrisma.scout.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ name: 'New Scout', pis: 4 }),
+    })
+    expect(seasonPrisma.prediction.updateMany).toHaveBeenCalledWith({
+      where: { scoutName: 'Old Scout' },
+      data: { scoutName: 'New Scout' },
+    })
+    expect(seasonPrisma.scoutAchievement.updateMany).toHaveBeenCalledWith({
+      where: { scoutName: 'Old Scout' },
+      data: { scoutName: 'New Scout' },
+    })
+    expect(seasonPrisma.scout.delete).toHaveBeenCalledWith({ where: { name: 'Old Scout' } })
+    expect(prisma.recentUser.updateMany).toHaveBeenCalledWith({
+      where: { email: 'scout@example.com' },
+      data: { displayName: 'New Scout' },
+    })
   })
 })

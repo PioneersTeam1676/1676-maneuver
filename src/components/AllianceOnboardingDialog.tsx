@@ -22,6 +22,7 @@ export const AllianceOnboardingDialog = () => {
   const [teamNumber, setTeamNumber] = useState("")
   const [confirmAlliance, setConfirmAlliance] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
 
   const derivedNames = useMemo(() => {
     if (!user?.name) return { first: "", last: "" }
@@ -47,14 +48,15 @@ export const AllianceOnboardingDialog = () => {
     return null
   }
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const result = submitAllianceProfile({
+    setSubmitting(true)
+    const result = await submitAllianceProfile({
       firstName,
       lastName,
       teamNumber,
       confirmedAlliance: confirmAlliance,
-    })
+    }).finally(() => setSubmitting(false))
 
     if (!result.success) {
       setError(result.message ?? "We couldn’t save your confirmation. Please try again.")
@@ -134,8 +136,8 @@ export const AllianceOnboardingDialog = () => {
             </Alert>
           )}
 
-          <Button type="submit" className="w-full">
-            Submit for review
+          <Button type="submit" className="w-full" disabled={submitting}>
+            {submitting ? "Submitting..." : "Submit for review"}
           </Button>
         </form>
       </DialogContent>

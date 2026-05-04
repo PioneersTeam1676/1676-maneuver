@@ -6,6 +6,7 @@ const { getSeasonPrisma, resolveSeasonSelector } = require("../seasonDb")
 const { sanitizeString, upsertRecentUser } = require("../utils/recentUserUtils")
 const { ensureEntryIdentitySchema, normalizeEmail } = require("../utils/entryIdentity")
 const { ensureScoutRegistration } = require("../utils/userRegistration")
+const { emailMatchesAllowedDomain } = require("../utils/authDomains")
 
 const router = express.Router()
 
@@ -99,6 +100,24 @@ router.get(
       return acc
     }, {})
     res.json({ roleAssignments })
+  })
+)
+
+router.get(
+  "/me",
+  asyncHandler(async (req, res) => {
+    const requesterEmail = sanitizeString(req.user?.email).toLowerCase()
+    if (!requesterEmail) {
+      return res.status(401).json({ error: "Not authenticated" })
+    }
+
+    const row = await prisma.role.findUnique({
+      where: { email: requesterEmail },
+      select: { role: true },
+    })
+    const role = row?.role || (emailMatchesAllowedDomain(requesterEmail) ? "scout" : "pending")
+
+    return res.json({ email: requesterEmail, role })
   })
 )
 
@@ -238,6 +257,119 @@ router.delete(
         recentUsers: recentUserDelete.count,
         rescouterPermissions: rescouterPermissionDelete.count,
         pushSubscriptions: pushSubscriptionDelete.count,
+      },
+    })
+  })
+)
+
+router.post(
+  "/rename-scout",
+  asyncHandler(async (req, res) => {
+    if (!(await requireRoleAtLeast(req, res, "lead"))) {
+      return
+    }
+
+    const oldName = sanitizeString(req.body?.oldName)
+    const newName = sanitizeString(req.body?.newName)
+    const normalizedEmail = normalizeEmail(req.body?.email)
+
+    if (!newName) {
+      return res.status(400).json({ error: "newName is required" })
+    }
+    if (!oldName && !normalizedEmail) {
+      return res.status(400).json({ error: "oldName or email is required" })
+    }
+
+    const emptyCounts = {
+      scoutingEntries: 0,
+      pitEntries: 0,
+      predictions: 0,
+      achievements: 0,
+      scoutProfile: 0,
+    }
+    let seasonCounts = emptyCounts
+
+    if (oldName && oldName !== newName) {
+      const selector = resolveSeasonSelector({
+        year: req.body?.year || req.query?.year,
+        formId: req.body?.formId || req.query?.formId,
+        eventName: req.body?.eventName || req.query?.eventName,
+        eventKey: req.body?.eventKey || req.query?.eventKey,
+      })
+      const { prisma: seasonPrisma } = await getSeasonPrisma(selector)
+
+      const [targetScout, oldScout] = await Promise.all([
+        seasonPrisma.scout.findUnique({ where: { name: newName } }),
+        seasonPrisma.scout.findUnique({ where: { name: oldName } }),
+      ])
+
+      if (oldScout && targetScout) {
+        return res.status(409).json({ error: "A scout profile already exists with that name" })
+      }
+
+      const seasonOperations = [
+        seasonPrisma.scoutingEntry.updateMany({
+          where: { scoutName: oldName },
+          data: { scoutName: newName },
+        }),
+        seasonPrisma.pitEntry.updateMany({
+          where: { scoutName: oldName },
+          data: { scoutName: newName },
+        }),
+      ]
+
+      if (oldScout) {
+        seasonOperations.unshift(
+          seasonPrisma.scout.create({
+            data: {
+              name: newName,
+              pis: oldScout.pis,
+              pisFromPredictions: oldScout.pisFromPredictions,
+              totalPredictions: oldScout.totalPredictions,
+              correctPredictions: oldScout.correctPredictions,
+              currentStreak: oldScout.currentStreak,
+              longestStreak: oldScout.longestStreak,
+              createdAt: oldScout.createdAt,
+              lastUpdated: oldScout.lastUpdated,
+            },
+          }),
+          seasonPrisma.prediction.updateMany({
+            where: { scoutName: oldName },
+            data: { scoutName: newName },
+          }),
+          seasonPrisma.scoutAchievement.updateMany({
+            where: { scoutName: oldName },
+            data: { scoutName: newName },
+          }),
+          seasonPrisma.scout.delete({ where: { name: oldName } })
+        )
+      }
+
+      const results = await seasonPrisma.$transaction(seasonOperations)
+      const resultOffset = oldScout ? 4 : 0
+      seasonCounts = {
+        scoutingEntries: results[resultOffset]?.count || 0,
+        pitEntries: results[resultOffset + 1]?.count || 0,
+        predictions: oldScout ? results[1]?.count || 0 : 0,
+        achievements: oldScout ? results[2]?.count || 0 : 0,
+        scoutProfile: oldScout ? 1 : 0,
+      }
+    }
+
+    const recentUserUpdate = normalizedEmail
+      ? await prisma.recentUser.updateMany({
+          where: { email: normalizedEmail },
+          data: { displayName: newName },
+        })
+      : { count: 0 }
+
+    res.json({
+      success: true,
+      oldName: oldName || null,
+      newName,
+      counts: {
+        ...seasonCounts,
+        recentUsers: recentUserUpdate.count || 0,
       },
     })
   })

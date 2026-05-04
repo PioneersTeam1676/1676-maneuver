@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { VerificationStatus } from "@/components/ui/verification-status"
+import { formatVerificationRecordName, hasCompletedOnboarding } from "@/lib/verificationRequest"
 
 const matchesAllowedDomain = (email: string, domains: string[]) => {
   if (!email) return false
@@ -38,6 +39,7 @@ export default function VerificationCenterPage() {
     acknowledgeRecentUser,
     setRole,
     removeAllianceProfile,
+    resetVerification,
     refreshRecentUsers,
     refreshRoles,
   } = useAuth()
@@ -128,7 +130,7 @@ export default function VerificationCenterPage() {
     return Array.from(recordsByEmail.values())
       .filter((record) => {
         const isAllowed = matchesAllowedDomain(record.email, allowedDomains)
-        return !record.acknowledged && record.assignedRole === "pending" && !isAllowed
+        return !record.acknowledged && record.assignedRole === "pending" && !isAllowed && hasCompletedOnboarding(record)
       })
       .sort((a, b) => b.lastSeenAt.localeCompare(a.lastSeenAt))
   }, [isLead, recentUsers, roleAssignments, allowedDomains])
@@ -210,9 +212,9 @@ export default function VerificationCenterPage() {
     toast.error(`Revoked access for ${email}`)
   }
 
-  const formatRecordName = (record: { displayName?: string | null; firstName?: string | null; lastName?: string | null; email: string }) => {
-    const profileName = `${record.firstName || ""} ${record.lastName || ""}`.trim()
-    return record.displayName || profileName || "Unknown user"
+  const handleReset = (email: string) => {
+    resetVerification(email)
+    toast.success(`Reset onboarding for ${email}`)
   }
 
   return (
@@ -238,13 +240,13 @@ export default function VerificationCenterPage() {
         <CardContent>
           {pendingRecords.length === 0 ? (
             <div className="rounded-md border border-dashed border-border/60 bg-muted/20 p-6 text-sm text-muted-foreground">
-              Once someone signs in with a non-alliance email, you&apos;ll see them here for quick approval.
+              Once someone finishes onboarding with a non-alliance email, you&apos;ll see them here for quick approval.
             </div>
           ) : (
             <div className="space-y-3">
               {pendingRecords.map((record) => {
                 const assignedRole = record.assignedRole
-                const displayName = formatRecordName(record)
+                const displayName = formatVerificationRecordName(record)
                 const initials = (displayName.split(' ').map((part: string) => part[0]) ?? []).join('').slice(0, 2) || record.email[0]?.toUpperCase() || "?"
                 return (
                   <div key={record.email} className="flex flex-col gap-4 rounded-lg border border-border bg-card p-3 shadow-sm sm:p-4 md:flex-row md:items-center md:justify-between">
@@ -276,6 +278,9 @@ export default function VerificationCenterPage() {
                       <Button size="sm" variant="outline" onClick={() => handleDismiss(record.email)} className="px-4">
                         Dismiss
                       </Button>
+                      <Button size="sm" variant="outline" onClick={() => handleReset(record.email)} className="px-4">
+                        Reset
+                      </Button>
                       <Button size="sm" variant="destructive" onClick={() => handleDeny(record.email)} className="px-4">
                         Deny
                       </Button>
@@ -292,12 +297,12 @@ export default function VerificationCenterPage() {
         <Card>
           <CardHeader>
             <CardTitle>Recent approvals</CardTitle>
-            <CardDescription>External accounts approved in the past 7 days. Use revoke access to send someone back to pending review.</CardDescription>
+            <CardDescription>External accounts approved in the past 7 days. Reset clears onboarding so they can resubmit the next time they visit.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {recentlyCleared.map((record) => {
               const assignedRole = (roleAssignments[record.email] ?? "pending") as UserRole
-              const displayName = formatRecordName(record)
+              const displayName = formatVerificationRecordName(record)
               return (
                 <div key={record.email} className="flex flex-col gap-3 rounded-md border border-border/60 bg-card/80 p-3 sm:p-4 md:flex-row md:items-center md:justify-between">
                   <div className="flex min-w-0 items-start gap-3">
@@ -321,6 +326,9 @@ export default function VerificationCenterPage() {
                   </div>
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
                     <span className="text-xs text-muted-foreground">{new Date(record.lastSeenAt).toLocaleString()}</span>
+                    <Button size="sm" variant="outline" onClick={() => handleReset(record.email)} className="w-full sm:w-auto">
+                      Reset
+                    </Button>
                     <Button size="sm" variant="outline" onClick={() => handleRevoke(record.email)} className="w-full sm:w-auto">
                       Revoke access
                     </Button>

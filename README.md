@@ -141,7 +141,7 @@ This fork introduces **enterprise-grade authentication and admin controls** whil
 4. **Start Frontend**:
    ```bash
    npm run dev
-   # App runs on http://localhost:4175
+   # App runs on http://localhost:4176
    ```
 
 ### Production Build & Deployment
@@ -165,9 +165,13 @@ The build automatically:
 3. Enable **Google Identity Services** API
 4. Create OAuth 2.0 credentials (Web application)
 5. Add authorized JavaScript origins:
-   - `http://localhost:4175` (development)
+   - `http://localhost:4176` (development)
    - Your production domain (e.g., `https://scouting.team1676.org`)
-6. Copy the Client ID to your `.env` file
+6. Add authorized redirect URIs:
+   - `http://localhost:4176/auth/google/callback` (development)
+   - `https://scouting.team1676.org/auth/google/callback` (production)
+   - Any other exact hostname users open, including aliases and ports
+7. Copy the Client ID to your `.env` file
 
 ## 📖 Usage
 
@@ -357,7 +361,9 @@ For questions, issues, or feature requests:
 
 **"Google sign-in not working"**: 
 - Verify `VITE_GOOGLE_CLIENT_ID` is set correctly in `.env`
-- Check that your domain is authorized in Google Cloud Console
+- Check that your exact origin and callback path are authorized in Google Cloud Console
+  - JavaScript origin example: `https://scouting.team1676.org`
+  - Redirect URI example: `https://scouting.team1676.org/auth/google/callback`
 - Ensure the backend server is running on port 3001
 
 **"Still showing as pending after admin approval"**: 

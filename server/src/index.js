@@ -185,6 +185,32 @@ app.use("/images", express.static(imageStorageDir))
 
 const apiAuthMiddleware = createApiAuthMiddleware()
 const openGoogleAuthMiddleware = createApiAuthMiddleware({ skipDomainCheck: true })
+const roleStatusAuthMiddleware = createApiAuthMiddleware({ skipDomainCheck: true, allowBlocked: true })
+const scoutDataAuthMiddleware = createApiAuthMiddleware({ allowPendingRole: true })
+
+const rolesAuthMiddleware = (req, res, next) => {
+  if (req.path === "/me") {
+    return roleStatusAuthMiddleware(req, res, next)
+  }
+  return apiAuthMiddleware(req, res, next)
+}
+
+const SCOUT_RESCUE_OPEN = ["1", "true", "yes"].includes(
+  String(process.env.SCOUTING_RESCUE_OPEN || "").trim().toLowerCase()
+)
+const SCOUT_RESCUE_PATHS = new Set(["/", "/bulk"])
+
+const scoutWriteAuthMiddleware = (req, res, next) => {
+  if (
+    SCOUT_RESCUE_OPEN &&
+    req.method === "POST" &&
+    SCOUT_RESCUE_PATHS.has(req.path)
+  ) {
+    console.warn(`[scouting-rescue] open POST ${req.originalUrl} bypassing auth`)
+    return next()
+  }
+  return scoutDataAuthMiddleware(req, res, next)
+}
 
 const registerRoutes = (prefix = "") => {
   const resolvePath = (suffix) => {
@@ -196,9 +222,9 @@ const registerRoutes = (prefix = "") => {
     res.json({ status: "ok", database: databaseInfo, basePath: prefix || "/" })
   })
 
-  app.use(resolvePath("/roles"), apiAuthMiddleware, rolesRouter)
-  app.use(resolvePath("/scouting"), apiAuthMiddleware, scoutingRouter)
-  app.use(resolvePath("/pit"), apiAuthMiddleware, pitRouter)
+  app.use(resolvePath("/roles"), rolesAuthMiddleware, rolesRouter)
+  app.use(resolvePath("/scouting"), scoutWriteAuthMiddleware, scoutingRouter)
+  app.use(resolvePath("/pit"), scoutDataAuthMiddleware, pitRouter)
   app.use(resolvePath("/game"), apiAuthMiddleware, gameRouter)
   app.use(resolvePath("/events"), openGoogleAuthMiddleware, eventsRouter)
   app.use(resolvePath("/recent-users"), openGoogleAuthMiddleware, recentUsersRouter)

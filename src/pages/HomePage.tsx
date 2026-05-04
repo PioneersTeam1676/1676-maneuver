@@ -38,9 +38,23 @@ const HomePage = () => {
   const [schedule, setSchedule] = useState<ScheduleState | null>(null)
   const [lastRefresh, setLastRefresh] = useState<number | null>(null)
 
-  const refreshSchedule = useCallback(async () => {
-    let refreshed = false
+  const loadFromCache = useCallback(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY)
+      if (!raw) {
+        setSchedule(null)
+      } else {
+        const parsed = JSON.parse(raw) as StoredScheduleState
+        setSchedule(parsed)
+      }
+    } catch (error) {
+      console.warn("Failed to read schedule automation state", error)
+      setSchedule(null)
+    }
+    setLastRefresh(Date.now())
+  }, [])
 
+  const refreshSchedule = useCallback(async () => {
     try {
       const remote = await fetchRemoteSchedule()
       if (remote && remote.eventKey) {
@@ -61,42 +75,27 @@ const HomePage = () => {
           mode: remote.mode ?? "auto",
         }
         localStorage.setItem(STORAGE_KEY, JSON.stringify(stored))
-        window.dispatchEvent(new Event("scheduleAutomationUpdated"))
-        refreshed = true
+        setLastRefresh(Date.now())
+        return
       }
     } catch (error) {
       console.warn("Failed to fetch schedule from API", error)
     }
 
-    if (!refreshed) {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY)
-        if (!raw) {
-          setSchedule(null)
-        } else {
-          const parsed = JSON.parse(raw) as StoredScheduleState
-          setSchedule(parsed)
-        }
-      } catch (error) {
-        console.warn("Failed to read schedule automation state", error)
-        setSchedule(null)
-      }
-    }
-
-    setLastRefresh(Date.now())
-  }, [])
+    loadFromCache()
+  }, [loadFromCache])
 
   useEffect(() => {
     void refreshSchedule()
 
     const handleStorage = (event: StorageEvent) => {
       if (event.key === STORAGE_KEY) {
-        void refreshSchedule()
+        loadFromCache()
       }
     }
 
     const handleCustomEvent = () => {
-      void refreshSchedule()
+      loadFromCache()
     }
 
     window.addEventListener("storage", handleStorage)
@@ -106,7 +105,7 @@ const HomePage = () => {
       window.removeEventListener("storage", handleStorage)
       window.removeEventListener("scheduleAutomationUpdated", handleCustomEvent)
     }
-  }, [refreshSchedule])
+  }, [refreshSchedule, loadFromCache])
 
   const normalizedEmail = normalizeEmail(user?.email ?? "")
   const assignments = schedule?.assignments ?? []

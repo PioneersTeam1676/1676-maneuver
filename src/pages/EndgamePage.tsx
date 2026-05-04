@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { transformToObjectFormat } from "@/lib/dataTransformation";
 import { generateEntryId } from "@/lib/scoutingDataUtils";
 import { saveScoutingEntry } from "@/lib/dexieDB";
+import { enqueuePendingSubmission } from "@/lib/pendingScoutingQueue";
 import type { ScoutingDataWithId } from "@/lib/scoutingDataUtils";
 import { ArrowRight } from "lucide-react";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
@@ -80,17 +81,45 @@ const EndgamePage = () => {
         timestamp: Date.now()
       };
 
-      await saveScoutingEntry(entryWithId);
+      let savedToDexie = true;
+      let syncedRemote = false;
+      let syncError: { name?: string; message?: string } | undefined;
+      try {
+        const result = await saveScoutingEntry(entryWithId);
+        syncedRemote = result.syncedRemote;
+        syncError = result.error;
+      } catch (saveError) {
+        savedToDexie = false;
+        const e = saveError as Error;
+        console.error("Error saving match data to local DB:", saveError);
+        enqueuePendingSubmission(entryWithId, { name: e?.name, message: e?.message });
+        toast.error(
+          `Match saved to backup queue. Local DB error: ${e?.name ?? "Unknown"}${e?.message ? `: ${e.message}` : ""}`,
+          { duration: 12000 },
+        );
+      }
+
+      if (savedToDexie && !syncedRemote) {
+        enqueuePendingSubmission(entryWithId, syncError);
+      }
 
       localStorage.removeItem("autoStateStack");
       localStorage.removeItem("teleopStateStack");
 
-      toast.success("Match data saved successfully!");
+      if (savedToDexie && syncedRemote) {
+        toast.success("Match synced to server.");
+      } else if (savedToDexie) {
+        toast.warning(
+          `Match saved on device — not yet synced${syncError?.message ? ` (${syncError.message})` : ""}. Will retry automatically.`,
+          { duration: 10000 },
+        );
+      }
       navigate("/game-start");
-      
+
     } catch (error) {
-      console.error("Error saving match data:", error);
-      toast.error("Error saving match data");
+      console.error("Error building match data:", error);
+      const e = error as Error;
+      toast.error(`Could not submit match: ${e?.name ?? "Error"}${e?.message ? `: ${e.message}` : ""}`);
     }
   };
 
