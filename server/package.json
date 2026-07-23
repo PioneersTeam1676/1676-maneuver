@@ -10,7 +10,10 @@
   },
   "jest": {
     "testEnvironment": "node",
-    "testMatch": ["**/__tests__/**/*.test.js", "**/*.test.js"]
+    "testMatch": [
+      "**/__tests__/**/*.test.js",
+      "**/*.test.js"
+    ]
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
@@ -18,7 +21,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "google-auth-library": "^9.11.0",
+    "google-auth-library": "^10.9.0",
     "morgan": "^1.10.0",
     "mysql2": "^3.11.0",
     "web-push": "^3.6.3"

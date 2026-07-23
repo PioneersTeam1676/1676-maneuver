@@ -101,7 +101,7 @@ export const replayPendingSubmissions = async (): Promise<ReplayResult> => {
     return { recovered: 0, remaining: 0, failed: [] }
   }
 
-  const { db, syncCachedScoutingEntries } = await import("./dexieDB")
+  const { db, cacheScoutingEntryLocally, syncCachedScoutingEntries } = await import("./dexieDB")
 
   const survivors: PendingSubmission[] = []
   const failed: PendingSubmission[] = []
@@ -109,11 +109,10 @@ export const replayPendingSubmissions = async (): Promise<ReplayResult> => {
 
   for (const item of queue) {
     try {
-      await db.scoutingData.put({
+      await cacheScoutingEntryLocally({
         id: item.entry.id,
         data: item.entry.data,
         timestamp: item.entry.timestamp ?? Date.now(),
-        synced: false,
       })
       recovered += 1
     } catch (error) {

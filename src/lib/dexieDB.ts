@@ -388,6 +388,10 @@ export const syncCachedScoutingEntries = async (): Promise<void> => {
 			if (!pendingEntries.length) return;
 			dismissSlowWarning = startSlowSyncWarning('Scouting');
 			try {
+				// 45 s (vs the default 8 s) because a whole day of queued entries can
+				// be a large payload on slow venue WiFi. Concurrent callers are
+				// de-duped via scoutingSyncPromise, so a slow bulk call delays the
+				// next attempt but never stacks parallel ones.
 				await apiPost('/scouting/bulk', withScoutingSeasonBody({
 					entries: pendingEntries.map(normalizeScoutingEntry),
 				}), { timeoutMs: 45_000 });
@@ -396,6 +400,11 @@ export const syncCachedScoutingEntries = async (): Promise<void> => {
 			} catch (bulkError) {
 				handleApiError('bulk scouting sync failed; falling back to per-entry', bulkError);
 			}
+			// Retrying every entry after a failed bulk call is safe even if the
+			// bulk call partially succeeded server-side: both /scouting and
+			// /scouting/bulk UPSERT by the client-generated entry id, so re-sending
+			// an already-stored entry updates it in place — it can never create a
+			// duplicate match record.
 			const results = await Promise.allSettled(
 				pendingEntries.map((entry) =>
 					apiPost('/scouting', withScoutingSeasonBody({ entry: normalizeScoutingEntry(entry) }), { timeoutMs: 30_000 })
@@ -468,6 +477,8 @@ export const syncCachedPitScoutingEntries = async (): Promise<void> => {
 			} catch (bulkError) {
 				handleApiError('bulk pit sync failed; falling back to per-entry', bulkError);
 			}
+			// Safe to retry per-entry after a failed bulk call: /pit and /pit/bulk
+			// both UPSERT by the client-generated id, so re-sends can't duplicate.
 			const results = await Promise.allSettled(
 				pendingEntries.map((entry) =>
 					apiPost('/pit', withScoutingSeasonBody({ entry: pitEntryPayload(entry) }), { timeoutMs: 30_000 })
@@ -607,6 +618,15 @@ gameDB.open().catch((error) => {
 	console.error('Failed to open Scout Profile database:', error);
 });
 
+// Used by pendingScoutingQueue when recovering entries whose first local
+// save failed: runs the same field extraction as saveScoutingEntry so the
+// recovered row keeps its team/match/scout metadata. (The previous raw
+// {id, data, timestamp} put left those indexed fields empty, which hid
+// recovered entries from local team/match views until the next full sync.)
+export const cacheScoutingEntryLocally = async (entry: ScoutingDataWithId): Promise<void> => {
+	await db.scoutingData.put(enhanceEntry(entry));
+};
+
 export interface SaveScoutingEntryResult {
 	syncedRemote: boolean;
 	error?: { name?: string; message?: string };
@@ -639,9 +659,14 @@ export const saveScoutingEntries = async (entries: ScoutingDataWithId[]): Promis
 	await db.scoutingData.bulkPut(enhancedEntries);
 
 	try {
-		await apiPost('/scouting/bulk', withScoutingSeasonBody({ entries: enhancedEntries }));
+		// normalizeScoutingEntry also strips 4-byte UTF-8 (emoji) that the
+		// MySQL columns reject — sending the raw entries here used to make the
+		// upload fail for any entry with an emoji in its notes.
+		await apiPost('/scouting/bulk', withScoutingSeasonBody({ entries: enhancedEntries.map(normalizeScoutingEntry) }));
 		await db.scoutingData.bulkPut(enhancedEntries.map((entry) => ({ ...entry, synced: true })));
 	} catch (error) {
+		// Entries stay synced:false locally; the periodic sync in App.tsx
+		// retries them, so a failure here is deferred, not lost.
 		handleApiError('failed to persist scouting entries remotely', error);
 	}
 };
@@ -1010,10 +1035,19 @@ export const getFilterOptions = async (): Promise<{
 		]);
 
 		const normalized = entriesResponse.entries.map(normalizeScoutingEntry);
-			await db.scoutingData.clear();
-			if (normalized.length) {
-				await db.scoutingData.bulkPut(normalized);
-			}
+		// Preserve unsynced local entries before replacing the cache with the
+		// server copy — clearing unconditionally here used to silently discard
+		// entries that hadn't uploaded yet (same merge as loadAllScoutingEntries).
+		const localEntries = await db.scoutingData.toArray();
+		const unsyncedLocal = localEntries.filter((entry) => entry.synced === false);
+		const serverIds = new Set(normalized.map((entry) => entry.id));
+		const localOnly = unsyncedLocal.filter((entry) => !serverIds.has(entry.id));
+
+		await db.scoutingData.clear();
+		const mergedEntries = [...normalized, ...localOnly];
+		if (mergedEntries.length) {
+			await db.scoutingData.bulkPut(mergedEntries);
+		}
 
 		return {
 			teams: stats.teams,

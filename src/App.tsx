@@ -13,7 +13,7 @@ import { syncCachedPitScoutingEntries, syncCachedScoutingEntries } from '@/lib/d
 import { replayPendingSubmissions } from '@/lib/pendingScoutingQueue'
 import { getForm } from '@/lib/formBuilderApi'
 import { syncActiveFormConfig } from '@/lib/activeForm'
-import { AUTH_REFRESHED_EVENT, hasUsableAuthToken } from '@/lib/apiClient'
+import { AUTH_REFRESHED_EVENT, hasUsableAuthToken, maybeRefreshBackendSession } from '@/lib/apiClient'
 
 import MainLayout from "@/layouts/MainLayout";
 import NotFoundPage from "@/pages/NotFoundPage";
@@ -118,9 +118,10 @@ function App() {
   useEffect(() => {
 
     // Track PWA install prompt
-    window.addEventListener('beforeinstallprompt', () => {
+    const handleBeforeInstallPrompt = () => {
       analytics.trackEvent('pwa_install_prompt_shown');
-    });
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
     // Track if app was launched as PWA
     if (window.matchMedia('(display-mode: standalone)').matches) {
@@ -183,79 +184,103 @@ function App() {
       }, 2000);
     }
 
-    const syncOnlineCaches = () => {
+    const syncOnlineCaches = async (): Promise<void> => {
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
         return
       }
       if (!hasUsableAuthToken()) {
         return
       }
-      void (async () => {
-        try {
-          const activeConfig = await syncActiveFormConfig()
-          const formIds = [activeConfig.match, activeConfig.pit].filter(Boolean) as string[]
-          if (formIds.length) {
-            await Promise.all(formIds.map((id) => getForm(id).catch(() => null)))
-          }
-        } catch (error) {
-          console.warn('Failed to sync active forms', error)
+      try {
+        const activeConfig = await syncActiveFormConfig()
+        const formIds = [activeConfig.match, activeConfig.pit].filter(Boolean) as string[]
+        if (formIds.length) {
+          await Promise.all(formIds.map((id) => getForm(id).catch(() => null)))
         }
+      } catch (error) {
+        console.warn('Failed to sync active forms', error)
+      }
 
+      try {
         await syncCachedScoutingEntries()
         await syncCachedPitScoutingEntries()
-      })()
+      } catch (error) {
+        console.warn('Failed to sync cached scouting entries', error)
+      }
     }
 
-    const runEventSync = () => {
+    const runEventSync = async (): Promise<void> => {
       if (!hasUsableAuthToken()) {
         return
       }
-      void (async () => {
-        try {
-          const settings = await syncEventSettings()
-          const eventKey = settings.currentEvent?.trim()
-          if (eventKey) {
-            await ensureMatchScheduleCached(eventKey)
-          }
-        } catch (error) {
-          console.error('Failed to sync event settings', error)
+      try {
+        const settings = await syncEventSettings()
+        const eventKey = settings.currentEvent?.trim()
+        if (eventKey) {
+          await ensureMatchScheduleCached(eventKey)
         }
-      })()
+      } catch (error) {
+        console.error('Failed to sync event settings', error)
+      }
     }
 
-    const replayPendingScouting = () => {
-      void replayPendingSubmissions().catch((error) => {
+    const replayPendingScouting = async (): Promise<void> => {
+      try {
+        await replayPendingSubmissions()
+      } catch (error) {
         console.warn('Failed to replay pending scouting submissions', error)
+      }
+    }
+
+    // One guarded runner shared by every trigger below. Scouts leave the PWA
+    // open on one screen for hours, so besides the focus/visibility/online
+    // events (which may never fire in that scenario) we also run this on a
+    // timer. The `syncTickInFlight` flag stops a slow pass (e.g. a stalled
+    // fetch on captive-portal WiFi) from stacking concurrent attempts — the
+    // per-store promises in dexieDB de-dupe too, but the form/event fetches
+    // here have no de-dupe of their own. Every network call involved goes
+    // through apiClient's default 8 s timeout (bulk sync uses 45 s), so a
+    // dead link can only stall one tick, not wedge the queue permanently.
+    let syncTickInFlight = false
+    const runAllSyncs = () => {
+      if (syncTickInFlight) return
+      syncTickInFlight = true
+      // Renew the backend session in the background before it expires so
+      // sync requests never hit a 401 during normal operation.
+      maybeRefreshBackendSession()
+      void Promise.allSettled([
+        runEventSync(),
+        syncOnlineCaches(),
+        replayPendingScouting(),
+      ]).finally(() => {
+        syncTickInFlight = false
       })
     }
 
-    runEventSync()
-    syncOnlineCaches()
-    replayPendingScouting()
+    runAllSyncs()
 
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
-        runEventSync()
-        syncOnlineCaches()
-        replayPendingScouting()
+        runAllSyncs()
       }
     }
 
     const handleFocus = () => {
-      runEventSync()
-      syncOnlineCaches()
-      replayPendingScouting()
+      runAllSyncs()
     }
 
     const handleOnline = () => {
-      syncOnlineCaches()
-      runEventSync()
-      replayPendingScouting()
+      runAllSyncs()
     }
 
     const handleAuthRefreshed = () => {
       syncOnlineCaches()
     }
+
+    // Periodic retry: scouts don't background the app between matches, so
+    // without this nothing re-triggers sync after the initial mount events.
+    const SYNC_INTERVAL_MS = 45_000
+    const syncInterval = window.setInterval(runAllSyncs, SYNC_INTERVAL_MS)
 
     window.addEventListener('focus', handleFocus)
     document.addEventListener('visibilitychange', handleVisibility)
@@ -263,6 +288,8 @@ function App() {
     window.addEventListener(AUTH_REFRESHED_EVENT, handleAuthRefreshed)
 
     return () => {
+      window.clearInterval(syncInterval)
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
       window.removeEventListener('focus', handleFocus)
       document.removeEventListener('visibilitychange', handleVisibility)
       window.removeEventListener('online', handleOnline)

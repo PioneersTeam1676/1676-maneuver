@@ -81,12 +81,22 @@ export interface NexusEventStatus {
  * Make a request to the Nexus API
  */
 const makeNexusRequest = async (endpoint: string, apiKey: string): Promise<unknown> => {
-  const response = await fetch(`${NEXUS_BASE_URL}${endpoint}`, {
-    headers: {
-      'Nexus-Api-Key': apiKey,
-      'Accept': 'application/json',
-    },
-  });
+  // Timeout so a captive-portal network (navigator.onLine true, no real
+  // internet) fails fast instead of hanging the page's loading state.
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10_000);
+  let response: Response;
+  try {
+    response = await fetch(`${NEXUS_BASE_URL}${endpoint}`, {
+      headers: {
+        'Nexus-Api-Key': apiKey,
+        'Accept': 'application/json',
+      },
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!response.ok) {
     if (response.status === 401) {

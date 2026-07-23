@@ -5,6 +5,7 @@ const { parseJsonValue, stringifyJsonValue, toMsBigInt, fromBigInt } = require("
 const { replaceImageDataUrls } = require("../utils/imagePermalinkStore")
 const { ensureEntryIdentitySchema, updatePitEntryEmail } = require("../utils/entryIdentity")
 const { ensureScoutRegistration } = require("../utils/userRegistration")
+const { requireLeadRole } = require("../utils/requireLeadRole")
 
 const router = express.Router()
 
@@ -216,8 +217,10 @@ router.delete(
   })
 )
 
+// Wipes EVERY pit entry — lead+ only (see requireLeadRole for why).
 router.delete(
   "/",
+  requireLeadRole,
   asyncHandler(async (_req, res) => {
     const { prisma } = await getSeasonPrisma()
     await ensureEntryIdentitySchema(prisma)

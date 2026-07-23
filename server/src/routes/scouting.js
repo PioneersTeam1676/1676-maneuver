@@ -3,9 +3,9 @@ const { getSeasonPrisma, resolveSeasonSelector } = require("../seasonDb")
 const asyncHandler = require("../utils/asyncHandler")
 const { parseJsonValue, stringifyJsonValue, toMsBigInt, fromBigInt } = require("../utils/dbUtils")
 const { detectOutliers } = require("../services/outlierDetection")
-const { prisma: mainPrisma } = require("../db")
 const { ensureEntryIdentitySchema, updateScoutingEntryEmail } = require("../utils/entryIdentity")
 const { ensureScoutRegistration } = require("../utils/userRegistration")
+const { requireLeadRole } = require("../utils/requireLeadRole")
 
 const router = express.Router()
 
@@ -990,8 +990,11 @@ router.delete(
   })
 )
 
+// Wipes EVERY scouting entry — lead+ only. Without the guard any
+// authenticated scout could erase the whole event's data with one request.
 router.delete(
   "/",
+  requireLeadRole,
   asyncHandler(async (_req, res) => {
     const { prisma } = await getSeasonPrisma()
     await ensureScoutingSchema(prisma)
@@ -1140,8 +1143,11 @@ router.get(
   })
 )
 
+// Lead+ only: "overwrite" mode deletes every existing entry first, and even
+// append mode can rewrite arbitrary rows via upsert.
 router.post(
   "/import",
+  requireLeadRole,
   asyncHandler(async (req, res) => {
     const { entries, mode = "append" } = req.body
     if (!Array.isArray(entries)) {
@@ -1206,8 +1212,10 @@ router.post(
   })
 )
 
+// Lead+ only: rewrites every stored entry in place.
 router.post(
   "/migrate/rebuilt",
+  requireLeadRole,
   asyncHandler(async (req, res) => {
     const eventNameFilter = asString(req.body?.eventName || req.query.eventName)
     const selector = resolveSeasonSelector({
@@ -1275,23 +1283,6 @@ router.post(
     })
   })
 )
-
-const LEAD_ROLE_WEIGHTS = { lead: 3, tech_lead: 4 }
-
-const requireLeadRole = asyncHandler(async (req, res, next) => {
-  const email = req.user?.email
-  if (!email) return res.status(403).json({ error: "insufficient permissions" })
-  try {
-    const row = await mainPrisma.role.findUnique({ where: { email: email.toLowerCase() } })
-    const roleWeight = row?.role ? (LEAD_ROLE_WEIGHTS[row.role] ?? 0) : 0
-    if (roleWeight < LEAD_ROLE_WEIGHTS.lead) {
-      return res.status(403).json({ error: "insufficient permissions" })
-    }
-  } catch {
-    return res.status(403).json({ error: "insufficient permissions" })
-  }
-  next()
-})
 
 router.get(
   "/outliers",

@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { AUTH_REFRESHED_EVENT, apiDelete, apiGet, apiPatch, apiPost, apiPut, hasUsableAuthToken } from '@/lib/apiClient'
+import { AUTH_REFRESHED_EVENT, apiDelete, apiGet, apiPatch, apiPost, apiPut, clearBackendSession, establishBackendSession, hasUsableAuthToken, refreshBackendSession } from '@/lib/apiClient'
 import { emailMatchesAllowedDomain as emailMatchesAllowedDomainHelper, mergeCurrentUserRole, parseAllowedEmailDomains, resolveDefaultRoleForEmail, resolveRoleAfterRefreshFailure, retainSessionStartRole } from '@/lib/authRoleDefaults'
 import { resolveOAuthErrorRecovery } from '@/lib/authSessionRecovery'
 import { resetVerificationState } from '@/lib/authVerificationReset'
@@ -97,7 +97,7 @@ type AuthContextValue = {
   canRescout: boolean
   rescouterPermissions: Record<string, boolean>
   setRescouter: (email: string, enabled: boolean) => Promise<void>
-  renewSession: (options?: { returnTo?: string }) => boolean
+  renewSession: (options?: { returnTo?: string }) => Promise<boolean>
 }
 
 const ROLE_STORAGE_KEY = 'auth_roles'
@@ -606,6 +606,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('auth_user')
       localStorage.removeItem(AUTH_ID_TOKEN_KEY)
+      // Also drop the backend-issued access/refresh tokens (and best-effort
+      // invalidate the refresh token server-side).
+      clearBackendSession()
     }
     silentRefreshStartedRef.current = false
     setUser(null)
@@ -1109,6 +1112,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(AUTH_ID_TOKEN_KEY, idToken)
       window.dispatchEvent(new CustomEvent(AUTH_REFRESHED_EVENT))
 
+      // Exchange the ~1-hour Google token for a long-lived backend session
+      // (5-day access token + 60-day refresh token). If this fails (server
+      // unreachable right now), the raw id_token still works for a while and
+      // apiClient retries the exchange on the next online/focus/interval tick.
+      void establishBackendSession(idToken)
+
       setRoleAssignments((prev) => {
         const next = ensureAdminPresence(retainSessionStartRole({ email: normalizedEmail, assignments: prev }))
         return areRoleAssignmentsEqual(prev, next) ? prev : next
@@ -1239,9 +1248,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [clearStoredAuthSession, consumeOAuthState, processOAuthResponse, user])
 
-  const renewSession = useCallback((options?: { returnTo?: string }): boolean => {
+  const renewSession = useCallback(async (options?: { returnTo?: string }): Promise<boolean> => {
     if (typeof window === 'undefined') return false
     if (window.location.pathname === AUTH_CALLBACK_PATH) return false
+
+    // First choice: silently exchange our refresh token for a new access
+    // token. No page reload, no Google, works on internet-less venue WiFi.
+    // Only if that definitively fails do we fall back to the Google
+    // prompt=none redirect flow below.
+    try {
+      const refreshed = await refreshBackendSession()
+      if (refreshed) return true
+    } catch {
+      // fall through to the Google flow
+    }
 
     const saved = localStorage.getItem('auth_user')
     const currentEmail = user?.email || (saved ? (() => {

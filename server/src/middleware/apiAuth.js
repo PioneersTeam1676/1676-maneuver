@@ -2,6 +2,7 @@ const { OAuth2Client } = require("google-auth-library")
 const { prisma } = require("../db")
 const { upsertRecentUser } = require("../utils/recentUserUtils")
 const { getAllowedEmailDomains } = require("../utils/authDomains")
+const { verifyAppToken } = require("../utils/appJwt")
 
 const normalizeToken = (value) => {
   if (!value) return null
@@ -50,6 +51,41 @@ const extractToken = (req) => {
   return null
 }
 
+// Shared role/domain gate used by both the app-JWT path and the legacy
+// Google path. Returns { ok: true } or { ok: false, status, error }.
+const authorizeEmail = async (email, { skipDomainCheck, allowBlocked, allowPendingRole, allowedDomains }) => {
+  const explicitRole = await prisma.role.findUnique({
+    where: { email },
+    select: { role: true },
+  })
+  if (explicitRole?.role === "blocked" && !allowBlocked) {
+    return { ok: false, status: 403, error: "Forbidden" }
+  }
+  if (!skipDomainCheck && allowedDomains.size) {
+    const domain = email.split("@")[1] || ""
+    if (!domain || !allowedDomains.has(domain)) {
+      if (!allowPendingRole && (!explicitRole || explicitRole.role === "pending")) {
+        return { ok: false, status: 403, error: "Forbidden" }
+      }
+    }
+  }
+  return { ok: true, explicitRole }
+}
+
+const touchRecentUser = async (user, explicitRole, skipDomainCheck) => {
+  try {
+    await upsertRecentUser(prisma, {
+      email: user.email,
+      lastSeenAt: new Date().toISOString(),
+      displayName: user.name || undefined,
+      photoUrl: user.picture || undefined,
+      acknowledged: skipDomainCheck ? undefined : (explicitRole?.role && explicitRole.role !== "pending" ? true : undefined),
+    })
+  } catch (error) {
+    console.warn("Failed to auto-upsert recent user from authenticated request", error?.message || error)
+  }
+}
+
 const createApiAuthMiddleware = ({ skipDomainCheck = false, allowBlocked = false, allowPendingRole = false } = {}) => {
   const tokens = resolveAuthTokens()
   const disableGoogleAuth = normalizeToken(process.env.DISABLE_GOOGLE_ID_AUTH)
@@ -68,61 +104,64 @@ const createApiAuthMiddleware = ({ skipDomainCheck = false, allowBlocked = false
     }
 
     const token = extractToken(req)
-    if (!token || !tokens.has(token)) {
-      if (!googleClient) {
-        return res.status(401).json({ error: "Unauthorized" })
-      }
-      try {
-        const ticket = await googleClient.verifyIdToken({
-          idToken: token,
-          audience: googleClientId,
-        })
-        const payload = ticket.getPayload()
-        const email = payload?.email ? String(payload.email).toLowerCase() : ""
-        if (!email) {
-          return res.status(401).json({ error: "Unauthorized" })
-        }
-        if (payload?.email_verified === false) {
-          return res.status(403).json({ error: "Email not verified" })
-        }
-        const explicitRole = await prisma.role.findUnique({
-          where: { email },
-          select: { role: true },
-        })
-        if (explicitRole?.role === "blocked" && !allowBlocked) {
-          return res.status(403).json({ error: "Forbidden" })
-        }
-        if (!skipDomainCheck && allowedDomains.size) {
-          const domain = email.split("@")[1] || ""
-          if (!domain || !allowedDomains.has(domain)) {
-            if (!allowPendingRole && (!explicitRole || explicitRole.role === "pending")) {
-              return res.status(403).json({ error: "Forbidden" })
-            }
-          }
-        }
-        req.user = {
-          email,
-          name: payload?.name ? String(payload.name) : null,
-          picture: payload?.picture ? String(payload.picture) : null,
-        }
-        try {
-          await upsertRecentUser(prisma, {
-            email,
-            lastSeenAt: new Date().toISOString(),
-            displayName: payload?.name ? String(payload.name) : undefined,
-            photoUrl: payload?.picture ? String(payload.picture) : undefined,
-            acknowledged: skipDomainCheck ? undefined : (explicitRole?.role && explicitRole.role !== "pending" ? true : undefined),
-          })
-        } catch (error) {
-          console.warn("Failed to auto-upsert recent user from authenticated request", error?.message || error)
-        }
-        return next()
-      } catch (_error) {
-        return res.status(401).json({ error: "Unauthorized" })
-      }
+    if (token && tokens.has(token)) {
+      return next()
     }
 
-    return next()
+    if (!token) {
+      return res.status(401).json({ error: "Unauthorized" })
+    }
+
+    // Fast path: app-issued JWT from POST /auth/session. Verified locally
+    // with an HMAC — no network round-trip to Google on every request.
+    const appPayload = verifyAppToken(token)
+    if (appPayload?.email) {
+      const email = String(appPayload.email).toLowerCase()
+      const authz = await authorizeEmail(email, { skipDomainCheck, allowBlocked, allowPendingRole, allowedDomains })
+      if (!authz.ok) {
+        return res.status(authz.status).json({ error: authz.error })
+      }
+      req.user = {
+        email,
+        name: appPayload.name ? String(appPayload.name) : null,
+        picture: appPayload.picture ? String(appPayload.picture) : null,
+      }
+      await touchRecentUser(req.user, authz.explicitRole, skipDomainCheck)
+      return next()
+    }
+
+    // Legacy path: raw Google ID token as bearer. Kept so old clients keep
+    // working during rollout; new clients exchange it for an app JWT.
+    if (!googleClient) {
+      return res.status(401).json({ error: "Unauthorized" })
+    }
+    try {
+      const ticket = await googleClient.verifyIdToken({
+        idToken: token,
+        audience: googleClientId,
+      })
+      const payload = ticket.getPayload()
+      const email = payload?.email ? String(payload.email).toLowerCase() : ""
+      if (!email) {
+        return res.status(401).json({ error: "Unauthorized" })
+      }
+      if (payload?.email_verified === false) {
+        return res.status(403).json({ error: "Email not verified" })
+      }
+      const authz = await authorizeEmail(email, { skipDomainCheck, allowBlocked, allowPendingRole, allowedDomains })
+      if (!authz.ok) {
+        return res.status(authz.status).json({ error: authz.error })
+      }
+      req.user = {
+        email,
+        name: payload?.name ? String(payload.name) : null,
+        picture: payload?.picture ? String(payload.picture) : null,
+      }
+      await touchRecentUser(req.user, authz.explicitRole, skipDomainCheck)
+      return next()
+    } catch (_error) {
+      return res.status(401).json({ error: "Unauthorized" })
+    }
   }
 }
 

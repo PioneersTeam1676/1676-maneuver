@@ -9,6 +9,7 @@ const cors = require("cors")
 const morgan = require("morgan")
 const fs = require("fs/promises")
 
+const authRouter = require("./routes/auth")
 const rolesRouter = require("./routes/roles")
 const scoutingRouter = require("./routes/scouting")
 const pitRouter = require("./routes/pit")
@@ -222,6 +223,9 @@ const registerRoutes = (prefix = "") => {
     res.json({ status: "ok", database: databaseInfo, basePath: prefix || "/" })
   })
 
+  // No auth middleware on /auth — it IS the auth bootstrap (verifies the
+  // Google token / refresh token itself).
+  app.use(resolvePath("/auth"), authRouter)
   app.use(resolvePath("/roles"), rolesAuthMiddleware, rolesRouter)
   app.use(resolvePath("/scouting"), scoutWriteAuthMiddleware, scoutingRouter)
   app.use(resolvePath("/pit"), scoutDataAuthMiddleware, pitRouter)

@@ -158,6 +158,11 @@ export interface TBATeam {
   };
 }
 
+// Venue WiFi often reports navigator.onLine === true while having no real
+// internet uplink (captive portals, LAN-only networks). Without a timeout a
+// TBA fetch can hang for minutes and stall the periodic sync loop in App.tsx.
+const TBA_FETCH_TIMEOUT_MS = 10_000;
+
 // Helper function to make TBA API requests
 const makeTBARequest = async (endpoint: string, options: { apiKey?: string } = {}): Promise<unknown> => {
   const apiKey = resolveTbaApiKey(options.apiKey);
@@ -165,12 +170,20 @@ const makeTBARequest = async (endpoint: string, options: { apiKey?: string } = {
     throw new Error('TBA API key is not configured');
   }
 
-  const response = await fetch(`${TBA_BASE_URL}${endpoint}`, {
-    headers: {
-      'X-TBA-Auth-Key': apiKey,
-      'Accept': 'application/json',
-    },
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), TBA_FETCH_TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await fetch(`${TBA_BASE_URL}${endpoint}`, {
+      headers: {
+        'X-TBA-Auth-Key': apiKey,
+        'Accept': 'application/json',
+      },
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!response.ok) {
     throw new Error(`TBA API Error: ${response.status} ${response.statusText}`);

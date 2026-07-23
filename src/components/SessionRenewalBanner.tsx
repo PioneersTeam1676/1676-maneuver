@@ -15,6 +15,10 @@ const SessionRenewalBanner = () => {
   const { user, renewSession } = useAuth()
   const { isInScoutingSession } = useScoutingSession()
   const [needsRenewal, setNeedsRenewal] = useState(false)
+  // Tokens are no longer deleted client-side when they look expired — the
+  // server is the authority. So "session expired" is now signalled by an
+  // actual 401 (API_AUTH_FAILURE_EVENT), not by the token disappearing.
+  const [authFailed, setAuthFailed] = useState(false)
   const [renewing, setRenewing] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
   const [syncing, setSyncing] = useState(false)
@@ -26,10 +30,14 @@ const SessionRenewalBanner = () => {
   useEffect(() => {
     evaluate()
     const interval = window.setInterval(evaluate, POLL_INTERVAL_MS)
-    const onAuthFailure = () => evaluate()
+    const onAuthFailure = () => {
+      setAuthFailed(true)
+      evaluate()
+    }
     const onAuthRefreshed = () => {
       setRenewing(false)
       setNeedsRenewal(false)
+      setAuthFailed(false)
     }
     const onVisibility = () => {
       if (document.visibilityState === "visible") evaluate()
@@ -49,8 +57,14 @@ const SessionRenewalBanner = () => {
 
   const triggerRenew = useCallback(() => {
     setRenewing(true)
-    const ok = renewSession()
-    if (!ok) setRenewing(false)
+    void renewSession().then((ok) => {
+      // A successful silent refresh resolves true without reloading the
+      // page; the Google fallback redirects away, so this only matters for
+      // the failure case.
+      if (!ok) setRenewing(false)
+    }).catch(() => {
+      setRenewing(false)
+    })
   }, [renewSession])
 
   const refreshPendingCount = useCallback(async () => {
@@ -109,7 +123,7 @@ const SessionRenewalBanner = () => {
 
   if (!user || isInScoutingSession) return null
 
-  if (needsRenewal) {
+  if (needsRenewal || authFailed) {
     return (
       <div
         role="status"

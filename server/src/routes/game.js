@@ -2,6 +2,7 @@ const express = require("express")
 const { getSeasonPrisma, resolveSeasonSelector } = require("../seasonDb")
 const asyncHandler = require("../utils/asyncHandler")
 const { toMsBigInt, fromBigInt } = require("../utils/dbUtils")
+const { requireLeadRole } = require("../utils/requireLeadRole")
 
 const router = express.Router()
 
@@ -205,8 +206,12 @@ router.patch(
   })
 )
 
+// Deleting a scout cascades to their predictions and achievements — lead+
+// only (the UI only offers this from the lead-gated scout management page,
+// but the API itself must enforce it too).
 router.delete(
   "/scouts/:name",
+  requireLeadRole,
   asyncHandler(async (req, res) => {
     const { name } = req.params
     const { prisma } = await getSeasonPrisma(resolveSeasonSelector({ year: req.query.year, formId: req.query.formId }))
@@ -219,8 +224,10 @@ router.delete(
   })
 )
 
+// Wipes ALL scouts/predictions/achievements — lead+ only.
 router.delete(
   "/scouts",
+  requireLeadRole,
   asyncHandler(async (_req, res) => {
     const { prisma } = await getSeasonPrisma()
     await prisma.$transaction([

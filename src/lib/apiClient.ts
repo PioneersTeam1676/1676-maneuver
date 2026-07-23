@@ -51,10 +51,23 @@ const resolveBaseUrlCandidates = (): string[] => {
 const BASE_URL_CANDIDATES = resolveBaseUrlCandidates()
 let activeBaseIndex = 0
 const reportedFailures = new Set<string>()
-const AUTH_TOKEN_EXPIRY_SKEW_MS = 60_000
 const API_AUTH_FAILURE_EVENT = "api-auth-failure"
 const AUTH_REFRESHED_EVENT = "auth-session-refreshed"
 let lastAuthFailureEventAt = 0
+
+// localStorage keys for the backend-issued session. The app exchanges the
+// short-lived Google id_token for these once after login (POST /auth/session):
+// - access token: app JWT, ~5 day expiry, sent as the bearer token
+// - refresh token: opaque, ~60 day expiry, used to mint new access tokens
+//   without any Google round-trip (works on venue WiFi with no internet)
+const SESSION_ACCESS_TOKEN_KEY = "auth_session_token"
+const SESSION_REFRESH_TOKEN_KEY = "auth_refresh_token"
+const GOOGLE_ID_TOKEN_KEY = "auth_id_token"
+
+// Refresh the access token in the background once it's within a day of
+// expiring. Generous window: a device that only reaches the server a few
+// times a day still renews long before the 5-day expiry.
+const SESSION_REFRESH_WINDOW_MS = 24 * 60 * 60 * 1000
 
 type JwtPayload = {
   exp?: number
@@ -119,7 +132,7 @@ const decodeJwtPayload = (token: string): JwtPayload | null => {
   }
 }
 
-const isJwtFresh = (token: string, minRemainingMs = AUTH_TOKEN_EXPIRY_SKEW_MS): boolean => {
+const isJwtFresh = (token: string, minRemainingMs = 0): boolean => {
   const payload = decodeJwtPayload(token)
   if (!payload || typeof payload.exp !== "number") {
     return true
@@ -127,17 +140,28 @@ const isJwtFresh = (token: string, minRemainingMs = AUTH_TOKEN_EXPIRY_SKEW_MS): 
   return payload.exp * 1000 > Date.now() + minRemainingMs
 }
 
+const readStoredToken = (key: string): string | null => {
+  if (typeof window === "undefined") return null
+  const value = window.localStorage?.getItem(key)
+  const trimmed = value?.trim()
+  return trimmed ? trimmed : null
+}
+
+// IMPORTANT: this must never DELETE tokens. An earlier version removed the
+// token from localStorage the moment it looked expired — including while
+// offline, when there was no way to get a new one — which silently killed
+// sessions mid-competition. The server is the sole authority on token
+// validity: we always send what we have and react to real 401 responses.
 const resolveAuthToken = (): string | null => {
-  if (typeof window !== "undefined") {
-    const idToken = window.localStorage?.getItem("auth_id_token")
-    if (idToken && idToken.trim()) {
-      const trimmed = idToken.trim()
-      if (isJwtFresh(trimmed)) return trimmed
-      window.localStorage?.removeItem("auth_id_token")
-    }
-    const stored = window.localStorage?.getItem("api_auth_token")
-    if (stored && stored.trim()) return stored.trim()
-  }
+  // Preferred: backend-issued session token (long-lived, refreshable).
+  const sessionToken = readStoredToken(SESSION_ACCESS_TOKEN_KEY)
+  if (sessionToken) return sessionToken
+  // Fallback: raw Google id_token from a login where the session exchange
+  // hasn't completed yet (or an old app version).
+  const idToken = readStoredToken(GOOGLE_ID_TOKEN_KEY)
+  if (idToken) return idToken
+  const stored = readStoredToken("api_auth_token")
+  if (stored) return stored
   if (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_AUTH_TOKEN) {
     const token = String(import.meta.env.VITE_API_AUTH_TOKEN).trim()
     if (token) return token
@@ -195,6 +219,10 @@ async function handleResponse<T>(response: Response): Promise<T> {
   const body = isJson ? await response.json() : await response.text()
   if (!response.ok) {
     if (response.status === 401 && typeof window !== "undefined") {
+      // Try a silent refresh first — if it succeeds it dispatches
+      // AUTH_REFRESHED_EVENT, which re-triggers all the sync paths in
+      // App.tsx. Only surface the failure banner if refresh can't help.
+      void refreshBackendSession()
       const now = Date.now()
       if (now - lastAuthFailureEventAt > 1500) {
         lastAuthFailureEventAt = now
@@ -207,63 +235,197 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return body as T
 }
 
+type SessionResponse = {
+  accessToken?: string
+  accessTokenExpiresAt?: number
+  refreshToken?: string
+  refreshTokenExpiresAt?: number
+}
+
+const dispatchAuthRefreshed = (): void => {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(AUTH_REFRESHED_EVENT))
+  }
+}
+
+// Auth endpoints use this instead of apiPost so a 401 here can't recursively
+// re-trigger refreshBackendSession via the handleResponse hook above.
+const authEndpointPost = async (path: string, body: unknown): Promise<SessionResponse | null> => {
+  const response = await fetchWithFallback(path, {
+    method: "POST",
+    headers: defaultHeaders,
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) {
+    const status = response.status
+    // 401/403 mean the credential itself is bad — caller should discard it.
+    throw new ApiError(`Auth request failed with ${status}`, status)
+  }
+  return (await response.json()) as SessionResponse
+}
+
+// Exchange a Google id_token for a backend session. Called once after each
+// Google login. Failure is non-fatal: the raw id_token keeps working for
+// about an hour, and maybeRefreshBackendSession() retries the exchange.
+export const establishBackendSession = async (idToken: string): Promise<boolean> => {
+  if (typeof window === "undefined") return false
+  try {
+    const session = await authEndpointPost("/auth/session", { idToken })
+    if (!session?.accessToken || !session.refreshToken) return false
+    window.localStorage?.setItem(SESSION_ACCESS_TOKEN_KEY, session.accessToken)
+    window.localStorage?.setItem(SESSION_REFRESH_TOKEN_KEY, session.refreshToken)
+    dispatchAuthRefreshed()
+    return true
+  } catch (error) {
+    console.warn("[apiClient] Failed to establish backend session", error)
+    return false
+  }
+}
+
+let refreshSessionPromise: Promise<boolean> | null = null
+
+// Trade the stored refresh token for a new access token. De-duped so an
+// interval tick, a focus event, and a 401 handler firing together produce a
+// single request. Network errors leave the stored tokens untouched (they may
+// still be fine — we might just be offline); only a definitive 401/403 from
+// the server clears them.
+export const refreshBackendSession = (): Promise<boolean> => {
+  if (typeof window === "undefined") return Promise.resolve(false)
+  if (refreshSessionPromise) return refreshSessionPromise
+
+  const refreshToken = readStoredToken(SESSION_REFRESH_TOKEN_KEY)
+  if (!refreshToken) {
+    // No backend session yet — retry the id_token exchange if we still have
+    // a fresh Google token (e.g. the exchange failed right after login).
+    const idToken = readStoredToken(GOOGLE_ID_TOKEN_KEY)
+    if (idToken && isJwtFresh(idToken)) {
+      refreshSessionPromise = establishBackendSession(idToken).finally(() => {
+        refreshSessionPromise = null
+      })
+      return refreshSessionPromise
+    }
+    return Promise.resolve(false)
+  }
+
+  refreshSessionPromise = (async () => {
+    try {
+      const session = await authEndpointPost("/auth/refresh", { refreshToken })
+      if (!session?.accessToken) return false
+      window.localStorage?.setItem(SESSION_ACCESS_TOKEN_KEY, session.accessToken)
+      dispatchAuthRefreshed()
+      return true
+    } catch (error) {
+      const status = error instanceof ApiError ? error.status : undefined
+      if (status === 401 || status === 403) {
+        // The server definitively rejected this refresh token — it's dead.
+        window.localStorage?.removeItem(SESSION_ACCESS_TOKEN_KEY)
+        window.localStorage?.removeItem(SESSION_REFRESH_TOKEN_KEY)
+      } else {
+        console.warn("[apiClient] Session refresh failed (will retry later)", error)
+      }
+      return false
+    } finally {
+      refreshSessionPromise = null
+    }
+  })()
+
+  return refreshSessionPromise
+}
+
+// Cheap check used by online/focus/interval handlers: refresh in the
+// background before the access token actually expires so requests never see
+// a 401 during normal operation.
+export const maybeRefreshBackendSession = (): void => {
+  if (typeof window === "undefined") return
+  if (typeof navigator !== "undefined" && !navigator.onLine) return
+  const accessToken = readStoredToken(SESSION_ACCESS_TOKEN_KEY)
+  if (accessToken && isJwtFresh(accessToken, SESSION_REFRESH_WINDOW_MS)) {
+    return
+  }
+  const hasRefreshToken = Boolean(readStoredToken(SESSION_REFRESH_TOKEN_KEY))
+  const hasFreshIdToken = (() => {
+    const idToken = readStoredToken(GOOGLE_ID_TOKEN_KEY)
+    return Boolean(idToken && isJwtFresh(idToken))
+  })()
+  if (!hasRefreshToken && !hasFreshIdToken) return
+  void refreshBackendSession()
+}
+
+// Full local sign-out: drop the backend session (best-effort server-side
+// invalidation) plus any stored Google token.
+export const clearBackendSession = (): void => {
+  if (typeof window === "undefined") return
+  const refreshToken = readStoredToken(SESSION_REFRESH_TOKEN_KEY)
+  window.localStorage?.removeItem(SESSION_ACCESS_TOKEN_KEY)
+  window.localStorage?.removeItem(SESSION_REFRESH_TOKEN_KEY)
+  if (refreshToken) {
+    void authEndpointPost("/auth/logout", { refreshToken }).catch(() => {
+      // Offline logout is fine — the row expires server-side on its own.
+    })
+  }
+}
+
+// Note: caller-supplied `init` is spread FIRST so the computed method,
+// auth headers, and body always win. An earlier version spread `init` last,
+// which silently replaced the Authorization headers whenever a caller passed
+// its own `headers` — every such request then failed with a 401.
 export async function apiGet<T>(path: string, init?: ApiRequestInit): Promise<T> {
   const response = await fetchWithFallback(path, {
+    ...init,
     method: "GET",
     headers: withAuthHeaders(init?.headers),
-    ...init,
   })
   return handleResponse<T>(response)
 }
 
 export async function apiPost<T>(path: string, body?: unknown, init?: ApiRequestInit): Promise<T> {
   const response = await fetchWithFallback(path, {
+    ...init,
     method: "POST",
     headers: withAuthHeaders({
       ...defaultHeaders,
       ...(init?.headers ?? {}),
     }),
     body: body ? JSON.stringify(body) : undefined,
-    ...init,
   })
   return handleResponse<T>(response)
 }
 
 export async function apiPut<T>(path: string, body?: unknown, init?: ApiRequestInit): Promise<T> {
   const response = await fetchWithFallback(path, {
+    ...init,
     method: "PUT",
     headers: withAuthHeaders({
       ...defaultHeaders,
       ...(init?.headers ?? {}),
     }),
     body: body ? JSON.stringify(body) : undefined,
-    ...init,
   })
   return handleResponse<T>(response)
 }
 
 export async function apiPatch<T>(path: string, body?: unknown, init?: ApiRequestInit): Promise<T> {
   const response = await fetchWithFallback(path, {
+    ...init,
     method: "PATCH",
     headers: withAuthHeaders({
       ...defaultHeaders,
       ...(init?.headers ?? {}),
     }),
     body: body ? JSON.stringify(body) : undefined,
-    ...init,
   })
   return handleResponse<T>(response)
 }
 
 export async function apiDelete<T>(path: string, body?: unknown, init?: ApiRequestInit): Promise<T> {
   const response = await fetchWithFallback(path, {
+    ...init,
     method: "DELETE",
     headers: withAuthHeaders(body ? {
       ...defaultHeaders,
       ...(init?.headers ?? {}),
     } : (init?.headers ?? {})),
     body: body ? JSON.stringify(body) : undefined,
-    ...init,
   })
   return handleResponse<T>(response)
 }
