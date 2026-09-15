@@ -1,3 +1,5 @@
+name: maneuver
+
 services:
   api:
     build: ./server

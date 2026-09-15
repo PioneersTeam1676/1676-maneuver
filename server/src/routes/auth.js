@@ -4,7 +4,6 @@ const { prisma } = require("../db")
 const asyncHandler = require("../utils/asyncHandler")
 const {
   ACCESS_TOKEN_TTL_SECONDS,
-  REFRESH_TOKEN_TTL_SECONDS,
   signAppToken,
   generateRefreshToken,
   hashRefreshToken,
@@ -17,7 +16,7 @@ const {
 // device lost its session an hour after login. Instead, the client trades
 // its Google token ONCE for:
 //   - an app-signed access token (JWT, 5-day expiry — outlives an event)
-//   - an opaque refresh token (60 days, stored hashed in auth_sessions)
+//   - an opaque refresh token (valid until logout, stored hashed in auth_sessions)
 // POST /auth/refresh exchanges the refresh token for a fresh access token
 // with no Google round-trip, so sessions survive as long as the device
 // occasionally reaches OUR server — no Google connectivity needed.
@@ -66,7 +65,6 @@ const issueSession = async ({ email, name, picture }) => {
 
   const now = Date.now()
   const refreshToken = generateRefreshToken()
-  const refreshExpiresAt = now + REFRESH_TOKEN_TTL_SECONDS * 1000
 
   await prisma.$executeRawUnsafe(
     `INSERT INTO auth_sessions (token_hash, email, name, picture, created_at, expires_at, last_used_at)
@@ -76,14 +74,9 @@ const issueSession = async ({ email, name, picture }) => {
     name || null,
     picture || null,
     now,
-    refreshExpiresAt,
+    0, // Retain the legacy NOT NULL column; sessions no longer expire by age.
     now
   )
-
-  // Opportunistic cleanup so dead sessions don't accumulate forever.
-  await prisma
-    .$executeRawUnsafe(`DELETE FROM auth_sessions WHERE expires_at < ?`, now)
-    .catch(() => {})
 
   const { token: accessToken, expiresAt: accessTokenExpiresAt } = signAppToken(
     { email, name: name || undefined, picture: picture || undefined },
@@ -94,7 +87,7 @@ const issueSession = async ({ email, name, picture }) => {
     accessToken,
     accessTokenExpiresAt,
     refreshToken,
-    refreshTokenExpiresAt: refreshExpiresAt,
+    refreshTokenExpiresAt: null,
     user: { email, name: name || null, picture: picture || null },
   }
 }
@@ -164,19 +157,15 @@ router.post(
 
     const tokenHash = hashRefreshToken(refreshToken)
     const rows = await prisma.$queryRawUnsafe(
-      `SELECT email, name, picture, expires_at AS expiresAt FROM auth_sessions WHERE token_hash = ? LIMIT 1`,
+      `SELECT email, name, picture FROM auth_sessions WHERE token_hash = ? LIMIT 1`,
       tokenHash
     )
     const session = Array.isArray(rows) ? rows[0] : null
     if (!session) {
       return res.status(401).json({ error: "Invalid refresh token" })
     }
-    if (Number(session.expiresAt) <= Date.now()) {
-      await prisma
-        .$executeRawUnsafe(`DELETE FROM auth_sessions WHERE token_hash = ?`, tokenHash)
-        .catch(() => {})
-      return res.status(401).json({ error: "Refresh token expired" })
-    }
+    // Existing sessions also stay signed in: ignore their legacy expires_at.
+    // Logout still deletes the row, and blocked accounts cannot refresh.
 
     const email = String(session.email || "").toLowerCase()
     const explicitRole = await prisma.role.findUnique({

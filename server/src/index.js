@@ -28,6 +28,8 @@ const { prisma, databaseInfo } = require("./db")
 const { initWebhookSync } = require("./webhookSyncManager")
 const { imageStorageDir } = require("./utils/imagePermalinkStore")
 const { ensureRecentUserProfileSchema } = require("./utils/recentUserUtils")
+const { resolveErrorResponse } = require("./utils/serviceErrors")
+const { checkDatabaseHealth } = require("./utils/healthCheck")
 
 const compression = require("compression")
 
@@ -219,8 +221,15 @@ const registerRoutes = (prefix = "") => {
     return `${prefix}${suffix}`
   }
 
-  app.get(resolvePath("/health"), (_req, res) => {
-    res.json({ status: "ok", database: databaseInfo, basePath: prefix || "/" })
+  // Probes MySQL for real: a 503 here means "API up, database down".
+  app.get(resolvePath("/health"), async (_req, res) => {
+    const database = await checkDatabaseHealth(prisma)
+    const healthy = database.status === "ok"
+    res.status(healthy ? 200 : 503).json({
+      status: healthy ? "ok" : "degraded",
+      database: { ...databaseInfo, ...database },
+      basePath: prefix || "/",
+    })
   })
 
   // No auth middleware on /auth — it IS the auth bootstrap (verifies the
@@ -248,7 +257,8 @@ registerRoutes("")
 
 app.use((err, _req, res, _next) => {
   console.error("API error", err)
-  res.status(500).json({ error: "Internal server error" })
+  const { status, body } = resolveErrorResponse(err)
+  res.status(status).json(body)
 })
 
 scheduleBackups()

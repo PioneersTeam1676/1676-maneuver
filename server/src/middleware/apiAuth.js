@@ -3,6 +3,7 @@ const { prisma } = require("../db")
 const { upsertRecentUser } = require("../utils/recentUserUtils")
 const { getAllowedEmailDomains } = require("../utils/authDomains")
 const { verifyAppToken } = require("../utils/appJwt")
+const { isDatabaseUnavailableError } = require("../utils/serviceErrors")
 
 const normalizeToken = (value) => {
   if (!value) return null
@@ -72,6 +73,18 @@ const authorizeEmail = async (email, { skipDomainCheck, allowBlocked, allowPendi
   return { ok: true, explicitRole }
 }
 
+// The identity was verified but the role lookup itself blew up. Express 4
+// does not catch async rejections, so without this the request would hang
+// until the client's own timeout — and the old code mapped it to 401.
+const respondAuthorizationFailure = (res, error) => {
+  if (isDatabaseUnavailableError(error)) {
+    console.error("[apiAuth] database unavailable during authorization:", error?.message || error)
+    return res.status(503).json({ error: "Service temporarily unavailable", reason: "database_unavailable" })
+  }
+  console.error("[apiAuth] authorization failed:", error)
+  return res.status(500).json({ error: "Internal server error" })
+}
+
 const touchRecentUser = async (user, explicitRole, skipDomainCheck) => {
   try {
     await upsertRecentUser(prisma, {
@@ -117,7 +130,12 @@ const createApiAuthMiddleware = ({ skipDomainCheck = false, allowBlocked = false
     const appPayload = verifyAppToken(token)
     if (appPayload?.email) {
       const email = String(appPayload.email).toLowerCase()
-      const authz = await authorizeEmail(email, { skipDomainCheck, allowBlocked, allowPendingRole, allowedDomains })
+      let authz
+      try {
+        authz = await authorizeEmail(email, { skipDomainCheck, allowBlocked, allowPendingRole, allowedDomains })
+      } catch (error) {
+        return respondAuthorizationFailure(res, error)
+      }
       if (!authz.ok) {
         return res.status(authz.status).json({ error: authz.error })
       }
@@ -135,33 +153,42 @@ const createApiAuthMiddleware = ({ skipDomainCheck = false, allowBlocked = false
     if (!googleClient) {
       return res.status(401).json({ error: "Unauthorized" })
     }
+    // Only the Google verification itself may turn into a 401. Anything
+    // that fails AFTER the identity is proven (our database) is our fault
+    // and is reported as 503 so clients keep their session.
+    let payload
     try {
       const ticket = await googleClient.verifyIdToken({
         idToken: token,
         audience: googleClientId,
       })
-      const payload = ticket.getPayload()
-      const email = payload?.email ? String(payload.email).toLowerCase() : ""
-      if (!email) {
-        return res.status(401).json({ error: "Unauthorized" })
-      }
-      if (payload?.email_verified === false) {
-        return res.status(403).json({ error: "Email not verified" })
-      }
-      const authz = await authorizeEmail(email, { skipDomainCheck, allowBlocked, allowPendingRole, allowedDomains })
-      if (!authz.ok) {
-        return res.status(authz.status).json({ error: authz.error })
-      }
-      req.user = {
-        email,
-        name: payload?.name ? String(payload.name) : null,
-        picture: payload?.picture ? String(payload.picture) : null,
-      }
-      await touchRecentUser(req.user, authz.explicitRole, skipDomainCheck)
-      return next()
+      payload = ticket.getPayload()
     } catch (_error) {
       return res.status(401).json({ error: "Unauthorized" })
     }
+    const email = payload?.email ? String(payload.email).toLowerCase() : ""
+    if (!email) {
+      return res.status(401).json({ error: "Unauthorized" })
+    }
+    if (payload?.email_verified === false) {
+      return res.status(403).json({ error: "Email not verified" })
+    }
+    let authz
+    try {
+      authz = await authorizeEmail(email, { skipDomainCheck, allowBlocked, allowPendingRole, allowedDomains })
+    } catch (error) {
+      return respondAuthorizationFailure(res, error)
+    }
+    if (!authz.ok) {
+      return res.status(authz.status).json({ error: authz.error })
+    }
+    req.user = {
+      email,
+      name: payload?.name ? String(payload.name) : null,
+      picture: payload?.picture ? String(payload.picture) : null,
+    }
+    await touchRecentUser(req.user, authz.explicitRole, skipDomainCheck)
+    return next()
   }
 }
 

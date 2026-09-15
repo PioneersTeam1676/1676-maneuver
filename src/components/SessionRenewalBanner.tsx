@@ -1,11 +1,18 @@
 import { useCallback, useEffect, useState } from "react"
-import { AlertTriangle, CloudUpload, Loader2 } from "lucide-react"
+import { AlertTriangle, CloudUpload, Loader2, ServerCrash } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/AuthContext"
 import { useScoutingSession } from "@/hooks/useScoutingSession"
-import { API_AUTH_FAILURE_EVENT, AUTH_REFRESHED_EVENT, hasUsableAuthToken } from "@/lib/apiClient"
+import {
+  API_AUTH_FAILURE_EVENT,
+  API_REACHABLE_EVENT,
+  API_UNAVAILABLE_EVENT,
+  AUTH_REFRESHED_EVENT,
+  hasUsableAuthToken,
+  pingApi,
+} from "@/lib/apiClient"
 import { db, pitDB, syncCachedPitScoutingEntries, syncCachedScoutingEntries } from "@/lib/dexieDB"
 
 const POLL_INTERVAL_MS = 15_000
@@ -19,6 +26,11 @@ const SessionRenewalBanner = () => {
   // server is the authority. So "session expired" is now signalled by an
   // actual 401 (API_AUTH_FAILURE_EVENT), not by the token disappearing.
   const [authFailed, setAuthFailed] = useState(false)
+  // Server reachable but answering 503 (in practice: MySQL down). This is
+  // NOT a session problem — credentials are intact — so it gets its own
+  // banner instead of the misleading "Session expired".
+  const [serverUnavailable, setServerUnavailable] = useState(false)
+  const [retrying, setRetrying] = useState(false)
   const [renewing, setRenewing] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
   const [syncing, setSyncing] = useState(false)
@@ -38,18 +50,31 @@ const SessionRenewalBanner = () => {
       setRenewing(false)
       setNeedsRenewal(false)
       setAuthFailed(false)
+      setServerUnavailable(false)
+    }
+    const onApiUnavailable = () => {
+      setServerUnavailable(true)
+      // A 503 during the outage can never mean "expired"; drop any stale flag.
+      setAuthFailed(false)
+    }
+    const onApiReachable = () => {
+      setServerUnavailable(false)
     }
     const onVisibility = () => {
       if (document.visibilityState === "visible") evaluate()
     }
     window.addEventListener(API_AUTH_FAILURE_EVENT, onAuthFailure)
     window.addEventListener(AUTH_REFRESHED_EVENT, onAuthRefreshed)
+    window.addEventListener(API_UNAVAILABLE_EVENT, onApiUnavailable)
+    window.addEventListener(API_REACHABLE_EVENT, onApiReachable)
     document.addEventListener("visibilitychange", onVisibility)
     window.addEventListener("focus", evaluate)
     return () => {
       window.clearInterval(interval)
       window.removeEventListener(API_AUTH_FAILURE_EVENT, onAuthFailure)
       window.removeEventListener(AUTH_REFRESHED_EVENT, onAuthRefreshed)
+      window.removeEventListener(API_UNAVAILABLE_EVENT, onApiUnavailable)
+      window.removeEventListener(API_REACHABLE_EVENT, onApiReachable)
       document.removeEventListener("visibilitychange", onVisibility)
       window.removeEventListener("focus", evaluate)
     }
@@ -66,6 +91,21 @@ const SessionRenewalBanner = () => {
       setRenewing(false)
     })
   }, [renewSession])
+
+  // /health probes MySQL for real, so a 200 here means the outage is over;
+  // apiClient then fires API_REACHABLE_EVENT which clears the banner.
+  const triggerRetry = useCallback(() => {
+    setRetrying(true)
+    void pingApi()
+      .then(() => {
+        setServerUnavailable(false)
+        toast.success("Server is back. Syncing will resume automatically.")
+      })
+      .catch(() => {
+        toast.error("Still can't reach the scouting server. Your entries stay saved on this device.")
+      })
+      .finally(() => setRetrying(false))
+  }, [])
 
   const refreshPendingCount = useCallback(async () => {
     try {
@@ -122,6 +162,38 @@ const SessionRenewalBanner = () => {
   }, [syncing, pendingCount, refreshPendingCount])
 
   if (!user || isInScoutingSession) return null
+
+  if (serverUnavailable) {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        className="sticky top-0 z-50 border-b border-red-500/40 bg-red-500/10 px-4 py-2 text-red-900 dark:text-red-200"
+      >
+        <div className="mx-auto flex max-w-screen-md items-center gap-3 text-sm">
+          {retrying ? (
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+          ) : (
+            <ServerCrash className="h-4 w-4 shrink-0" />
+          )}
+          <span className="flex-1">
+            {pendingCount > 0
+              ? `Scouting server is down (not your login). ${pendingCount} entr${pendingCount === 1 ? "y" : "ies"} saved on this device and will sync when it's back.`
+              : "Scouting server is down (not your login). Keep scouting — entries save on this device."}
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={triggerRetry}
+            disabled={retrying}
+            className="h-8"
+          >
+            {retrying ? "Checking…" : "Retry"}
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   if (needsRenewal || authFailed) {
     return (

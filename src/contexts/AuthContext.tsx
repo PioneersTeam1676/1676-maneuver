@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { AUTH_REFRESHED_EVENT, apiDelete, apiGet, apiPatch, apiPost, apiPut, clearBackendSession, establishBackendSession, hasUsableAuthToken, refreshBackendSession } from '@/lib/apiClient'
+import { AUTH_REFRESHED_EVENT, apiDelete, apiGet, apiPatch, apiPost, apiPut, clearBackendSession, establishBackendSession, hasUsableAuthToken, refreshBackendSessionDetailed } from '@/lib/apiClient'
 import { emailMatchesAllowedDomain as emailMatchesAllowedDomainHelper, mergeCurrentUserRole, parseAllowedEmailDomains, resolveDefaultRoleForEmail, resolveRoleAfterRefreshFailure, retainSessionStartRole } from '@/lib/authRoleDefaults'
-import { resolveOAuthErrorRecovery } from '@/lib/authSessionRecovery'
+import { resolveOAuthErrorRecovery, resolveRenewalAction } from '@/lib/authSessionRecovery'
 import { resetVerificationState } from '@/lib/authVerificationReset'
 import { buildCanonicalGoogleAuthRestartUrl, resolveGoogleRedirectUri } from '@/lib/googleOAuthRedirect'
 import { findStoredVerificationProfile, hasCompletedOnboarding } from '@/lib/verificationRequest'
@@ -1113,7 +1113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       window.dispatchEvent(new CustomEvent(AUTH_REFRESHED_EVENT))
 
       // Exchange the ~1-hour Google token for a long-lived backend session
-      // (5-day access token + 60-day refresh token). If this fails (server
+      // (5-day access token + refresh token valid until logout). If this fails (server
       // unreachable right now), the raw id_token still works for a while and
       // apiClient retries the exchange on the next online/focus/interval tick.
       void establishBackendSession(idToken)
@@ -1254,14 +1254,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // First choice: silently exchange our refresh token for a new access
     // token. No page reload, no Google, works on internet-less venue WiFi.
-    // Only if that definitively fails do we fall back to the Google
-    // prompt=none redirect flow below.
+    // Only if the server DEFINITIVELY rejects the session (or we never had
+    // one) do we fall back to the Google prompt=none redirect flow below.
+    // When the server/database is merely down, redirecting to Google is
+    // pointless — the id_token exchange would fail the same way — and it
+    // produced a "sign-in failed" loop for scouts. In that case we wait;
+    // apiClient retries the refresh on the next online/focus/interval tick.
+    let action: ReturnType<typeof resolveRenewalAction> = 'google'
     try {
-      const refreshed = await refreshBackendSession()
-      if (refreshed) return true
+      action = resolveRenewalAction(await refreshBackendSessionDetailed())
     } catch {
-      // fall through to the Google flow
+      action = 'wait'
     }
+    if (action === 'done') return true
+    if (action === 'wait') return false
 
     const saved = localStorage.getItem('auth_user')
     const currentEmail = user?.email || (saved ? (() => {
@@ -1276,6 +1282,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (silentRefreshStartedRef.current) return false
 
     silentRefreshStartedRef.current = true
+    // If the redirect never actually navigates (iOS PWA quirk, blocked
+    // navigation), this guard used to stay set forever and "Renew now"
+    // silently did nothing until a full reload. Release it after a grace
+    // period so the button always does something.
+    window.setTimeout(() => {
+      silentRefreshStartedRef.current = false
+    }, 15_000)
     return startGoogleAuth({
       prompt: 'none',
       mode: 'silent',

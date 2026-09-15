@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { isActiveScoutingPath, resolveOAuthErrorRecovery } from './authSessionRecovery'
+import { isActiveScoutingPath, resolveOAuthErrorRecovery, resolveRenewalAction } from './authSessionRecovery'
 
 describe('auth session recovery', () => {
   it('preserves a saved session when silent refresh fails', () => {
@@ -36,5 +36,20 @@ describe('auth session recovery', () => {
     expect(isActiveScoutingPath('/scout-form')).toBe(true)
     expect(isActiveScoutingPath('/auto-scoring?match=12')).toBe(true)
     expect(isActiveScoutingPath('/game-start')).toBe(false)
+  })
+})
+
+describe('resolveRenewalAction', () => {
+  it('finishes immediately after a silent refresh', () => {
+    expect(resolveRenewalAction('refreshed')).toBe('done')
+  })
+
+  it('falls back to Google only when the server definitively rejected or lacks a session', () => {
+    expect(resolveRenewalAction('rejected')).toBe('google')
+    expect(resolveRenewalAction('no-credentials')).toBe('google')
+  })
+
+  it('waits (no Google redirect) when the server is temporarily unavailable', () => {
+    expect(resolveRenewalAction('unavailable')).toBe('wait')
   })
 })

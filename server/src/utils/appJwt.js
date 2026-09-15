@@ -9,9 +9,8 @@ const crypto = require("crypto")
 
 // Access tokens must outlive a full multi-day competition (Thu-Sun + slack).
 const ACCESS_TOKEN_TTL_SECONDS = 5 * 24 * 60 * 60 // 5 days
-// Refresh tokens let a device re-establish a session without re-prompting
-// Google. Long enough to cover a whole season of events.
-const REFRESH_TOKEN_TTL_SECONDS = 60 * 24 * 60 * 60 // 60 days
+// Refresh tokens persist until logout so access-token renewal never requires
+// a scout to sign in again just because time has passed.
 
 let cachedSecret = null
 
@@ -105,7 +104,6 @@ const hashRefreshToken = (token) =>
 
 module.exports = {
   ACCESS_TOKEN_TTL_SECONDS,
-  REFRESH_TOKEN_TTL_SECONDS,
   signAppToken,
   verifyAppToken,
   generateRefreshToken,

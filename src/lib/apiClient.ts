@@ -1,3 +1,5 @@
+import type { SessionRefreshOutcome } from "@/lib/authSessionRecovery"
+
 const normalizeBaseUrl = (value: string | undefined | null): string | null => {
   if (!value) return null
   const trimmed = value.trim()
@@ -53,12 +55,34 @@ let activeBaseIndex = 0
 const reportedFailures = new Set<string>()
 const API_AUTH_FAILURE_EVENT = "api-auth-failure"
 const AUTH_REFRESHED_EVENT = "auth-session-refreshed"
+// Fired when the server answers 502/503/504 (typically: API up, MySQL down)
+// and again when a request succeeds afterwards. Lets the UI say "server
+// unavailable" instead of the misleading "session expired".
+const API_UNAVAILABLE_EVENT = "api-unavailable"
+const API_REACHABLE_EVENT = "api-reachable"
 let lastAuthFailureEventAt = 0
+let apiKnownUnavailable = false
+
+const UNAVAILABLE_STATUSES = new Set([502, 503, 504])
+
+const reportApiUnavailable = (status: number, reason?: string): void => {
+  if (typeof window === "undefined") return
+  apiKnownUnavailable = true
+  window.dispatchEvent(new CustomEvent(API_UNAVAILABLE_EVENT, { detail: { status, reason } }))
+}
+
+// Only dispatched on the first success after an outage, so the common path
+// stays silent.
+const reportApiReachable = (): void => {
+  if (typeof window === "undefined" || !apiKnownUnavailable) return
+  apiKnownUnavailable = false
+  window.dispatchEvent(new CustomEvent(API_REACHABLE_EVENT))
+}
 
 // localStorage keys for the backend-issued session. The app exchanges the
 // short-lived Google id_token for these once after login (POST /auth/session):
 // - access token: app JWT, ~5 day expiry, sent as the bearer token
-// - refresh token: opaque, ~60 day expiry, used to mint new access tokens
+// - refresh token: opaque, valid until logout, used to mint new access tokens
 //   without any Google round-trip (works on venue WiFi with no internet)
 const SESSION_ACCESS_TOKEN_KEY = "auth_session_token"
 const SESSION_REFRESH_TOKEN_KEY = "auth_refresh_token"
@@ -219,19 +243,20 @@ async function handleResponse<T>(response: Response): Promise<T> {
   const body = isJson ? await response.json() : await response.text()
   if (!response.ok) {
     if (response.status === 401 && typeof window !== "undefined") {
-      // Try a silent refresh first — if it succeeds it dispatches
-      // AUTH_REFRESHED_EVENT, which re-triggers all the sync paths in
-      // App.tsx. Only surface the failure banner if refresh can't help.
-      void refreshBackendSession()
+      // Authenticated requests already tried silent renewal and a retry.
       const now = Date.now()
       if (now - lastAuthFailureEventAt > 1500) {
         lastAuthFailureEventAt = now
         window.dispatchEvent(new CustomEvent(API_AUTH_FAILURE_EVENT, { detail: { status: 401 } }))
       }
     }
+    if (UNAVAILABLE_STATUSES.has(response.status)) {
+      reportApiUnavailable(response.status, isJson ? body?.reason : undefined)
+    }
     const message = isJson && body?.error ? body.error : `Request failed with ${response.status}`
     throw new ApiError(message, response.status)
   }
+  reportApiReachable()
   return body as T
 }
 
@@ -239,7 +264,7 @@ type SessionResponse = {
   accessToken?: string
   accessTokenExpiresAt?: number
   refreshToken?: string
-  refreshTokenExpiresAt?: number
+  refreshTokenExpiresAt?: number | null
 }
 
 const dispatchAuthRefreshed = (): void => {
@@ -267,30 +292,46 @@ const authEndpointPost = async (path: string, body: unknown): Promise<SessionRes
 // Exchange a Google id_token for a backend session. Called once after each
 // Google login. Failure is non-fatal: the raw id_token keeps working for
 // about an hour, and maybeRefreshBackendSession() retries the exchange.
-export const establishBackendSession = async (idToken: string): Promise<boolean> => {
-  if (typeof window === "undefined") return false
+const establishBackendSessionDetailed = async (idToken: string): Promise<SessionRefreshOutcome> => {
+  if (typeof window === "undefined") return "no-credentials"
   try {
     const session = await authEndpointPost("/auth/session", { idToken })
-    if (!session?.accessToken || !session.refreshToken) return false
+    if (!session?.accessToken || !session.refreshToken) return "unavailable"
     window.localStorage?.setItem(SESSION_ACCESS_TOKEN_KEY, session.accessToken)
     window.localStorage?.setItem(SESSION_REFRESH_TOKEN_KEY, session.refreshToken)
+    reportApiReachable()
     dispatchAuthRefreshed()
-    return true
+    return "refreshed"
   } catch (error) {
     console.warn("[apiClient] Failed to establish backend session", error)
-    return false
+    const status = error instanceof ApiError ? error.status : undefined
+    if (status === 401 || status === 403) return "rejected"
+    if (typeof status === "number" && UNAVAILABLE_STATUSES.has(status)) {
+      reportApiUnavailable(status)
+    }
+    return "unavailable"
   }
 }
 
-let refreshSessionPromise: Promise<boolean> | null = null
+export const establishBackendSession = async (idToken: string): Promise<boolean> =>
+  (await establishBackendSessionDetailed(idToken)) === "refreshed"
+
+let refreshSessionPromise: Promise<SessionRefreshOutcome> | null = null
 
 // Trade the stored refresh token for a new access token. De-duped so an
 // interval tick, a focus event, and a 401 handler firing together produce a
 // single request. Network errors leave the stored tokens untouched (they may
 // still be fine — we might just be offline); only a definitive 401/403 from
 // the server clears them.
-export const refreshBackendSession = (): Promise<boolean> => {
-  if (typeof window === "undefined") return Promise.resolve(false)
+//
+// The outcome tells callers WHY it did not refresh, which decides whether a
+// Google re-login makes any sense (see resolveRenewalAction):
+// - "refreshed":      new access token stored.
+// - "rejected":       server said the refresh token is dead; credentials cleared.
+// - "unavailable":    server/database down or unreachable; credentials kept.
+// - "no-credentials": nothing to refresh with.
+export const refreshBackendSessionDetailed = (): Promise<SessionRefreshOutcome> => {
+  if (typeof window === "undefined") return Promise.resolve("no-credentials")
   if (refreshSessionPromise) return refreshSessionPromise
 
   const refreshToken = readStoredToken(SESSION_REFRESH_TOKEN_KEY)
@@ -299,31 +340,35 @@ export const refreshBackendSession = (): Promise<boolean> => {
     // a fresh Google token (e.g. the exchange failed right after login).
     const idToken = readStoredToken(GOOGLE_ID_TOKEN_KEY)
     if (idToken && isJwtFresh(idToken)) {
-      refreshSessionPromise = establishBackendSession(idToken).finally(() => {
+      refreshSessionPromise = establishBackendSessionDetailed(idToken).finally(() => {
         refreshSessionPromise = null
       })
       return refreshSessionPromise
     }
-    return Promise.resolve(false)
+    return Promise.resolve("no-credentials")
   }
 
-  refreshSessionPromise = (async () => {
+  refreshSessionPromise = (async (): Promise<SessionRefreshOutcome> => {
     try {
       const session = await authEndpointPost("/auth/refresh", { refreshToken })
-      if (!session?.accessToken) return false
+      if (!session?.accessToken) return "unavailable"
       window.localStorage?.setItem(SESSION_ACCESS_TOKEN_KEY, session.accessToken)
+      reportApiReachable()
       dispatchAuthRefreshed()
-      return true
+      return "refreshed"
     } catch (error) {
       const status = error instanceof ApiError ? error.status : undefined
       if (status === 401 || status === 403) {
         // The server definitively rejected this refresh token — it's dead.
         window.localStorage?.removeItem(SESSION_ACCESS_TOKEN_KEY)
         window.localStorage?.removeItem(SESSION_REFRESH_TOKEN_KEY)
-      } else {
-        console.warn("[apiClient] Session refresh failed (will retry later)", error)
+        return "rejected"
       }
-      return false
+      console.warn("[apiClient] Session refresh failed (will retry later)", error)
+      if (typeof status === "number" && UNAVAILABLE_STATUSES.has(status)) {
+        reportApiUnavailable(status)
+      }
+      return "unavailable"
     } finally {
       refreshSessionPromise = null
     }
@@ -331,6 +376,9 @@ export const refreshBackendSession = (): Promise<boolean> => {
 
   return refreshSessionPromise
 }
+
+export const refreshBackendSession = async (): Promise<boolean> =>
+  (await refreshBackendSessionDetailed()) === "refreshed"
 
 // Cheap check used by online/focus/interval handlers: refresh in the
 // background before the access token actually expires so requests never see
@@ -360,9 +408,36 @@ export const clearBackendSession = (): void => {
   window.localStorage?.removeItem(SESSION_REFRESH_TOKEN_KEY)
   if (refreshToken) {
     void authEndpointPost("/auth/logout", { refreshToken }).catch(() => {
-      // Offline logout is fine — the row expires server-side on its own.
+      // Local credentials are cleared even when the server is unreachable.
     })
   }
+}
+
+// A stale access token should be invisible to scouters. Renew silently and
+// retry the rejected request once, preserving its method, body and headers.
+const fetchWithSession = async (path: string, init: ApiRequestInit): Promise<Response> => {
+  const token = resolveAuthToken()
+  const headers = new Headers(init.headers)
+  const hasExplicitAuth = headers.has("Authorization") || headers.has("X-API-Key")
+  const send = () => fetchWithFallback(path, { ...init, headers: withAuthHeaders(init.headers) })
+  const response = await send()
+  if (response.status !== 401 || hasExplicitAuth) return response
+
+  // Another concurrent request may already have renewed the stored token.
+  if (resolveAuthToken() !== token) {
+    return send()
+  }
+  const outcome = await refreshBackendSessionDetailed()
+  if (outcome === "refreshed") {
+    return send()
+  }
+  // Renewal failed for a reason that is not "your session is dead" (server
+  // or database down, venue WiFi dropped). Keep the sign-in and let normal
+  // sync retry later; this must not trigger the sign-in warning.
+  if (outcome === "unavailable") {
+    throw new ApiError("Session renewal is temporarily unavailable", 503)
+  }
+  return response
 }
 
 // Note: caller-supplied `init` is spread FIRST so the computed method,
@@ -370,61 +445,61 @@ export const clearBackendSession = (): void => {
 // which silently replaced the Authorization headers whenever a caller passed
 // its own `headers` — every such request then failed with a 401.
 export async function apiGet<T>(path: string, init?: ApiRequestInit): Promise<T> {
-  const response = await fetchWithFallback(path, {
+  const response = await fetchWithSession(path, {
     ...init,
     method: "GET",
-    headers: withAuthHeaders(init?.headers),
+    headers: init?.headers,
   })
   return handleResponse<T>(response)
 }
 
 export async function apiPost<T>(path: string, body?: unknown, init?: ApiRequestInit): Promise<T> {
-  const response = await fetchWithFallback(path, {
+  const response = await fetchWithSession(path, {
     ...init,
     method: "POST",
-    headers: withAuthHeaders({
+    headers: {
       ...defaultHeaders,
       ...(init?.headers ?? {}),
-    }),
+    },
     body: body ? JSON.stringify(body) : undefined,
   })
   return handleResponse<T>(response)
 }
 
 export async function apiPut<T>(path: string, body?: unknown, init?: ApiRequestInit): Promise<T> {
-  const response = await fetchWithFallback(path, {
+  const response = await fetchWithSession(path, {
     ...init,
     method: "PUT",
-    headers: withAuthHeaders({
+    headers: {
       ...defaultHeaders,
       ...(init?.headers ?? {}),
-    }),
+    },
     body: body ? JSON.stringify(body) : undefined,
   })
   return handleResponse<T>(response)
 }
 
 export async function apiPatch<T>(path: string, body?: unknown, init?: ApiRequestInit): Promise<T> {
-  const response = await fetchWithFallback(path, {
+  const response = await fetchWithSession(path, {
     ...init,
     method: "PATCH",
-    headers: withAuthHeaders({
+    headers: {
       ...defaultHeaders,
       ...(init?.headers ?? {}),
-    }),
+    },
     body: body ? JSON.stringify(body) : undefined,
   })
   return handleResponse<T>(response)
 }
 
 export async function apiDelete<T>(path: string, body?: unknown, init?: ApiRequestInit): Promise<T> {
-  const response = await fetchWithFallback(path, {
+  const response = await fetchWithSession(path, {
     ...init,
     method: "DELETE",
-    headers: withAuthHeaders(body ? {
+    headers: body ? {
       ...defaultHeaders,
       ...(init?.headers ?? {}),
-    } : (init?.headers ?? {})),
+    } : (init?.headers ?? {}),
     body: body ? JSON.stringify(body) : undefined,
   })
   return handleResponse<T>(response)
@@ -442,7 +517,8 @@ export const setApiAuthToken = (token: string | null): void => {
 }
 
 export { ApiError }
-export { API_AUTH_FAILURE_EVENT, AUTH_REFRESHED_EVENT }
+export { API_AUTH_FAILURE_EVENT, AUTH_REFRESHED_EVENT, API_UNAVAILABLE_EVENT, API_REACHABLE_EVENT }
+export type { SessionRefreshOutcome }
 
 export type ApiHealth = {
   status?: string
