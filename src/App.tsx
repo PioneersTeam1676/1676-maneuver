@@ -63,56 +63,58 @@ import { AuthProvider } from '@/contexts/AuthContext';
 
 
 
+// Built once at module scope: creating it inside App() made every App
+// re-render a brand-new router that remounted the whole page tree.
+const router = createBrowserRouter(
+  createRoutesFromElements(
+    <Route path="/" element={<MainLayout />}>
+      <Route index element={<HomePage />} />
+      <Route path="/data-management" element={<DataManagementPage />} />
+      <Route path="/api-data" element={<APIDataPage />} />
+
+      <Route path="/clear-data" element={<ClearDataPage />} />
+      {/* <Route path="/parse-data" element={<ParseDataPage />} /> */}
+      <Route path="/game-start" element={<GameStartPage />} />
+<Route path="/event-settings" element={<EventSettingsPage />} />
+      <Route path="/auto-start" element={<AutoStartPage />} />
+      <Route path="/qr-data-transfer" element={<QRDataTransferPage />} />
+      <Route path="/json-transfer" element={<JSONDataTransferPage />} />
+      <Route path="/match-data-qr" element={<MatchDataQRPage />} />
+      <Route path="/match-strategy" element={<MatchStrategyPage />} />
+      <Route path="/auto-scoring" element={<AutoScoringPage />} />
+      <Route path="/teleop-scoring" element={<TeleopScoringPage />} />
+      <Route path="/endgame" element={<EndgamePage />} />
+      <Route path="/team-stats" element={<TeamStatsPage />} />
+      <Route path="/pit-scouting" element={<PitScoutingPage />} />
+      <Route path="/drive-scouting" element={<DriveTeamScoutingPage />} />
+      <Route path="/pit-assignments" element={<PitAssignmentsPage />} />
+      <Route path="/strategy-overview" element={<StrategyOverviewPage />} />
+      <Route path="/pick-list" element={<PickListPage />} />
+      <Route path="/shift-generator" element={<ShiftGeneratorPage />} />
+      <Route path="/scout-form" element={<ScoutFormPage />} />
+      <Route path="/admin" element={<AdminPanelPage />} />
+<Route path="/pi-panel" element={<PiPanelPage />} />
+      <Route path="/user-management" element={<UserManagementPage />} />
+      <Route path="/scout-activity" element={<ScoutActivityPage />} />
+<Route path="/verification-center" element={<VerificationCenterPage />} />
+      <Route path="/scout-management" element={<ScoutManagementDashboardPage />} />
+      <Route path="/achievements" element={<AchievementsPage />} />
+      <Route path="/dev-utilities" element={<DevUtilitiesPage />} />
+      <Route path="/tos" element={<TOSPage />} />
+      <Route path="/terms" element={<TOSPage />} />
+      <Route path="/privacy" element={<PrivacyPolicyPage />} />
+      <Route path="/alliance-onboarding" element={<AllianceOnboardingPage />} />
+      <Route path="/schedule" element={<SchedulePage />} />
+      <Route path="/rescout" element={<RescouterPage />} />
+      <Route path="/outliers" element={<OutlierDetectionPage />} />
+      <Route path="/auth/google/callback" element={<AuthCallbackPage />} />
+      {/* Add more routes as needed */}
+      <Route path="*" element={<NotFoundPage />} />
+    </Route>
+  )
+);
+
 function App() {
-  const router = createBrowserRouter(
-    createRoutesFromElements(
-      <Route path="/" element={<MainLayout />}>
-        <Route index element={<HomePage />} />
-        <Route path="/data-management" element={<DataManagementPage />} />
-        <Route path="/api-data" element={<APIDataPage />} />
-
-        <Route path="/clear-data" element={<ClearDataPage />} />
-        {/* <Route path="/parse-data" element={<ParseDataPage />} /> */}
-        <Route path="/game-start" element={<GameStartPage />} />
-  <Route path="/event-settings" element={<EventSettingsPage />} />
-        <Route path="/auto-start" element={<AutoStartPage />} />
-        <Route path="/qr-data-transfer" element={<QRDataTransferPage />} />
-        <Route path="/json-transfer" element={<JSONDataTransferPage />} />
-        <Route path="/match-data-qr" element={<MatchDataQRPage />} />
-        <Route path="/match-strategy" element={<MatchStrategyPage />} />
-        <Route path="/auto-scoring" element={<AutoScoringPage />} />
-        <Route path="/teleop-scoring" element={<TeleopScoringPage />} />
-        <Route path="/endgame" element={<EndgamePage />} />
-        <Route path="/team-stats" element={<TeamStatsPage />} />
-        <Route path="/pit-scouting" element={<PitScoutingPage />} />
-        <Route path="/drive-scouting" element={<DriveTeamScoutingPage />} />
-        <Route path="/pit-assignments" element={<PitAssignmentsPage />} />
-        <Route path="/strategy-overview" element={<StrategyOverviewPage />} />
-        <Route path="/pick-list" element={<PickListPage />} />
-        <Route path="/shift-generator" element={<ShiftGeneratorPage />} />
-        <Route path="/scout-form" element={<ScoutFormPage />} />
-        <Route path="/admin" element={<AdminPanelPage />} />
-  <Route path="/pi-panel" element={<PiPanelPage />} />
-        <Route path="/user-management" element={<UserManagementPage />} />
-        <Route path="/scout-activity" element={<ScoutActivityPage />} />
-  <Route path="/verification-center" element={<VerificationCenterPage />} />
-        <Route path="/scout-management" element={<ScoutManagementDashboardPage />} />
-        <Route path="/achievements" element={<AchievementsPage />} />
-        <Route path="/dev-utilities" element={<DevUtilitiesPage />} />
-        <Route path="/tos" element={<TOSPage />} />
-        <Route path="/terms" element={<TOSPage />} />
-        <Route path="/privacy" element={<PrivacyPolicyPage />} />
-        <Route path="/alliance-onboarding" element={<AllianceOnboardingPage />} />
-        <Route path="/schedule" element={<SchedulePage />} />
-        <Route path="/rescout" element={<RescouterPage />} />
-        <Route path="/outliers" element={<OutlierDetectionPage />} />
-        <Route path="/auth/google/callback" element={<AuthCallbackPage />} />
-        {/* Add more routes as needed */}
-        <Route path="*" element={<NotFoundPage />} />
-      </Route>
-    )
-  );
-
   const [showSplash, setShowSplash] = useState(true);
 
   useEffect(() => {

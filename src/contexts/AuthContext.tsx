@@ -102,6 +102,8 @@ type AuthContextValue = {
 
 export type RoleChangeResult = { success: boolean; message?: string }
 
+const SIGN_OUT_REDIRECT_URL = (import.meta.env.VITE_APP_URL as string | undefined)?.trim() || 'https://scouting.team1676.org'
+
 const ROLE_STORAGE_KEY = 'auth_roles'
 const RECENT_STORAGE_KEY = 'auth_recent_users'
 const SCHEDULE_STORAGE_KEY = 'schedule_automation_state'
@@ -1077,6 +1079,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const storedState = consumeOAuthState(stateValue)
     if (!storedState) {
+      // The same callback can be delivered twice (page remount, StrictMode);
+      // the first delivery consumed the state and signed the user in. Report
+      // that success instead of a scary "sign-in failed" for the duplicate.
+      const tokenEmail = (() => {
+        try {
+          return normalizeEmail(decodeIdToken(idToken).email || '')
+        } catch {
+          return ''
+        }
+      })()
+      if (tokenEmail && tokenEmail === normalizeEmail(readSavedUserEmail() || '')) {
+        return { success: true, message: 'You’re signed in.', returnTo: '/' }
+      }
       return { success: false, message: 'OAuth session expired or invalid. Please try signing in again.' }
     }
 
@@ -1384,6 +1399,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(() => {
     clearStoredAuthSession()
+    // Full navigation (not a router push) so no in-memory state from the
+    // signed-in session survives.
+    window.location.assign(SIGN_OUT_REDIRECT_URL)
   }, [clearStoredAuthSession])
 
   const submitAllianceProfile = useCallback(async (input: AllianceProfileInput) => {

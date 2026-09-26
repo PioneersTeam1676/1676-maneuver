@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { CheckCircle2, Loader2, XCircle } from "lucide-react"
 
@@ -25,8 +25,14 @@ const decodeIdTokenPreview = (token: string) => {
   }
 }
 
+// A remount of this page (router rebuild, StrictMode) must not post the same
+// token again: the state is single-use, so a second post reports a failure
+// even though the first one signed the user in.
+const postedStates = new Set<string>()
+
 const AuthCallbackPage = () => {
   const [status, setStatus] = useState<"pending" | "success" | "error">("pending")
+  const succeededRef = useRef(false)
   const [message, setMessage] = useState("Finishing Google sign-in…")
   const params = useMemo(fragmentToSearchParams, [])
   const [sent, setSent] = useState(false)
@@ -58,11 +64,17 @@ const AuthCallbackPage = () => {
 
     const idToken = params.get("id_token")
 
+    if (idToken && state && postedStates.has(state)) {
+      setSent(true)
+      return
+    }
+
     if (!idToken || !state) {
       setStatus("error")
       setMessage("Missing Google sign-in credentials. You can close this tab and try again.")
       return
     }
+    postedStates.add(state)
 
     const preview = decodeIdTokenPreview(idToken)
     if (preview) {
@@ -102,6 +114,7 @@ const AuthCallbackPage = () => {
       if (data.type !== "google-auth-complete") return
 
       if (data.success) {
+        succeededRef.current = true
         setStatus("success")
         setMessage(
           data.message || (hasOpener ? "You’re signed in! This tab will close automatically." : "You’re signed in! Redirecting you back to the app."),
@@ -112,6 +125,8 @@ const AuthCallbackPage = () => {
           navigate(data.returnTo || "/", { replace: true })
         }
       } else {
+        // A late failure after a success is a duplicate delivery, not a real error.
+        if (succeededRef.current) return
         setStatus("error")
         setMessage(data.message || "We couldn’t finish signing you in. Please retry from the app.")
         if (!hasOpener) {

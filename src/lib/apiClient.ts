@@ -275,11 +275,16 @@ const dispatchAuthRefreshed = (): void => {
 
 // Auth endpoints use this instead of apiPost so a 401 here can't recursively
 // re-trigger refreshBackendSession via the handleResponse hook above.
-const authEndpointPost = async (path: string, body: unknown): Promise<SessionResponse | null> => {
+const authEndpointPost = async (
+  path: string,
+  body: unknown,
+  { keepalive = false }: { keepalive?: boolean } = {},
+): Promise<SessionResponse | null> => {
   const response = await fetchWithFallback(path, {
     method: "POST",
     headers: defaultHeaders,
     body: JSON.stringify(body),
+    keepalive,
   })
   if (!response.ok) {
     const status = response.status
@@ -407,7 +412,9 @@ export const clearBackendSession = (): void => {
   window.localStorage?.removeItem(SESSION_ACCESS_TOKEN_KEY)
   window.localStorage?.removeItem(SESSION_REFRESH_TOKEN_KEY)
   if (refreshToken) {
-    void authEndpointPost("/auth/logout", { refreshToken }).catch(() => {
+    // keepalive: sign-out navigates away immediately, which would otherwise
+    // cancel this request and leave the refresh token valid server-side.
+    void authEndpointPost("/auth/logout", { refreshToken }, { keepalive: true }).catch(() => {
       // Local credentials are cleared even when the server is unreachable.
     })
   }
