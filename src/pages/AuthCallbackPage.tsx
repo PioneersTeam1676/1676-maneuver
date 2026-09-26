@@ -70,6 +70,12 @@ const AuthCallbackPage = () => {
     }
 
     if (!idToken || !state) {
+      // Remounted after this page already sent a token and stripped it from
+      // the URL: sign-in is in progress, not missing.
+      if (postedStates.size > 0) {
+        setSent(true)
+        return
+      }
       setStatus("error")
       setMessage("Missing Google sign-in credentials. You can close this tab and try again.")
       return

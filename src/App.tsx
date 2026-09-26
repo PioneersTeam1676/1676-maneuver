@@ -67,6 +67,12 @@ import { AuthProvider } from '@/contexts/AuthContext';
 // re-render a brand-new router that remounted the whole page tree.
 const router = createBrowserRouter(
   createRoutesFromElements(
+    <>
+    {/* Outside MainLayout on purpose: the layout swaps between its pending,
+        loading and full variants as sign-in completes, which remounted this
+        page after it had already stripped the token from the URL and showed
+        "Missing Google sign-in credentials" to a user who was signed in. */}
+    <Route path="/auth/google/callback" element={<AuthCallbackPage />} />
     <Route path="/" element={<MainLayout />}>
       <Route index element={<HomePage />} />
       <Route path="/data-management" element={<DataManagementPage />} />
@@ -107,10 +113,10 @@ const router = createBrowserRouter(
       <Route path="/schedule" element={<SchedulePage />} />
       <Route path="/rescout" element={<RescouterPage />} />
       <Route path="/outliers" element={<OutlierDetectionPage />} />
-      <Route path="/auth/google/callback" element={<AuthCallbackPage />} />
       {/* Add more routes as needed */}
       <Route path="*" element={<NotFoundPage />} />
     </Route>
+    </>
   )
 );
 
