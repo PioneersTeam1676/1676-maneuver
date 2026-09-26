@@ -55,6 +55,21 @@ router.get(
   })
 )
 
+// A pending user's own request as the server sees it. Their device only
+// has its local copy otherwise, which goes stale if a lead resets or
+// removes the request, leaving them on "request sent" indefinitely.
+router.get(
+  "/me",
+  asyncHandler(async (req, res) => {
+    const email = sanitizeString(req.user?.email).toLowerCase()
+    if (!email) {
+      return res.status(401).json({ error: "Not authenticated" })
+    }
+    const row = await prisma.recentUser.findUnique({ where: { email } })
+    res.json({ recentUser: row ? mapRowToRecord(row) : null })
+  })
+)
+
 router.put(
   "/:email",
   asyncHandler(async (req, res) => {

@@ -181,19 +181,28 @@ export default function AdminPanelPage() {
     )
   }
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const trimmed = email.trim().toLowerCase()
     if (!trimmed) {
       toast.error("Enter an email address before saving.")
       return
     }
-    setRole(trimmed, selectedRole)
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      toast.error("That doesn't look like an email address.")
+      return
+    }
+    const result = await setRole(trimmed, selectedRole)
+    if (!result.success) {
+      // Keep the typed email so the lead can retry without re-entering it.
+      toast.error(result.message || `Could not grant access to ${trimmed}`)
+      return
+    }
     setEmail("")
-    toast.success(`Granted ${roleLabels[selectedRole]} access to ${trimmed}`)
+    toast.success(`Granted ${roleLabels[selectedRole]} access to ${trimmed}. They can sign in now.`)
   }
 
-  const handleRoleUpdate = (addr: string, current: UserRole, next: Exclude<UserRole, "pending">) => {
+  const handleRoleUpdate = async (addr: string, current: UserRole, next: Exclude<UserRole, "pending">) => {
     if (current === "tech_lead") {
       toast.error("Technical Lead role cannot be changed.")
       return
@@ -203,11 +212,15 @@ export default function AdminPanelPage() {
       toast.error("Add another lead before demoting this account.")
       return
     }
-    setRole(addr, next)
+    const result = await setRole(addr, next)
+    if (!result.success) {
+      toast.error(result.message || `Could not update ${addr}`)
+      return
+    }
     toast.success(`Updated ${addr} to ${roleLabels[next]}`)
   }
 
-  const handleRemove = (addr: string, current: UserRole) => {
+  const handleRemove = async (addr: string, current: UserRole) => {
     if (current === "tech_lead") {
       toast.error("Technical Lead cannot be removed.")
       return
@@ -217,7 +230,11 @@ export default function AdminPanelPage() {
       toast.error("Add another lead before removing this account.")
       return
     }
-    setRole(addr, "blocked")
+    const result = await setRole(addr, "blocked")
+    if (!result.success) {
+      toast.error(result.message || `Could not revoke ${addr}`)
+      return
+    }
     toast.success(`Revoked access for ${addr}`)
   }
 
@@ -316,8 +333,13 @@ export default function AdminPanelPage() {
                       />
                     </TableCell>
                     <TableCell className="space-x-2 text-right">
-                      <Button size="sm" onClick={() => setRole(r.email, "scout")}>Grant scout</Button>
-                      <Button size="sm" variant="outline" onClick={() => acknowledgeRecentUser(r.email)}>Mark reviewed</Button>
+                      <Button size="sm" onClick={() => void setRole(r.email, "scout").then((result) => {
+                        if (result.success) toast.success(`Granted Scout access to ${r.email}`)
+                        else toast.error(result.message || `Could not grant access to ${r.email}`)
+                      })}>Grant scout</Button>
+                      <Button size="sm" variant="outline" onClick={() => void acknowledgeRecentUser(r.email).then((ok) => {
+                        if (!ok) toast.error(`Could not mark ${r.email} reviewed`)
+                      })}>Mark reviewed</Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -605,7 +627,9 @@ export default function AdminPanelPage() {
                     noLabel="New"
                   />
                   {!rec.acknowledged && (
-                    <Button size="sm" variant="ghost" onClick={() => acknowledgeRecentUser(rec.email)}>Dismiss</Button>
+                    <Button size="sm" variant="ghost" onClick={() => void acknowledgeRecentUser(rec.email).then((ok) => {
+                    if (!ok) toast.error(`Could not dismiss ${rec.email}`)
+                  })}>Dismiss</Button>
                   )}
                 </div>
               </div>

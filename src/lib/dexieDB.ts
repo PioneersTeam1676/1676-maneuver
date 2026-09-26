@@ -257,6 +257,70 @@ const handleApiError = (context: string, error: unknown): void => {
 	console.error(`[dexieDB] ${context}:`, error);
 };
 
+type SyncableRow = { id: string; synced?: boolean };
+
+// Content fingerprint ignoring the sync flag, so "is this still the row we
+// uploaded?" doesn't depend on whether it was already marked.
+const rowFingerprint = (row: SyncableRow): string => {
+	return JSON.stringify({ ...row, synced: undefined });
+};
+
+// Mark rows synced only if they still hold exactly what was uploaded. A scout
+// can re-save an entry while its upload is in flight; writing the old snapshot
+// back with synced:true used to overwrite that edit and hide it from every
+// later sync pass.
+const markRowsSynced = async <T extends SyncableRow>(table: Table<T, string>, sent: T[]): Promise<void> => {
+	if (!sent.length) return;
+	await table.db.transaction('rw', table, async () => {
+		const current = await table.bulkGet(sent.map((row) => row.id));
+		const confirmed = sent.filter((row, idx) => {
+			const now = current[idx];
+			return now !== undefined && rowFingerprint(now) === rowFingerprint(row);
+		});
+		await Promise.all(confirmed.map((row) => table.update(row.id, { synced: true } as never)));
+	});
+};
+
+// Write server rows into the local cache without ever replacing a row that
+// still has un-uploaded local changes. With `replaceAll`, rows the server no
+// longer has are dropped too — except unsynced ones, which only exist here.
+// Runs in one transaction so a save landing mid-refresh can't be wiped.
+const mergeServerRows = async <T extends SyncableRow>(
+	table: Table<T, string>,
+	serverRows: T[],
+	{ replaceAll = false }: { replaceAll?: boolean } = {},
+): Promise<T[]> =>
+	table.db.transaction('rw', table, async () => {
+		const unsynced = await table.filter((row) => row.synced === false).toArray();
+		const unsyncedIds = new Set(unsynced.map((row) => row.id));
+		const incoming = serverRows
+			.filter((row) => !unsyncedIds.has(row.id))
+			.map((row) => ({ ...row, synced: true }));
+		if (replaceAll) {
+			const keep = new Set(incoming.map((row) => row.id));
+			unsyncedIds.forEach((id) => keep.add(id));
+			const allKeys = (await table.toCollection().primaryKeys()) as string[];
+			await table.bulkDelete(allKeys.filter((key) => !keep.has(key)));
+		}
+		if (incoming.length) {
+			await table.bulkPut(incoming);
+		}
+		return [...incoming, ...unsynced];
+	});
+
+// Ask the browser not to evict IndexedDB under storage pressure. Safari in
+// particular clears site data for web apps it considers unused; persisted
+// storage (granted to installed PWAs) is exempt.
+export const requestPersistentStorage = async (): Promise<boolean> => {
+	try {
+		if (typeof navigator === 'undefined' || !navigator.storage?.persist) return false;
+		if (await navigator.storage.persisted()) return true;
+		return await navigator.storage.persist();
+	} catch {
+		return false;
+	}
+};
+
 const computeAllianceOptions = (entries: ScoutingEntryDB[]): string[] => {
 	return [...new Set(entries.map((entry) => entry.alliance).filter((value): value is string => Boolean(value)))].sort();
 };
@@ -395,7 +459,7 @@ export const syncCachedScoutingEntries = async (): Promise<void> => {
 				await apiPost('/scouting/bulk', withScoutingSeasonBody({
 					entries: pendingEntries.map(normalizeScoutingEntry),
 				}), { timeoutMs: 45_000 });
-				await db.scoutingData.bulkPut(pendingEntries.map((entry) => ({ ...entry, synced: true })));
+				await markRowsSynced(db.scoutingData, pendingEntries);
 				return;
 			} catch (bulkError) {
 				handleApiError('bulk scouting sync failed; falling back to per-entry', bulkError);
@@ -424,9 +488,7 @@ export const syncCachedScoutingEntries = async (): Promise<void> => {
 					);
 				}
 			});
-			if (successes.length) {
-				await db.scoutingData.bulkPut(successes.map((entry) => ({ ...entry, synced: true })));
-			}
+			await markRowsSynced(db.scoutingData, successes);
 			if (failures.length > 0) {
 				const sample = failures[0];
 				const reason = sample.reason instanceof Error ? sample.reason.message : String(sample.reason);
@@ -472,7 +534,7 @@ export const syncCachedPitScoutingEntries = async (): Promise<void> => {
 				await apiPost('/pit/bulk', withScoutingSeasonBody({
 					entries: pendingEntries.map(pitEntryPayload),
 				}), { timeoutMs: 45_000 });
-				await pitDB.pitScoutingData.bulkPut(pendingEntries.map((entry) => ({ ...entry, synced: true })));
+				await markRowsSynced(pitDB.pitScoutingData, pendingEntries);
 				return;
 			} catch (bulkError) {
 				handleApiError('bulk pit sync failed; falling back to per-entry', bulkError);
@@ -498,9 +560,7 @@ export const syncCachedPitScoutingEntries = async (): Promise<void> => {
 					);
 				}
 			});
-			if (successes.length) {
-				await pitDB.pitScoutingData.bulkPut(successes.map((entry) => ({ ...entry, synced: true })));
-			}
+			await markRowsSynced(pitDB.pitScoutingData, successes);
 			if (failures.length > 0) {
 				const sample = failures[0];
 				const reason = sample.reason instanceof Error ? sample.reason.message : String(sample.reason);
@@ -642,7 +702,7 @@ export const saveScoutingEntry = async (entry: ScoutingDataWithId): Promise<Save
 
 	try {
 		await apiPost('/scouting', withScoutingSeasonBody({ entry: normalizeScoutingEntry(enhancedEntry) }));
-		await db.scoutingData.update(enhancedEntry.id, { synced: true });
+		await markRowsSynced(db.scoutingData, [enhancedEntry]);
 		return { syncedRemote: true };
 	} catch (error) {
 		handleApiError('failed to persist scouting entry remotely', error);
@@ -663,7 +723,7 @@ export const saveScoutingEntries = async (entries: ScoutingDataWithId[]): Promis
 		// MySQL columns reject — sending the raw entries here used to make the
 		// upload fail for any entry with an emoji in its notes.
 		await apiPost('/scouting/bulk', withScoutingSeasonBody({ entries: enhancedEntries.map(normalizeScoutingEntry) }));
-		await db.scoutingData.bulkPut(enhancedEntries.map((entry) => ({ ...entry, synced: true })));
+		await markRowsSynced(db.scoutingData, enhancedEntries);
 	} catch (error) {
 		// Entries stay synced:false locally; the periodic sync in App.tsx
 		// retries them, so a failure here is deferred, not lost.
@@ -672,26 +732,14 @@ export const saveScoutingEntries = async (entries: ScoutingDataWithId[]): Promis
 };
 
 export const loadAllScoutingEntries = async (): Promise<ScoutingEntryDB[]> => {
-	await syncCachedScoutingEntries();
+	// A failed upload must not block reading: unsynced rows survive the merge.
+	await syncCachedScoutingEntries().catch(() => {});
 
 	try {
 		const { entries } = await apiGet<{ entries: ScoutingEntryDB[] }>(
 			`/scouting${toQueryString(withScoutingSeasonParams({}))}`,
 		);
-		const normalized = entries.map(normalizeScoutingEntry);
-		const localEntries = await db.scoutingData.toArray();
-		const unsyncedLocal = localEntries.filter((entry) => entry.synced === false);
-		const serverIds = new Set(normalized.map((entry) => entry.id));
-		// Keep local-only entries when a refresh races with a failed background sync.
-		const localOnly = unsyncedLocal.filter((entry) => !serverIds.has(entry.id));
-
-		await db.scoutingData.clear();
-		const mergedEntries = [...normalized, ...localOnly];
-		if (mergedEntries.length) {
-			await db.scoutingData.bulkPut(mergedEntries);
-		}
-
-		return mergedEntries;
+		return await mergeServerRows(db.scoutingData, entries.map(normalizeScoutingEntry), { replaceAll: true });
 	} catch (error) {
 		handleApiError('failed to load scouting entries from API', error);
 		return db.scoutingData.toArray();
@@ -703,11 +751,8 @@ export const loadScoutingEntriesByTeam = async (teamNumber: string): Promise<Sco
 		const { entries } = await apiGet<{ entries: ScoutingEntryDB[] }>(
 			`/scouting${toQueryString(withScoutingSeasonParams({ teamNumber }))}`,
 		);
-		const normalized = entries.map(normalizeScoutingEntry);
-		if (normalized.length) {
-			await db.scoutingData.bulkPut(normalized);
-		}
-		return normalized;
+		await mergeServerRows(db.scoutingData, entries.map(normalizeScoutingEntry));
+		return db.scoutingData.where('teamNumber').equals(teamNumber).toArray();
 	} catch (error) {
 		handleApiError('failed to load scouting entries by team from API', error);
 		return db.scoutingData.where('teamNumber').equals(teamNumber).toArray();
@@ -719,11 +764,8 @@ export const loadScoutingEntriesByMatch = async (matchNumber: string): Promise<S
 		const { entries } = await apiGet<{ entries: ScoutingEntryDB[] }>(
 			`/scouting${toQueryString(withScoutingSeasonParams({ matchNumber }))}`,
 		);
-		const normalized = entries.map(normalizeScoutingEntry);
-		if (normalized.length) {
-			await db.scoutingData.bulkPut(normalized);
-		}
-		return normalized;
+		await mergeServerRows(db.scoutingData, entries.map(normalizeScoutingEntry));
+		return db.scoutingData.where('matchNumber').equals(matchNumber).toArray();
 	} catch (error) {
 		handleApiError('failed to load scouting entries by match from API', error);
 		return db.scoutingData.where('matchNumber').equals(matchNumber).toArray();
@@ -735,11 +777,8 @@ export const loadScoutingEntriesByEvent = async (eventName: string): Promise<Sco
 		const { entries } = await apiGet<{ entries: ScoutingEntryDB[] }>(
 			`/scouting${toQueryString(withScoutingSeasonParams({ eventName }))}`,
 		);
-		const normalized = entries.map(normalizeScoutingEntry);
-		if (normalized.length) {
-			await db.scoutingData.bulkPut(normalized);
-		}
-		return normalized;
+		await mergeServerRows(db.scoutingData, entries.map(normalizeScoutingEntry));
+		return db.scoutingData.where('eventName').equals(eventName).toArray();
 	} catch (error) {
 		handleApiError('failed to load scouting entries by event from API', error);
 		return db.scoutingData.where('eventName').equals(eventName).toArray();
@@ -754,14 +793,15 @@ export const loadScoutingEntriesByTeamAndEvent = async (
 		const { entries } = await apiGet<{ entries: ScoutingEntryDB[] }>(
 			`/scouting${toQueryString(withScoutingSeasonParams({ teamNumber, eventName }))}`,
 		);
-		const normalized = entries.map(normalizeScoutingEntry);
-		if (normalized.length) {
-			await db.scoutingData.bulkPut(normalized);
-		}
-		return normalized;
+		await mergeServerRows(db.scoutingData, entries.map(normalizeScoutingEntry));
+		return db.scoutingData
+			.filter((entry) => entry.teamNumber === teamNumber && entry.eventName === eventName)
+			.toArray();
 	} catch (error) {
 		handleApiError('failed to load scouting entries by team and event from API', error);
-		return db.scoutingData.where('[teamNumber+eventName]').equals([teamNumber, eventName]).toArray();
+		return db.scoutingData
+			.filter((entry) => entry.teamNumber === teamNumber && entry.eventName === eventName)
+			.toArray();
 	}
 };
 
@@ -958,8 +998,19 @@ export const importScoutingData = async (
 	duplicatesSkipped?: number;
 	error?: string;
 }> => {
+	// Store locally as unsynced first: if the upload fails, the periodic sync
+	// retries it instead of the imported data only existing in the file.
+	const normalized = importData.entries.map((entry) => ({ ...normalizeScoutingEntry(entry), synced: false }));
 	try {
-		const normalized = importData.entries.map(normalizeScoutingEntry);
+		if (mode === 'overwrite') {
+			await db.transaction('rw', db.scoutingData, async () => {
+				await db.scoutingData.clear();
+				await db.scoutingData.bulkPut(normalized);
+			});
+		} else if (normalized.length) {
+			await db.scoutingData.bulkPut(normalized);
+		}
+
 		const response = await apiPost<{ success: boolean; importedCount: number }>(
 			'/scouting/import',
 			withScoutingSeasonBody({
@@ -967,13 +1018,7 @@ export const importScoutingData = async (
 				mode,
 			}),
 		);
-
-		if (mode === 'overwrite') {
-			await db.scoutingData.clear();
-		}
-		if (normalized.length) {
-			await db.scoutingData.bulkPut(normalized);
-		}
+		await markRowsSynced(db.scoutingData, normalized);
 
 		return {
 			success: response.success,
@@ -1002,11 +1047,8 @@ export const queryScoutingEntries = async (filters: {
 			'/scouting/query',
 			withScoutingSeasonBody({ filters }),
 		);
-		const normalized = entries.map(normalizeScoutingEntry);
-		if (normalized.length) {
-			await db.scoutingData.bulkPut(normalized);
-		}
-		return normalized;
+		await mergeServerRows(db.scoutingData, entries.map(normalizeScoutingEntry));
+		return queryScoutingEntriesLocally(filters);
 	} catch (error) {
 		handleApiError('failed to query scouting entries via API', error);
 		return queryScoutingEntriesLocally(filters);
@@ -1035,19 +1077,7 @@ export const getFilterOptions = async (): Promise<{
 		]);
 
 		const normalized = entriesResponse.entries.map(normalizeScoutingEntry);
-		// Preserve unsynced local entries before replacing the cache with the
-		// server copy — clearing unconditionally here used to silently discard
-		// entries that hadn't uploaded yet (same merge as loadAllScoutingEntries).
-		const localEntries = await db.scoutingData.toArray();
-		const unsyncedLocal = localEntries.filter((entry) => entry.synced === false);
-		const serverIds = new Set(normalized.map((entry) => entry.id));
-		const localOnly = unsyncedLocal.filter((entry) => !serverIds.has(entry.id));
-
-		await db.scoutingData.clear();
-		const mergedEntries = [...normalized, ...localOnly];
-		if (mergedEntries.length) {
-			await db.scoutingData.bulkPut(mergedEntries);
-		}
+		await mergeServerRows(db.scoutingData, normalized, { replaceAll: true });
 
 		return {
 			teams: stats.teams,
@@ -1068,9 +1098,8 @@ export const savePitScoutingEntry = async (entry: PitScoutingEntry): Promise<Pit
 
 	try {
 		const response = await apiPost<PitSaveResponse>('/pit', withScoutingSeasonBody({ entry: pitEntryPayload(unsynced) }));
-		const persisted = response.entry ? { ...mergePitEntry(response.entry), synced: true } : { ...unsynced, synced: true };
-		await pitDB.pitScoutingData.put(persisted);
-		return persisted;
+		await markRowsSynced(pitDB.pitScoutingData, [unsynced]);
+		return response.entry ? { ...mergePitEntry(response.entry), synced: true } : { ...unsynced, synced: true };
 	} catch (error) {
 		handleApiError('failed to persist pit scouting entry remotely', error);
 		return unsynced;
@@ -1078,25 +1107,15 @@ export const savePitScoutingEntry = async (entry: PitScoutingEntry): Promise<Pit
 };
 
 export const loadAllPitScoutingEntries = async (): Promise<PitScoutingEntry[]> => {
-	// Push any unsynced local entries before fetching from server
-	await syncCachedPitScoutingEntries();
+	// Push any unsynced local entries before fetching from server. A failed
+	// upload must not block reading: unsynced rows survive the merge.
+	await syncCachedPitScoutingEntries().catch(() => {});
 
 	try {
 		const { entries } = await apiGet<{ entries: PitEntryWithData[] }>(
 			`/pit${toQueryString(withScoutingSeasonParams({}))}`,
 		);
-		const normalized = entries.map((e) => ({ ...mergePitEntry(e), synced: true as const }));
-
-		// Merge: preserve unsynced local entries not yet on server
-		const localEntries = await pitDB.pitScoutingData.toArray();
-		const unsyncedLocal = localEntries.filter((e) => e.synced === false);
-		const serverIds = new Set(normalized.map((e) => e.id));
-		const localOnly = unsyncedLocal.filter((e) => !serverIds.has(e.id));
-
-		await pitDB.pitScoutingData.clear();
-		await pitDB.pitScoutingData.bulkPut([...normalized, ...localOnly]);
-
-		return [...normalized, ...localOnly];
+		return await mergeServerRows(pitDB.pitScoutingData, entries.map(mergePitEntry), { replaceAll: true });
 	} catch (error) {
 		handleApiError('failed to load pit scouting entries from API', error);
 		return pitDB.pitScoutingData.toArray();
@@ -1109,11 +1128,8 @@ export const loadPitScoutingByTeam = async (teamNumber: string): Promise<PitScou
 		const { entries } = await apiGet<{ entries: PitEntryWithData[] }>(
 			`/pit${toQueryString(withScoutingSeasonParams({ teamNumber }))}`,
 		);
-		const normalized = entries.map(mergePitEntry);
-		if (normalized.length) {
-			await pitDB.pitScoutingData.bulkPut(normalized);
-		}
-		return normalized;
+		await mergeServerRows(pitDB.pitScoutingData, entries.map(mergePitEntry));
+		return pitDB.pitScoutingData.where('teamNumber').equals(teamNumber).toArray();
 	} catch (error) {
 		handleApiError('failed to load pit scouting entries by team', error);
 		return pitDB.pitScoutingData.where('teamNumber').equals(teamNumber).toArray();
@@ -1125,11 +1141,8 @@ export const loadPitScoutingByEvent = async (eventName: string): Promise<PitScou
 		const { entries } = await apiGet<{ entries: PitEntryWithData[] }>(
 			`/pit${toQueryString(withScoutingSeasonParams({ eventName }))}`,
 		);
-		const normalized = entries.map(mergePitEntry);
-		if (normalized.length) {
-			await pitDB.pitScoutingData.bulkPut(normalized);
-		}
-		return normalized;
+		await mergeServerRows(pitDB.pitScoutingData, entries.map(mergePitEntry));
+		return pitDB.pitScoutingData.where('eventName').equals(eventName).toArray();
 	} catch (error) {
 		handleApiError('failed to load pit scouting entries by event', error);
 		return pitDB.pitScoutingData.where('eventName').equals(eventName).toArray();
@@ -1144,12 +1157,11 @@ export const loadPitScoutingByTeamAndEvent = async (
 		const { entries } = await apiGet<{ entries: PitEntryWithData[] }>(
 			`/pit${toQueryString(withScoutingSeasonParams({ teamNumber, eventName }))}`,
 		);
-		const normalized = entries.map(mergePitEntry);
-		if (normalized.length) {
-			await pitDB.pitScoutingData.bulkPut(normalized);
-			return normalized[0];
-		}
-		return undefined;
+		const merged = await mergeServerRows(pitDB.pitScoutingData, entries.map(mergePitEntry));
+		// An unsynced local edit wins over the server copy of the same entry.
+		return merged
+			.filter((entry) => entry.teamNumber === teamNumber && entry.eventName === eventName)
+			.sort((a, b) => b.timestamp - a.timestamp)[0];
 	} catch (error) {
 		handleApiError('failed to load pit scouting entry by team and event', error);
 		const results = await pitDB.pitScoutingData

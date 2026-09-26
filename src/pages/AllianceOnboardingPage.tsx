@@ -1,14 +1,18 @@
 import { useAuth } from "@/contexts/AuthContext"
 import { useNavigate } from "react-router-dom"
-import { type FormEvent, useEffect, useRef, useState } from "react"
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ShieldCheck, RefreshCw, CheckCircle2 } from "lucide-react"
+import { ShieldCheck, RefreshCw, CheckCircle2, AlertTriangle } from "lucide-react"
 import { syncEventSettings } from "@/lib/eventSettingsClient"
+import { apiGet } from "@/lib/apiClient"
+import { hasCompletedOnboarding } from "@/lib/verificationRequest"
+
+type ServerRequest = { firstName: string | null; lastName: string | null; teamNumber: string | null }
 
 const POLL_INTERVAL_MS = 30_000
 
@@ -31,6 +35,10 @@ const AllianceOnboardingPage = () => {
   const [teamNumber, setTeamNumber] = useState("")
   const [profileSubmitted, setProfileSubmitted] = useState(false)
   const [profileSubmitting, setProfileSubmitting] = useState(false)
+  // null until the first successful check; then whether the server really
+  // holds a completed request for this account.
+  const [serverHasRequest, setServerHasRequest] = useState<boolean | null>(null)
+  const [checkError, setCheckError] = useState<string | null>(null)
   const prevRoleRef = useRef(role)
 
   const recentUser = user
@@ -39,7 +47,10 @@ const AllianceOnboardingPage = () => {
   const savedFirstName = allianceProfile?.firstName || recentUser?.firstName || ""
   const savedLastName = allianceProfile?.lastName || recentUser?.lastName || ""
   const savedTeamNumber = allianceProfile?.teamNumber || recentUser?.teamNumber || ""
-  const hasProfileDetails = Boolean(savedFirstName && savedLastName && savedTeamNumber)
+  const hasLocalProfile = Boolean(savedFirstName && savedLastName && savedTeamNumber)
+  // Trust the server once we've heard from it; local storage alone said
+  // "request sent" even after a lead reset or deleted the request.
+  const hasProfileDetails = serverHasRequest ?? hasLocalProfile
   const requestSubmitted = role !== "blocked" && (hasProfileDetails || profileSubmitted)
 
   // Session expired while on this page — send to landing page so they can sign in again
@@ -74,34 +85,68 @@ const AllianceOnboardingPage = () => {
     setTeamNumber(savedTeamNumber)
   }, [savedFirstName, savedLastName, savedTeamNumber, user])
 
-  // Poll for role approval every 30 seconds
-  useEffect(() => {
-    const check = async () => {
-      setChecking(true)
-      try {
-        await refreshRoles()
-        setLastChecked(new Date())
-      } catch {
-        // ignore
-      } finally {
-        setChecking(false)
-      }
-    }
+  // Latest values for the poll loop without restarting its interval.
+  const latestRef = useRef({ role, savedFirstName, savedLastName, savedTeamNumber, submitAllianceProfile })
+  latestRef.current = { role, savedFirstName, savedLastName, savedTeamNumber, submitAllianceProfile }
 
-    check()
-    const id = setInterval(check, POLL_INTERVAL_MS)
-    return () => clearInterval(id)
-  }, [refreshRoles])
-
-  const handleManualCheck = async () => {
+  const checkStatus = useCallback(async () => {
     setChecking(true)
     try {
       await refreshRoles()
+      const current = latestRef.current
+      if (current.role === "pending") {
+        const response = await apiGet<{ recentUser: ServerRequest | null }>("/recent-users/me").catch((error) => {
+          // Older server without this route: fall back to the local copy.
+          if (typeof error === "object" && error && "status" in error && (error as { status?: number }).status === 404) return null
+          throw error
+        })
+        if (!response) {
+          setCheckError(null)
+          setLastChecked(new Date())
+          return true
+        }
+        const { recentUser } = response
+        const onServer = Boolean(recentUser && hasCompletedOnboarding(recentUser))
+        if (!onServer && current.savedFirstName && current.savedLastName && current.savedTeamNumber) {
+          // The server lost the request (reset, or the first save never
+          // arrived). Resend what this device already has.
+          const result = await current.submitAllianceProfile({
+            firstName: current.savedFirstName,
+            lastName: current.savedLastName,
+            teamNumber: current.savedTeamNumber,
+            confirmedAlliance: true,
+          })
+          setServerHasRequest(result.success)
+        } else {
+          setServerHasRequest(onServer)
+        }
+      }
+      setCheckError(null)
       setLastChecked(new Date())
-    } catch {
-      toast.error("Could not reach the server. Try again shortly.")
+      return true
+    } catch (error) {
+      const status = typeof error === "object" && error && "status" in error ? (error as { status?: number }).status : undefined
+      setCheckError(
+        status === 401
+          ? "Your sign-in expired. Sign out and sign back in."
+          : "Can't reach the scouting server. Your request is safe; we'll keep retrying."
+      )
+      return false
     } finally {
       setChecking(false)
+    }
+  }, [refreshRoles])
+
+  // Poll for role approval every 30 seconds
+  useEffect(() => {
+    void checkStatus()
+    const id = setInterval(() => void checkStatus(), POLL_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [checkStatus])
+
+  const handleManualCheck = async () => {
+    if (!(await checkStatus())) {
+      toast.error("Could not reach the server. Try again shortly.")
     }
   }
 
@@ -121,6 +166,7 @@ const AllianceOnboardingPage = () => {
     }
 
     setProfileSubmitted(true)
+    setServerHasRequest(true)
     toast.success("Profile details saved for admin review.")
   }
 
@@ -184,6 +230,13 @@ const AllianceOnboardingPage = () => {
                 {profileSubmitting ? "Saving..." : "Save profile details"}
               </Button>
             </form>
+          )}
+
+          {checkError && (
+            <div className="flex items-start gap-2 rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{checkError}</span>
+            </div>
           )}
 
           <div className="rounded-md border border-dashed border-muted-foreground/40 bg-muted/20 p-4 text-sm text-muted-foreground">

@@ -17,6 +17,8 @@ const matchesAllowedDomain = (email: string, domains: string[]) => {
   return domains.some((domain) => domain && normalized.endsWith(`@${domain}`))
 }
 
+const REFRESH_INTERVAL_MS = 30_000
+
 const roleLabels: Record<UserRole, string> = {
   blocked: "Blocked",
   pending: "Pending",
@@ -45,11 +47,19 @@ export default function VerificationCenterPage() {
   } = useAuth()
   const navigate = useNavigate()
   const [refreshing, setRefreshing] = useState(false)
+  const [busyEmail, setBusyEmail] = useState<string | null>(null)
 
+  // New sign-ins land on the server, not on this device, so keep polling
+  // while the page is open instead of relying on the manual Refresh button.
   useEffect(() => {
     if (!isLead) return
-    void refreshRecentUsers().catch(() => {})
-    void refreshRoles().catch(() => {})
+    const load = () => {
+      void refreshRecentUsers().catch(() => {})
+      void refreshRoles().catch(() => {})
+    }
+    load()
+    const id = window.setInterval(load, REFRESH_INTERVAL_MS)
+    return () => window.clearInterval(id)
   }, [isLead, refreshRecentUsers, refreshRoles])
 
   const handleRefresh = async () => {
@@ -128,12 +138,16 @@ export default function VerificationCenterPage() {
     })
 
     return Array.from(recordsByEmail.values())
-      .filter((record) => {
-        const isAllowed = matchesAllowedDomain(record.email, allowedDomains)
-        return !record.acknowledged && record.assignedRole === "pending" && !isAllowed && hasCompletedOnboarding(record)
-      })
+      .filter((record) => record.assignedRole === "pending" && !matchesAllowedDomain(record.email, allowedDomains))
       .sort((a, b) => b.lastSeenAt.localeCompare(a.lastSeenAt))
   }, [isLead, recentUsers, roleAssignments, allowedDomains])
+
+  // Everyone still pending is listed somewhere: completed, un-dismissed
+  // requests in the main queue; dismissed or unfinished ones below it.
+  // Previously those were filtered out entirely, so a dismissed scout sat on
+  // "request sent" forever with no way for a lead to find them again.
+  const queuedRecords = pendingRecords.filter((record) => !record.acknowledged && hasCompletedOnboarding(record))
+  const otherPendingRecords = pendingRecords.filter((record) => record.acknowledged || !hasCompletedOnboarding(record))
 
   const recentlyCleared = useMemo(() => {
     const sevenDaysAgo = new Date()
@@ -188,29 +202,60 @@ export default function VerificationCenterPage() {
     )
   }
 
-  const handleApprove = (email: string) => {
-    setRole(email, "scout")
-    acknowledgeRecentUser(email)
-    toast.success(`Granted Scout access to ${email}`)
+  const runAction = async (email: string, action: () => Promise<boolean>) => {
+    setBusyEmail(email)
+    try {
+      await action()
+    } finally {
+      setBusyEmail(null)
+    }
   }
 
-  const handleDismiss = (email: string) => {
-    acknowledgeRecentUser(email)
-    toast(`Dismissed verification request for ${email}`)
-  }
+  const handleApprove = (email: string) =>
+    runAction(email, async () => {
+      const result = await setRole(email, "scout")
+      if (!result.success) {
+        toast.error(result.message || `Could not approve ${email}`)
+        return false
+      }
+      toast.success(`Granted Scout access to ${email}`)
+      return true
+    })
 
-  const handleDeny = (email: string) => {
-    // Remove any submitted alliance profile and block the account from re-requesting on refresh.
-    removeAllianceProfile(email)
-    setRole(email, "blocked")
-    acknowledgeRecentUser(email)
-    toast.error(`Denied access for ${email}`)
-  }
+  const handleDismiss = (email: string) =>
+    runAction(email, async () => {
+      const ok = await acknowledgeRecentUser(email)
+      if (!ok) {
+        toast.error(`Could not dismiss ${email}. Check your connection and try again.`)
+        return false
+      }
+      toast(`Moved ${email} to other pending sign-ins`)
+      return true
+    })
 
-  const handleRevoke = (email: string) => {
-    setRole(email, "blocked")
-    toast.error(`Revoked access for ${email}`)
-  }
+  const handleDeny = (email: string) =>
+    runAction(email, async () => {
+      const result = await setRole(email, "blocked")
+      if (!result.success) {
+        toast.error(result.message || `Could not deny ${email}`)
+        return false
+      }
+      // Remove any submitted alliance profile so the account can't re-request on refresh.
+      removeAllianceProfile(email)
+      toast.error(`Denied access for ${email}`)
+      return true
+    })
+
+  const handleRevoke = (email: string) =>
+    runAction(email, async () => {
+      const result = await setRole(email, "blocked")
+      if (!result.success) {
+        toast.error(result.message || `Could not revoke ${email}`)
+        return false
+      }
+      toast.error(`Revoked access for ${email}`)
+      return true
+    })
 
   const handleReset = (email: string) => {
     resetVerification(email)
@@ -235,16 +280,16 @@ export default function VerificationCenterPage() {
       <Card>
         <CardHeader>
           <CardTitle>Pending approvals</CardTitle>
-          <CardDescription>{pendingRecords.length === 0 ? "No outstanding requests." : `${pendingRecords.length} request${pendingRecords.length === 1 ? '' : 's'} awaiting your review.`}</CardDescription>
+          <CardDescription>{queuedRecords.length === 0 ? "No outstanding requests." : `${queuedRecords.length} request${queuedRecords.length === 1 ? '' : 's'} awaiting your review.`}</CardDescription>
         </CardHeader>
         <CardContent>
-          {pendingRecords.length === 0 ? (
+          {queuedRecords.length === 0 ? (
             <div className="rounded-md border border-dashed border-border/60 bg-muted/20 p-6 text-sm text-muted-foreground">
               Once someone finishes onboarding with a non-alliance email, you&apos;ll see them here for quick approval.
             </div>
           ) : (
             <div className="space-y-3">
-              {pendingRecords.map((record) => {
+              {queuedRecords.map((record) => {
                 const assignedRole = record.assignedRole
                 const displayName = formatVerificationRecordName(record)
                 const initials = (displayName.split(' ').map((part: string) => part[0]) ?? []).join('').slice(0, 2) || record.email[0]?.toUpperCase() || "?"
@@ -272,16 +317,16 @@ export default function VerificationCenterPage() {
                     
                     <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end">
                       <Badge variant="secondary" className="justify-center px-3 py-1 sm:inline-flex">Scout</Badge>
-                      <Button size="sm" onClick={() => handleApprove(record.email)} className="px-4">
+                      <Button size="sm" onClick={() => handleApprove(record.email)} disabled={busyEmail === record.email} className="px-4">
                         Approve
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => handleDismiss(record.email)} className="px-4">
+                      <Button size="sm" variant="outline" onClick={() => handleDismiss(record.email)} disabled={busyEmail === record.email} className="px-4">
                         Dismiss
                       </Button>
                       <Button size="sm" variant="outline" onClick={() => handleReset(record.email)} className="px-4">
                         Reset
                       </Button>
-                      <Button size="sm" variant="destructive" onClick={() => handleDeny(record.email)} className="px-4">
+                      <Button size="sm" variant="destructive" onClick={() => handleDeny(record.email)} disabled={busyEmail === record.email} className="px-4">
                         Deny
                       </Button>
                     </div>
@@ -292,6 +337,51 @@ export default function VerificationCenterPage() {
           )}
         </CardContent>
       </Card>
+
+      {otherPendingRecords.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Other pending sign-ins</CardTitle>
+            <CardDescription>
+              Still waiting for access: requests you dismissed, and people who signed in but haven&apos;t finished the name and team form yet.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {otherPendingRecords.map((record) => {
+              const displayName = formatVerificationRecordName(record)
+              const status = !hasCompletedOnboarding(record) ? "Form not finished" : "Dismissed"
+              return (
+                <div key={record.email} className="flex flex-col gap-3 rounded-md border border-border/60 bg-card/80 p-3 sm:p-4 md:flex-row md:items-center md:justify-between">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <Avatar className="h-8 w-8 shrink-0">
+                      <AvatarImage src={record.photoUrl ?? undefined} alt={displayName} referrerPolicy="no-referrer" />
+                      <AvatarFallback>
+                        {displayName.split(' ').map((part) => part[0]).join('').slice(0, 2) || record.email[0]?.toUpperCase() || "?"}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex min-w-0 flex-col gap-1">
+                      <span className="font-medium">{displayName}</span>
+                      <span className="break-all font-mono text-xs text-muted-foreground">{record.email}</span>
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        <Badge variant="outline">{status}</Badge>
+                        {record.teamNumber && <span>Team {record.teamNumber}</span>}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center sm:justify-end">
+                    <Button size="sm" onClick={() => handleApprove(record.email)} disabled={busyEmail === record.email}>
+                      Approve
+                    </Button>
+                    <Button size="sm" variant="destructive" onClick={() => handleDeny(record.email)} disabled={busyEmail === record.email}>
+                      Deny
+                    </Button>
+                  </div>
+                </div>
+              )
+            })}
+          </CardContent>
+        </Card>
+      )}
 
       {recentlyCleared.length > 0 && (
         <Card>
@@ -329,7 +419,7 @@ export default function VerificationCenterPage() {
                     <Button size="sm" variant="outline" onClick={() => handleReset(record.email)} className="w-full sm:w-auto">
                       Reset
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => handleRevoke(record.email)} className="w-full sm:w-auto">
+                    <Button size="sm" variant="outline" onClick={() => handleRevoke(record.email)} disabled={busyEmail === record.email} className="w-full sm:w-auto">
                       Revoke access
                     </Button>
                   </div>

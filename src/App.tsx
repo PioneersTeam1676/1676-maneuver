@@ -9,7 +9,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { analytics } from '@/lib/analytics';
 import { syncEventSettings } from '@/lib/eventSettingsClient'
 import { ensureMatchScheduleCached } from '@/lib/tbaUtils'
-import { syncCachedPitScoutingEntries, syncCachedScoutingEntries } from '@/lib/dexieDB'
+import { requestPersistentStorage, syncCachedPitScoutingEntries, syncCachedScoutingEntries } from '@/lib/dexieDB'
 import { replayPendingSubmissions } from '@/lib/pendingScoutingQueue'
 import { getForm } from '@/lib/formBuilderApi'
 import { syncActiveFormConfig } from '@/lib/activeForm'
@@ -201,11 +201,16 @@ function App() {
         console.warn('Failed to sync active forms', error)
       }
 
-      try {
-        await syncCachedScoutingEntries()
-        await syncCachedPitScoutingEntries()
-      } catch (error) {
-        console.warn('Failed to sync cached scouting entries', error)
+      // Settled independently so a failing match upload never blocks pit uploads.
+      const [matchResult, pitResult] = await Promise.allSettled([
+        syncCachedScoutingEntries(),
+        syncCachedPitScoutingEntries(),
+      ])
+      if (matchResult.status === 'rejected') {
+        console.warn('Failed to sync cached scouting entries', matchResult.reason)
+      }
+      if (pitResult.status === 'rejected') {
+        console.warn('Failed to sync cached pit entries', pitResult.reason)
       }
     }
 
@@ -257,6 +262,7 @@ function App() {
       })
     }
 
+    void requestPersistentStorage()
     runAllSyncs()
 
     const handleVisibility = () => {

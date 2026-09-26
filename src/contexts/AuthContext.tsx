@@ -73,7 +73,7 @@ type AuthContextValue = {
   ready: boolean
   authorizationReady: boolean
   roleAssignments: RoleAssignments
-  setRole: (email: string, role: UserRole) => void
+  setRole: (email: string, role: UserRole) => Promise<RoleChangeResult>
   removeRole: (email: string) => void
   resetVerification: (email: string) => void
   canDelete: boolean
@@ -91,7 +91,7 @@ type AuthContextValue = {
   allowedAllianceDomain: string
   allowedAllianceDomains: string[]
   isAllowedDomainUser: boolean
-  acknowledgeRecentUser: (email: string) => void
+  acknowledgeRecentUser: (email: string) => Promise<boolean>
   refreshRoles: () => Promise<void>
   refreshRecentUsers: () => Promise<void>
   canRescout: boolean
@@ -99,6 +99,8 @@ type AuthContextValue = {
   setRescouter: (email: string, enabled: boolean) => Promise<void>
   renewSession: (options?: { returnTo?: string }) => Promise<boolean>
 }
+
+export type RoleChangeResult = { success: boolean; message?: string }
 
 const ROLE_STORAGE_KEY = 'auth_roles'
 const RECENT_STORAGE_KEY = 'auth_recent_users'
@@ -1480,49 +1482,58 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }).recentUsers)
   }, [])
 
-  const setRole = useCallback((email: string, role: UserRole) => {
+  // Resolves only once the server has the new role. The local change is
+  // optimistic; on failure we re-fetch so the UI snaps back to the truth
+  // instead of showing an approval that never reached the server.
+  const setRole = useCallback(async (email: string, role: UserRole): Promise<RoleChangeResult> => {
     const normalized = normalizeEmail(email)
-    
-    // Prevent changing ultra admin emails
-    if (ULTRA_ADMIN_EMAILS.includes(normalized) && role !== 'tech_lead') {
-      console.warn('Ultra admin email cannot be assigned a different role')
-      return
+    if (!normalized) {
+      return { success: false, message: 'Enter an email address.' }
     }
-    
-    if (ADMIN_EMAILS.includes(normalized) && role !== 'lead' && role !== 'tech_lead') {
-      console.warn('Configured admin email cannot be assigned a non-lead role')
-      return
-    }
-    
-    setRoleAssignments((prev) => {
-      const currentRole = prev[normalized]
-      const isAdminRole = (r: string) => r === 'lead' || r === 'tech_lead'
 
-      if (isAdminRole(currentRole) && !isAdminRole(role)) {
-        const remainingAdmins = Object.values(prev).filter((value) => isAdminRole(value)).length
-        if (remainingAdmins <= 1) {
-          console.warn('Cannot demote the last admin role assignment')
-          return prev
-        }
+    if (ULTRA_ADMIN_EMAILS.includes(normalized) && role !== 'tech_lead') {
+      return { success: false, message: 'This account is a configured technical lead and cannot be changed.' }
+    }
+
+    if (ADMIN_EMAILS.includes(normalized) && role !== 'lead' && role !== 'tech_lead') {
+      return { success: false, message: 'This account is a configured lead and cannot be given a non-lead role.' }
+    }
+
+    const isAdminRole = (r: string | undefined) => r === 'lead' || r === 'tech_lead'
+    if (isAdminRole(roleAssignments[normalized]) && !isAdminRole(role)) {
+      const remainingAdmins = Object.values(roleAssignments).filter((value) => isAdminRole(value)).length
+      if (remainingAdmins <= 1) {
+        return { success: false, message: 'Add another lead before changing the last lead.' }
       }
-      const next = { ...prev }
-      next[normalized] = role
-      const ensured = ensureAdminPresence(next)
-      return ensured
-    })
-    upsertRecentUser({
-      email: normalized,
-      acknowledged: role !== 'pending',
-    })
-    void (async () => {
-      try {
-        await apiPut(`/roles/${encodeURIComponent(normalized)}`, { role })
-        await fetchRoleAssignmentsFromApi()
-      } catch (error) {
-        console.error('Failed to update role on API', error)
-      }
-    })()
-  }, [ensureAdminPresence, upsertRecentUser, fetchRoleAssignmentsFromApi])
+    }
+
+    setRoleAssignments((prev) => ensureAdminPresence({ ...prev, [normalized]: role }))
+    setRecentUsers((prev) =>
+      prev.map((record) =>
+        record.email === normalized ? { ...record, acknowledged: role !== 'pending' } : record
+      )
+    )
+
+    try {
+      await apiPut(`/roles/${encodeURIComponent(normalized)}`, { role })
+    } catch (error) {
+      console.error('Failed to update role on API', error)
+      await fetchRoleAssignmentsFromApi().catch(() => {})
+      const status = typeof error === 'object' && error && 'status' in error ? (error as { status?: number }).status : undefined
+      const message = status === 403
+        ? 'You do not have permission to assign that role.'
+        : error instanceof Error && error.message
+          ? `Could not save to the server: ${error.message}`
+          : 'Could not save to the server. Check your connection and try again.'
+      return { success: false, message }
+    }
+
+    await Promise.all([
+      fetchRoleAssignmentsFromApi().catch(() => {}),
+      fetchRecentUsersFromApi().catch(() => {}),
+    ])
+    return { success: true }
+  }, [ensureAdminPresence, fetchRecentUsersFromApi, fetchRoleAssignmentsFromApi, roleAssignments])
 
   const removeRole = useCallback((email: string) => {
     const normalized = normalizeEmail(email)
@@ -1631,46 +1642,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })()
   }, [ensureAdminPresence, fetchRecentUsersFromApi, fetchRoleAssignmentsFromApi, roleAssignments])
 
-  const acknowledgeRecentUser = useCallback((email: string) => {
+  const acknowledgeRecentUser = useCallback(async (email: string): Promise<boolean> => {
     const normalized = normalizeEmail(email)
-    if (!normalized) return
+    if (!normalized) return false
 
-    let shouldSync = false
+    setRecentUsers((prev) =>
+      prev.map((record) => (record.email === normalized ? { ...record, acknowledged: true } : record))
+    )
 
-    setRecentUsers((prev) => {
-      let found = false
-      const updated = prev.map((record) => {
-        if (record.email !== normalized) {
-          return record
-        }
-        found = true
-        if (record.acknowledged) {
-          return record
-        }
-        shouldSync = true
-        return {
-          ...record,
-          acknowledged: true,
-        }
-      })
-
-      if (!found || !shouldSync) {
-        return prev
-      }
-
-      return updated
-    })
-
-    if (shouldSync) {
-      void (async () => {
-        try {
-          await apiPatch(`/recent-users/${encodeURIComponent(normalized)}`, { acknowledged: true })
-        } catch (error) {
-          console.error('Failed to acknowledge recent user on API', error)
-        }
-      })()
+    // Always send: the PATCH is idempotent, and deciding from inside a state
+    // updater (as before) skipped it whenever React deferred the updater.
+    try {
+      await apiPatch(`/recent-users/${encodeURIComponent(normalized)}`, { acknowledged: true })
+      return true
+    } catch (error) {
+      console.error('Failed to acknowledge recent user on API', error)
+      await fetchRecentUsersFromApi().catch(() => {})
+      return false
     }
-  }, [])
+  }, [fetchRecentUsersFromApi])
 
   const role = useMemo<UserRole>(() => {
     if (!user) return 'pending'

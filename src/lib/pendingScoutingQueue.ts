@@ -35,15 +35,12 @@ const writeQueue = (queue: PendingSubmission[]): void => {
   if (!isBrowser()) return
   try {
     localStorage.setItem(QUEUE_KEY, JSON.stringify(queue))
-  } catch {
-    // localStorage full — last-resort, drop oldest non-failed and retry once
-    if (queue.length > 1) {
-      try {
-        localStorage.setItem(QUEUE_KEY, JSON.stringify(queue.slice(-Math.max(1, queue.length - 1))))
-      } catch {
-        // give up; data may be lost but nothing more we can do
-      }
-    }
+  } catch (error) {
+    // localStorage full. Keep whatever queue was stored before rather than
+    // trimming it: dropping the oldest entry to fit a new one just trades one
+    // lost match for another. IndexedDB is the primary store; this queue is
+    // only the fallback for when that save failed.
+    console.error("[pendingScoutingQueue] could not persist queue", error)
   }
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent(PENDING_QUEUE_CHANGED_EVENT))

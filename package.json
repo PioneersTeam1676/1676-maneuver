@@ -78,6 +78,7 @@
     "eslint": "^9.25.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.19",
+    "fake-indexeddb": "^6.2.5",
     "globals": "^16.0.0",
     "react-router-dom": "^7.6.2",
     "tw-animate-css": "^1.3.4",
