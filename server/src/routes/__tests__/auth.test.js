@@ -20,6 +20,7 @@ describe('persistent auth sessions', () => {
   let server
   let baseUrl
   let sessions
+  let revoked
 
   beforeAll(async () => {
     process.env.GOOGLE_CLIENT_ID = 'test-client'
@@ -40,16 +41,20 @@ describe('persistent auth sessions', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     sessions = new Map()
+    revoked = new Set()
     prisma.role.findUnique.mockResolvedValue({ role: 'scout' })
     mockVerifyIdToken.mockResolvedValue({
       getPayload: () => ({ email: 'scout@pascack.org', name: 'Scout', email_verified: true }),
     })
-    prisma.$queryRawUnsafe.mockImplementation(async (_sql, tokenHash) => {
+    prisma.$queryRawUnsafe.mockImplementation(async (sql, tokenHash) => {
+      if (sql.includes('auth_revoked_sessions')) return revoked.has(tokenHash) ? [{ sid: tokenHash }] : []
       const session = sessions.get(tokenHash)
       return session ? [session] : []
     })
     prisma.$executeRawUnsafe.mockImplementation(async (sql, ...args) => {
-      if (sql.startsWith('INSERT')) {
+      if (sql.includes('INTO auth_revoked_sessions')) {
+        revoked.add(args[0])
+      } else if (sql.startsWith('INSERT')) {
         const [tokenHash, email, name, picture, createdAt, expiresAt] = args
         sessions.set(tokenHash, { email, name, picture, createdAt, expiresAt })
       } else if (sql.startsWith('DELETE')) {
@@ -74,7 +79,7 @@ describe('persistent auth sessions', () => {
     return { status: response.status, body: await response.json() }
   }
 
-  it('issues a persistent session without deleting older sessions', async () => {
+  it('issues a persistent session without touching older sessions', async () => {
     sessions.set('older-device', { email: 'other@pascack.org', expiresAt: 1 })
     const { status, body } = await post('/session', { idToken: 'valid-google-token' })
     expect(status).toBe(200)
@@ -107,6 +112,53 @@ describe('persistent auth sessions', () => {
     prisma.role.findUnique.mockResolvedValue({ role: 'blocked' })
     expect((await post('/refresh', { refreshToken: 'blocked-token' })).status).toBe(403)
     expect((await post('/session', { idToken: 'valid-google-token' })).status).toBe(403)
+  })
+
+  it('rejects signed refresh tokens once the account is blocked', async () => {
+    const { body } = await post('/session', { idToken: 'valid-google-token' })
+    prisma.role.findUnique.mockResolvedValue({ role: 'blocked' })
+    expect((await post('/refresh', { refreshToken: body.refreshToken })).status).toBe(403)
+  })
+
+  describe('when MySQL is unreachable', () => {
+    const dbDown = () => Object.assign(new Error("Can't reach database server at `db:3306`"), { code: 'P1001' })
+
+    beforeEach(() => {
+      prisma.role.findUnique.mockRejectedValue(dbDown())
+      prisma.$executeRawUnsafe.mockRejectedValue(dbDown())
+      prisma.$queryRawUnsafe.mockRejectedValue(dbDown())
+    })
+
+    it('still issues a session from a valid Google token', async () => {
+      const { status, body } = await post('/session', { idToken: 'valid-google-token' })
+      expect(status).toBe(200)
+      expect(verifyAppToken(body.accessToken).email).toBe('scout@pascack.org')
+      expect(typeof body.refreshToken).toBe('string')
+    })
+
+    it('still refreshes a session issued by this server', async () => {
+      prisma.role.findUnique.mockResolvedValue({ role: 'scout' })
+      prisma.$executeRawUnsafe.mockResolvedValue(1)
+      prisma.$queryRawUnsafe.mockResolvedValue([])
+      const { body: session } = await post('/session', { idToken: 'valid-google-token' })
+
+      prisma.role.findUnique.mockRejectedValue(dbDown())
+      prisma.$executeRawUnsafe.mockRejectedValue(dbDown())
+      prisma.$queryRawUnsafe.mockRejectedValue(dbDown())
+      const { status, body } = await post('/refresh', { refreshToken: session.refreshToken })
+      expect(status).toBe(200)
+      expect(verifyAppToken(body.accessToken).email).toBe('scout@pascack.org')
+    })
+
+    it('answers 503 (not 401) for a legacy opaque refresh token it cannot look up', async () => {
+      const { status } = await post('/refresh', { refreshToken: 'a'.repeat(96) })
+      expect(status).toBe(503)
+    })
+  })
+
+  it('never lets a refresh token act as an access token', async () => {
+    const { body } = await post('/session', { idToken: 'valid-google-token' })
+    expect(verifyAppToken(body.refreshToken)).toBeNull()
   })
 
   it('still requires a valid Google token for initial sign-in', async () => {

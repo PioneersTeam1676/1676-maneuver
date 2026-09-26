@@ -1,6 +1,6 @@
 type OAuthMode = 'interactive' | 'silent'
 
-export type OAuthErrorRecovery = 'clear-session' | 'show-error' | 'preserve-session'
+export type OAuthErrorRecovery = 'clear-session' | 'show-error' | 'retry-interactive'
 
 const ACTIVE_SCOUTING_PATHS = new Set([
   '/scout-form',
@@ -27,8 +27,13 @@ export const resolveOAuthErrorRecovery = ({
   if (mode !== 'silent') {
     return 'show-error'
   }
+  // Silent (prompt=none) auth only starts from an explicit Renew tap, after
+  // the backend session was already found dead or missing. Google refusing
+  // it (interaction_required, multiple accounts, blocked third-party
+  // cookies) means the scout must pick their account — so show the real
+  // prompt instead of pretending the old session was restored.
   if (hasSavedUser) {
-    return 'preserve-session'
+    return 'retry-interactive'
   }
   return 'clear-session'
 }

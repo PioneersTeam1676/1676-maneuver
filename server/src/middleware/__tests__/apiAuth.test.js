@@ -91,3 +91,61 @@ describe('api auth middleware when the database is down', () => {
     await expect(response.json()).resolves.toEqual({ email: 'scout@pascack.org' })
   })
 })
+
+describe('api auth middleware 401 reasons', () => {
+  let server
+  let baseUrl
+  const originalClientId = process.env.GOOGLE_CLIENT_ID
+
+  beforeAll(async () => {
+    process.env.GOOGLE_CLIENT_ID = 'test-client'
+    const { createApiAuthMiddleware } = require('../apiAuth')
+    const app = express()
+    app.get('/protected', createApiAuthMiddleware(), (_req, res) => res.json({ ok: true }))
+    server = app.listen(0, '127.0.0.1')
+    await new Promise((resolve) => server.once('listening', resolve))
+    baseUrl = `http://127.0.0.1:${server.address().port}`
+  })
+
+  afterAll(async () => {
+    await new Promise((resolve) => server.close(resolve))
+    if (originalClientId === undefined) delete process.env.GOOGLE_CLIENT_ID
+    else process.env.GOOGLE_CLIENT_ID = originalClientId
+  })
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    jest.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+
+  const get = (token) =>
+    fetch(`${baseUrl}/protected`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+
+  it('names a missing token', async () => {
+    const response = await get(null)
+    expect(response.status).toBe(401)
+    await expect(response.json()).resolves.toEqual({ error: 'Unauthorized', reason: 'no_token' })
+    expect(mockVerifyIdToken).not.toHaveBeenCalled()
+  })
+
+  it('names an expired/foreign-secret app token without asking Google', async () => {
+    const { token } = signAppToken({ email: 'scout@pascack.org' }, { expiresInSeconds: -10 })
+    const response = await get(token)
+    expect(response.status).toBe(401)
+    await expect(response.json()).resolves.toEqual({ error: 'Unauthorized', reason: 'app_token_invalid' })
+    expect(mockVerifyIdToken).not.toHaveBeenCalled()
+  })
+
+  it('names an expired Google token', async () => {
+    mockVerifyIdToken.mockRejectedValue(new Error('Token used too late, 1757970000 > 1757966400'))
+    const response = await get('google-id-token')
+    expect(response.status).toBe(401)
+    await expect(response.json()).resolves.toEqual({ error: 'Unauthorized', reason: 'google_token_expired' })
+  })
+
+  it('names a Google token that fails verification', async () => {
+    mockVerifyIdToken.mockRejectedValue(new Error('Invalid token signature'))
+    const response = await get('google-id-token')
+    await expect(response.json()).resolves.toEqual({ error: 'Unauthorized', reason: 'google_token_invalid' })
+  })
+})

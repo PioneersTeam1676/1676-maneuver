@@ -64,8 +64,9 @@ const signAppToken = (payload, { expiresInSeconds = ACCESS_TOKEN_TTL_SECONDS } =
 }
 
 // Returns the decoded payload, or null when the token is not one of ours,
-// has been tampered with, or is expired. Never throws.
-const verifyAppToken = (token) => {
+// has been tampered with, is expired, or is of the wrong kind (a refresh
+// token must never be accepted as a bearer access token). Never throws.
+const verifyAppToken = (token, { typ = "access" } = {}) => {
   try {
     if (typeof token !== "string") return null
     const parts = token.split(".")
@@ -89,13 +90,26 @@ const verifyAppToken = (token) => {
     if (typeof payload.exp !== "number" || payload.exp * 1000 <= Date.now()) {
       return null
     }
+    // Access tokens predate the typ claim, so a missing typ means access.
+    if ((payload.typ || "access") !== typ) return null
     return payload
   } catch {
     return null
   }
 }
 
-// Opaque refresh tokens are random bytes; only a SHA-256 hash is stored in
+// Refresh tokens are signed, so /auth/session and /auth/refresh keep working
+// while MySQL is unreachable. The database only holds revocations (logout);
+// `sid` is the revocation handle. Long expiry = "valid until logout".
+const REFRESH_TOKEN_TTL_SECONDS = 10 * 365 * 24 * 60 * 60
+
+const signRefreshToken = (payload) =>
+  signAppToken(
+    { ...payload, typ: "refresh", sid: crypto.randomBytes(16).toString("hex") },
+    { expiresInSeconds: REFRESH_TOKEN_TTL_SECONDS }
+  ).token
+
+// Legacy opaque refresh tokens are random bytes; only a SHA-256 hash is stored in
 // the database so a leaked DB dump cannot be replayed as live tokens.
 const generateRefreshToken = () => crypto.randomBytes(48).toString("hex")
 
@@ -106,6 +120,7 @@ module.exports = {
   ACCESS_TOKEN_TTL_SECONDS,
   signAppToken,
   verifyAppToken,
+  signRefreshToken,
   generateRefreshToken,
   hashRefreshToken,
 }

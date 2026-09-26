@@ -3,11 +3,14 @@ import { describe, expect, it } from 'vitest'
 import { isActiveScoutingPath, resolveOAuthErrorRecovery, resolveRenewalAction } from './authSessionRecovery'
 
 describe('auth session recovery', () => {
-  it('preserves a saved session when silent refresh fails', () => {
+  // Silent mode only runs after a scout tapped Renew with no usable backend
+  // session. Reporting "Session restored" there was a lie that left them
+  // stuck on the expired banner; they need the real Google prompt.
+  it('escalates to interactive sign-in when silent renewal fails for a saved user', () => {
     expect(resolveOAuthErrorRecovery({
       mode: 'silent',
       hasSavedUser: true,
-    })).toBe('preserve-session')
+    })).toBe('retry-interactive')
   })
 
   it('clears the session when silent refresh fails without a saved user', () => {
@@ -24,12 +27,12 @@ describe('auth session recovery', () => {
     })).toBe('show-error')
   })
 
-  it('preserves a saved session when silent refresh fails during match scouting', () => {
+  it('escalates to interactive sign-in even when renewal started mid-match', () => {
     expect(resolveOAuthErrorRecovery({
       mode: 'silent',
       hasSavedUser: true,
       returnTo: '/scout-form',
-    })).toBe('preserve-session')
+    })).toBe('retry-interactive')
   })
 
   it('recognizes active match scouting routes', () => {

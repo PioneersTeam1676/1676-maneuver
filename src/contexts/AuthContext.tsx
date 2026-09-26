@@ -1201,14 +1201,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           returnTo: storedState?.returnTo,
         })
 
-        if (recovery === 'preserve-session') {
+        if (recovery === 'retry-interactive') {
           silentRefreshStartedRef.current = false
-          result = {
-            success: true,
-            message: 'Session restored.',
-            returnTo: storedState?.returnTo || readCurrentAppPath(),
-            mode,
-          }
+          // Leaves the page for Google's account picker; the callback page's
+          // escape hatch covers the case where navigation never happens.
+          startGoogleAuth({
+            mode: 'interactive',
+            loginHint: savedEmail,
+            returnTo: storedState?.returnTo || '/',
+            replace: true,
+          })
+          return
         } else {
           if (recovery === 'clear-session') {
             clearStoredAuthSession()
@@ -1246,7 +1249,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       window.removeEventListener('message', handleOAuthMessage)
     }
-  }, [clearStoredAuthSession, consumeOAuthState, processOAuthResponse, user])
+  }, [clearStoredAuthSession, consumeOAuthState, processOAuthResponse, startGoogleAuth, user])
 
   const renewSession = useCallback(async (options?: { returnTo?: string }): Promise<boolean> => {
     if (typeof window === 'undefined') return false

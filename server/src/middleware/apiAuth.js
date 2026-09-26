@@ -73,6 +73,31 @@ const authorizeEmail = async (email, { skipDomainCheck, allowBlocked, allowPendi
   return { ok: true, explicitRole }
 }
 
+// Every 401 carries a machine-readable reason so an outage can be told apart
+// from a genuinely dead credential from the server log alone (morgan only
+// prints the status, and all 401 bodies used to be byte-identical).
+const reject = (req, res, reason, detail) => {
+  // google-auth-library appends the decoded token payload (email, name) to
+  // its error message; keep only the first clause so no PII lands in logs.
+  const safeDetail = detail ? String(detail).split(/[:{]/)[0].trim().slice(0, 120) : ""
+  console.warn(
+    `[apiAuth] 401 ${req.method} ${req.originalUrl} reason=${reason}` + (safeDetail ? ` detail=${safeDetail}` : "")
+  )
+  return res.status(401).json({ error: "Unauthorized", reason })
+}
+
+// Our JWTs carry iss "maneuver-api"; Google's carry accounts.google.com.
+const looksLikeAppToken = (token) => {
+  try {
+    const parts = String(token).split(".")
+    if (parts.length !== 3) return false
+    const claims = JSON.parse(Buffer.from(parts[1].replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8"))
+    return claims?.iss === "maneuver-api"
+  } catch {
+    return false
+  }
+}
+
 // The identity was verified but the role lookup itself blew up. Express 4
 // does not catch async rejections, so without this the request would hang
 // until the client's own timeout — and the old code mapped it to 401.
@@ -122,7 +147,7 @@ const createApiAuthMiddleware = ({ skipDomainCheck = false, allowBlocked = false
     }
 
     if (!token) {
-      return res.status(401).json({ error: "Unauthorized" })
+      return reject(req, res, "no_token")
     }
 
     // Fast path: app-issued JWT from POST /auth/session. Verified locally
@@ -148,10 +173,16 @@ const createApiAuthMiddleware = ({ skipDomainCheck = false, allowBlocked = false
       return next()
     }
 
+    // An app-signed token that failed verification is either expired or was
+    // signed with a different AUTH_JWT_SECRET (server restarted without one).
+    if (looksLikeAppToken(token)) {
+      return reject(req, res, "app_token_invalid")
+    }
+
     // Legacy path: raw Google ID token as bearer. Kept so old clients keep
     // working during rollout; new clients exchange it for an app JWT.
     if (!googleClient) {
-      return res.status(401).json({ error: "Unauthorized" })
+      return reject(req, res, "google_auth_disabled")
     }
     // Only the Google verification itself may turn into a 401. Anything
     // that fails AFTER the identity is proven (our database) is our fault
@@ -163,12 +194,14 @@ const createApiAuthMiddleware = ({ skipDomainCheck = false, allowBlocked = false
         audience: googleClientId,
       })
       payload = ticket.getPayload()
-    } catch (_error) {
-      return res.status(401).json({ error: "Unauthorized" })
+    } catch (error) {
+      const message = String(error?.message || "")
+      const reason = /expired|used too late/i.test(message) ? "google_token_expired" : "google_token_invalid"
+      return reject(req, res, reason, message)
     }
     const email = payload?.email ? String(payload.email).toLowerCase() : ""
     if (!email) {
-      return res.status(401).json({ error: "Unauthorized" })
+      return reject(req, res, "google_token_no_email")
     }
     if (payload?.email_verified === false) {
       return res.status(403).json({ error: "Email not verified" })
