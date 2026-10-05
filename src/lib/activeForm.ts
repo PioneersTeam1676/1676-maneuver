@@ -178,3 +178,16 @@ export const setActiveFormId = (type: FormType, id: string | null) => {
     }
   })
 }
+
+// Synchronous read of a form definition from the local cache that
+// formBuilderApi.getForm fills (App syncs the active forms on every tick).
+export const readCachedFormDefinition = <T extends { id?: string }>(id: string | undefined): T | null => {
+  if (!id || typeof window === "undefined") return null
+  try {
+    const parsed = JSON.parse(localStorage.getItem("form_builder:forms") || "[]")
+    if (!Array.isArray(parsed)) return null
+    return (parsed.find((form: { id?: string }) => form?.id === id) as T | undefined) ?? null
+  } catch {
+    return null
+  }
+}

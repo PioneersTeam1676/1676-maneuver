@@ -22,8 +22,9 @@ Maneuver is a mobile-first FRC (FIRST Robotics Competition) scouting application
 ### Docker
 - `docker-compose up --build` — Containerized API on port 4000
 
-### No automated test suite
-Manual QA is the testing approach. Useful utilities: `scripts/testCompression.js` and `src/lib/testDataGenerator.ts`.
+### Tests
+- `npm test` (frontend, vitest) and `cd server && npm test` (backend, jest).
+- See `docs/NEW_SEASON.md` for the season checklist, auth model and backups.
 
 ## Architecture
 
@@ -38,11 +39,12 @@ All scouting data is stored locally in IndexedDB (Dexie) first, then optionally 
 1. **SimpleScoutingAppDB** — Match scouting entries
 2. **PitScoutingDB** — Pit scouting entries
 3. **ScoutProfileDB** — Scout profiles, predictions, achievements
+4. **LocalBackupDB** (`src/lib/localBackup.ts`) — append-only 24 h copy of every save, exported from `/device-backup`
 
 The backend (Prisma schema at `server/prisma/schema.prisma`) mirrors this with 13 models. Sync is on-demand with client ID → server ID mapping.
 
 ### Authentication & Roles
-Google OAuth 2.0 with RBAC managed in `src/contexts/AuthContext.tsx`. Role hierarchy: pending → scout → lead → form_maker → admin → ultra_admin. Domain whitelisting via `VITE_ALLOWED_EMAIL_DOMAIN(S)` env vars.
+Google OAuth 2.0 with RBAC managed in `src/contexts/AuthContext.tsx`. Roles (see `routePermissions`): blocked/pending → pit_scout/drive_team → scout_minus/scout/scout_plus → lead → tech_lead. The server is the authority (`roles` table); env-configured admin emails are bootstrapped into it (`server/src/utils/configuredAdmins.js`). Domain whitelisting via `VITE_ALLOWED_EMAIL_DOMAIN(S)` env vars.
 
 ### Key Integration Points
 - **The Blue Alliance API** (`src/lib/tbaUtils.ts`) — Match schedules, team info

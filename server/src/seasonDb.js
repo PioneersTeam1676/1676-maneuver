@@ -66,6 +66,41 @@ const getLatestFormForYear = async (year) => {
   return withDbConfig || rows[0]
 }
 
+// Season used when a request names none (no year, no event key). It is the
+// current event's year (else the newest season year with a form), not the
+// most recently edited form:
+// tweaking last year's form used to silently send every un-scoped read to
+// last year's database while new uploads (scoped by event key) went to this
+// year's, so current data seemed to vanish. ACTIVE_SEASON_YEAR pins it.
+let defaultYearCache = { value: null, at: 0 }
+const DEFAULT_YEAR_TTL_MS = 30_000
+
+const resolveDefaultYear = async () => {
+  if (Date.now() - defaultYearCache.at < DEFAULT_YEAR_TTL_MS) return defaultYearCache.value
+  const value = await computeDefaultYear()
+  defaultYearCache = { value, at: Date.now() }
+  return value
+}
+
+const computeDefaultYear = async () => {
+  const pinned = parseYear(process.env.ACTIVE_SEASON_YEAR)
+  if (pinned) return pinned
+  // Uploads are routed by their event key's year, so un-scoped reads follow
+  // the current event (Event Settings) to land in the same database.
+  try {
+    const settings = await mainPrisma.eventSetting.findUnique({ where: { id: 1 }, select: { currentEvent: true } })
+    const fromEvent = parseYear(settings?.currentEvent)
+    if (fromEvent) return fromEvent
+  } catch {
+    // event_settings missing on a fresh database: fall through
+  }
+  const newest = await mainPrisma.formDefinition.findFirst({
+    orderBy: [{ year: "desc" }, { updatedAt: "desc" }],
+    select: { year: true },
+  })
+  return parseYear(newest?.year)
+}
+
 const getFormForSeason = async ({ year, formId }) => {
   if (year) {
     return getLatestFormForYear(year)
@@ -81,6 +116,11 @@ const getFormForSeason = async ({ year, formId }) => {
     }
 
     return explicitForm
+  }
+  const defaultYear = await resolveDefaultYear()
+  if (defaultYear) {
+    const seasonForm = await getLatestFormForYear(defaultYear)
+    if (seasonForm) return seasonForm
   }
   return mainPrisma.formDefinition.findFirst({
     orderBy: { updatedAt: "desc" },
@@ -173,7 +213,14 @@ const getSeasonDbConfig = async (selector) => {
 }
 
 const getSeasonPrisma = async (selector = {}) => {
-  const config = await getSeasonDbConfig(selector)
+  let effective = selector || {}
+  if (!effective.year && !effective.formId) {
+    // Lets a season_db_configs row for the default year apply to un-scoped
+    // requests too, not only form-level DB settings.
+    const defaultYear = await resolveDefaultYear().catch(() => null)
+    if (defaultYear) effective = { ...effective, year: defaultYear }
+  }
+  const config = await getSeasonDbConfig(effective)
   if (!config) {
     return { prisma: mainPrisma, config: null, source: "main" }
   }

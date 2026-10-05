@@ -9,6 +9,9 @@ const { requireLeadRole, isLeadEmail } = require("../utils/requireLeadRole")
 
 const router = express.Router()
 
+// Value of the "Scout Team" column in the shared export sheet.
+const SCOUT_TEAM_NAME = String(process.env.SCOUT_TEAM_NAME || "Pascack").trim() || "Pascack"
+
 const loadDisplayNames = async (prisma) => {
   try {
     const row = await prisma.eventSetting.findUnique({ where: { id: 1 } })
@@ -1097,6 +1100,41 @@ router.post(
   })
 )
 
+// Season-agnostic export: one row per entry, one column per stored field
+// (whatever the active form collected). Use this when the "rebuilt" sheet
+// layout no longer matches the current game.
+router.get(
+  "/export/raw",
+  asyncHandler(async (req, res) => {
+    const { prisma } = await getSeasonPrisma(seasonFromQuery(req))
+    await ensureScoutingSchema(prisma)
+    const where = {}
+    if (req.query.eventName) where.eventName = String(req.query.eventName)
+    const rows = await prisma.scoutingEntry.findMany({ where, orderBy: { timestamp: "asc" } })
+    const entries = rows.map(rowToEntry)
+    const base = ["id", "clientId", "eventName", "matchNumber", "teamNumber", "alliance", "scoutName", "timestamp"]
+    const dataKeys = []
+    const seen = new Set()
+    entries.forEach((entry) => {
+      Object.keys(entry.data || {}).forEach((key) => {
+        if (!seen.has(key)) {
+          seen.add(key)
+          dataKeys.push(key)
+        }
+      })
+    })
+    const cell = (value) =>
+      sanitizeCsvCell(value !== null && typeof value === "object" ? JSON.stringify(value) : value ?? "")
+    const lines = [[...base, ...dataKeys].map(sanitizeCsvCell).join(",")]
+    entries.forEach((entry) => {
+      lines.push([...base.map((key) => cell(entry[key])), ...dataKeys.map((key) => cell(entry.data?.[key]))].join(","))
+    })
+    res.setHeader("Content-Type", "text/csv; charset=utf-8")
+    res.setHeader("Content-Disposition", 'attachment; filename="scouting-raw.csv"')
+    res.send(lines.join("\n"))
+  })
+)
+
 router.get(
   "/export/rebuilt",
   asyncHandler(async (req, res) => {
@@ -1124,7 +1162,7 @@ router.get(
     ])
     const rebuiltRows = rows.map((row) => {
       const record = rowToRebuiltExport(row)
-      record["Scout Team"] = "Pascack"
+      record["Scout Team"] = SCOUT_TEAM_NAME
       if (record.Event && displayNames[record.Event]) {
         record.Event = displayNames[record.Event]
       }
@@ -1167,7 +1205,7 @@ router.get(
     ])
     const rebuiltRows = rows.map((row) => {
       const record = rowToRebuiltExport(row)
-      record["Scout Team"] = "Pascack"
+      record["Scout Team"] = SCOUT_TEAM_NAME
       if (record.Event && displayNames[record.Event]) {
         record.Event = displayNames[record.Event]
       }
