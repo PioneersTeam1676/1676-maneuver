@@ -22,6 +22,7 @@ const pushRouter = require("./routes/push")
 const formsRouter = require("./routes/forms")
 const webhookSyncRouter = require("./routes/webhookSync")
 const rescoutRouter = require("./routes/rescout")
+const backupsRouter = require("./routes/backups")
 const { createApiAuthMiddleware } = require("./middleware/apiAuth")
 const { scheduleBackups } = require("./backupManager")
 const { prisma, databaseInfo } = require("./db")
@@ -265,6 +266,7 @@ const registerRoutes = (prefix = "") => {
   app.use(resolvePath("/forms"), apiAuthMiddleware, formsRouter)
   app.use(resolvePath("/webhook-sync"), apiAuthMiddleware, webhookSyncRouter)
   app.use(resolvePath("/rescout"), apiAuthMiddleware, rescoutRouter)
+  app.use(resolvePath("/backups"), apiAuthMiddleware, backupsRouter)
 }
 
 for (const prefix of routePrefixes) {

@@ -416,6 +416,7 @@ const routePermissions: Array<{ pattern: RegExp; minRole: UserRole | null }> = [
   { pattern: /^\/schedule$/, minRole: 'scout' },
   { pattern: /^\/rescout$/, minRole: 'scout_plus' },
   { pattern: /^\/outliers$/, minRole: 'lead' },
+  { pattern: /^\/device-backup$/, minRole: null }, // Device-local data; must stay reachable even when sign-in is broken
   { pattern: /^\/alliance-onboarding$/, minRole: null }, // Accessible to anyone, including pending/unverified
   { pattern: /^\/auth\/google\/callback$/, minRole: null }, // Accessible to anyone for OAuth flow
 ]

@@ -1,4 +1,4 @@
-import { Binoculars, Calendar, Wrench, Gamepad2, RotateCcw, type LucideIcon } from "lucide-react"
+import { Binoculars, Calendar, Wrench, Gamepad2, RotateCcw, HardDriveDownload, type LucideIcon } from "lucide-react"
 import { useAuth, type UserRole } from "@/contexts/AuthContext"
 import {
   SidebarGroup,
@@ -96,6 +96,7 @@ export function NavMain({
       { title: "Drive Team Scouting", url: "/drive-scouting", icon: Gamepad2, minRole: "drive_team" },
       { title: "Schedule", url: "/schedule", icon: Calendar, minRole: "scout" },
       { title: "Rescout", url: "/rescout", icon: RotateCcw, hidden: !canRescout },
+      { title: "Device Backup", url: "/device-backup", icon: HardDriveDownload },
     ]
 
   return (

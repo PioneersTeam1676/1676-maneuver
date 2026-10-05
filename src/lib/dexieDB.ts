@@ -4,6 +4,7 @@ import type { ScoutingDataWithId } from './scoutingDataUtils';
 import type { PitScoutingEntry } from './pitScoutingTypes';
 import { apiDelete, apiGet, apiPatch, apiPost } from './apiClient';
 import { withScoutingSeasonBody, withScoutingSeasonParams } from '@/lib/scoutingSeason';
+import { recordLocalBackup } from '@/lib/localBackup';
 
 const SLOW_SYNC_WARN_MS = 6_000;
 const SLOW_SYNC_TOAST_ID = 'slow-sync-warning';
@@ -681,6 +682,7 @@ export interface SaveScoutingEntryResult {
 
 export const saveScoutingEntry = async (entry: ScoutingDataWithId): Promise<SaveScoutingEntryResult> => {
 	const enhancedEntry = enhanceEntry(entry);
+	await recordLocalBackup('match', enhancedEntry);
 	await db.scoutingData.put(enhancedEntry);
 
 	if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -703,6 +705,9 @@ export const saveScoutingEntry = async (entry: ScoutingDataWithId): Promise<Save
 
 export const saveScoutingEntries = async (entries: ScoutingDataWithId[]): Promise<void> => {
 	const enhancedEntries = entries.map(enhanceEntry);
+	for (const enhanced of enhancedEntries) {
+		await recordLocalBackup('match', enhanced);
+	}
 	await db.scoutingData.bulkPut(enhancedEntries);
 
 	try {
@@ -1081,6 +1086,7 @@ export const getFilterOptions = async (): Promise<{
 
 export const savePitScoutingEntry = async (entry: PitScoutingEntry): Promise<PitScoutingEntry> => {
 	const unsynced = { ...entry, synced: false };
+	await recordLocalBackup('pit', unsynced);
 	await pitDB.pitScoutingData.put(unsynced);
 
 	try {
