@@ -1399,6 +1399,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(() => {
     clearStoredAuthSession()
+    // Shared devices: the next person to sign in must not inherit this
+    // account's cached role map (it is re-fetched from the server anyway).
+    localStorage.removeItem(ROLE_STORAGE_KEY)
+    localStorage.removeItem(RECENT_STORAGE_KEY)
     // Full navigation (not a router push) so no in-memory state from the
     // signed-in session survives.
     window.location.assign(SIGN_OUT_REDIRECT_URL)

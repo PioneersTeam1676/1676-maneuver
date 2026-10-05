@@ -30,6 +30,7 @@ const { imageStorageDir } = require("./utils/imagePermalinkStore")
 const { ensureRecentUserProfileSchema } = require("./utils/recentUserUtils")
 const { resolveErrorResponse } = require("./utils/serviceErrors")
 const { checkDatabaseHealth } = require("./utils/healthCheck")
+const { ensureConfiguredAdmins } = require("./utils/configuredAdmins")
 
 const compression = require("compression")
 
@@ -65,6 +66,21 @@ const routePrefixes = Array.from(prefixSet)
 ensureRecentUserProfileSchema(prisma).catch((error) => {
   console.warn("Failed to ensure recent user profile columns", error?.message || error)
 })
+
+// Make the env-configured admins real server-side roles. Retries until the
+// database answers so a server that boots before MySQL still bootstraps.
+const bootstrapConfiguredAdmins = (attempt = 0) => {
+  ensureConfiguredAdmins(prisma)
+    .then((count) => {
+      if (count) console.log(`[auth] ensured ${count} configured admin account(s)`)
+    })
+    .catch((error) => {
+      const delay = Math.min(60_000, 5_000 * (attempt + 1))
+      console.warn(`[auth] could not ensure configured admins (retry in ${delay / 1000}s):`, error?.message || error)
+      setTimeout(() => bootstrapConfiguredAdmins(attempt + 1), delay).unref()
+    })
+}
+bootstrapConfiguredAdmins()
 
 const parseCorsOrigins = (value) => {
   if (!value) return true

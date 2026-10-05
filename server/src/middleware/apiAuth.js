@@ -110,7 +110,18 @@ const respondAuthorizationFailure = (res, error) => {
   return res.status(500).json({ error: "Internal server error" })
 }
 
+// Every authenticated request used to do a read + write on recent_users,
+// tripling database load during a bulk sync. "Last seen" only needs minute
+// resolution, so write it at most once per interval per account.
+const RECENT_USER_TOUCH_INTERVAL_MS = 5 * 60 * 1000
+const lastTouchedAt = new Map()
+
 const touchRecentUser = async (user, explicitRole, skipDomainCheck) => {
+  const now = Date.now()
+  const key = `${user.email}|${explicitRole?.role || ""}`
+  if (now - (lastTouchedAt.get(key) || 0) < RECENT_USER_TOUCH_INTERVAL_MS) return
+  lastTouchedAt.set(key, now)
+  if (lastTouchedAt.size > 5000) lastTouchedAt.clear()
   try {
     await upsertRecentUser(prisma, {
       email: user.email,
