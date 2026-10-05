@@ -432,82 +432,103 @@ const queryScoutingEntriesLocally = async (filters: {
 
 // Local caches sync lazily through direct API calls in the functions below.
 
+// Upload every unsynced row of a table. Rows go up in chunks so a long
+// offline backlog (or pit entries carrying photos) never becomes one request
+// big enough to time out or hit the server's body limit; a chunk whose bulk
+// call fails is retried entry-by-entry so one bad row can't block the rest.
+// Retrying is safe even if a bulk call partially succeeded server-side: every
+// endpoint UPSERTs by the client-generated id, so a re-send updates in place
+// and can never create a duplicate record.
+const uploadUnsyncedRows = async <T extends SyncableRow & { teamNumber?: string }>({
+	table,
+	label,
+	bulkPath,
+	singlePath,
+	toPayload,
+	chunkSize,
+	describe,
+}: {
+	table: Table<T, string>;
+	label: string;
+	bulkPath: string;
+	singlePath: string;
+	toPayload: (row: T) => unknown;
+	chunkSize: number;
+	describe: (row: T) => string;
+}): Promise<void> => {
+	const pendingEntries = await table.filter((row) => row.synced === false).toArray();
+	if (!pendingEntries.length) return;
+	const dismissSlowWarning = startSlowSyncWarning(label);
+	const failures: { entry: T; reason: unknown }[] = [];
+	try {
+		for (let offset = 0; offset < pendingEntries.length; offset += chunkSize) {
+			const chunk = pendingEntries.slice(offset, offset + chunkSize);
+			try {
+				// 45 s (vs the default 8 s): slow venue WiFi. Concurrent callers
+				// are de-duped by the caller's promise, so this never stacks.
+				await apiPost(bulkPath, withScoutingSeasonBody({ entries: chunk.map(toPayload) }), { timeoutMs: 45_000 });
+				await markRowsSynced(table, chunk);
+				continue;
+			} catch (bulkError) {
+				handleApiError(`bulk ${label.toLowerCase()} sync failed; falling back to per-entry`, bulkError);
+			}
+			const results = await Promise.allSettled(
+				chunk.map((entry) =>
+					apiPost(singlePath, withScoutingSeasonBody({ entry: toPayload(entry) }), { timeoutMs: 30_000 }).then(() => entry),
+				),
+			);
+			const successes: T[] = [];
+			results.forEach((result, idx) => {
+				if (result.status === 'fulfilled') {
+					successes.push(chunk[idx]);
+				} else {
+					failures.push({ entry: chunk[idx], reason: result.reason });
+					handleApiError(`failed to sync ${describe(chunk[idx])}`, result.reason);
+				}
+			});
+			await markRowsSynced(table, successes);
+		}
+	} finally {
+		dismissSlowWarning();
+	}
+	if (failures.length > 0) {
+		const sample = failures[0];
+		const reason = sample.reason instanceof Error ? sample.reason.message : String(sample.reason);
+		const status = sample.reason && typeof sample.reason === 'object' && 'status' in sample.reason
+			? ` [HTTP ${(sample.reason as { status?: number }).status}]`
+			: '';
+		throw new Error(
+			`${failures.length} of ${pendingEntries.length} ${label.toLowerCase()} entries failed: ${reason}${status} (${describe(sample.entry)})`,
+		);
+	}
+};
+
 let scoutingSyncPromise: Promise<void> | null = null;
 
 export const syncCachedScoutingEntries = async (): Promise<void> => {
 	if (typeof navigator !== 'undefined' && !navigator.onLine) {
 		return;
 	}
-
 	if (scoutingSyncPromise) {
 		await scoutingSyncPromise;
 		return;
 	}
-
-	scoutingSyncPromise = (async () => {
-		let dismissSlowWarning: (() => void) | null = null;
-		try {
-			const localEntries = await db.scoutingData.toArray();
-			const pendingEntries = localEntries.filter((entry) => entry.synced === false);
-			if (!pendingEntries.length) return;
-			dismissSlowWarning = startSlowSyncWarning('Scouting');
-			try {
-				// 45 s (vs the default 8 s) because a whole day of queued entries can
-				// be a large payload on slow venue WiFi. Concurrent callers are
-				// de-duped via scoutingSyncPromise, so a slow bulk call delays the
-				// next attempt but never stacks parallel ones.
-				await apiPost('/scouting/bulk', withScoutingSeasonBody({
-					entries: pendingEntries.map(normalizeScoutingEntry),
-				}), { timeoutMs: 45_000 });
-				await markRowsSynced(db.scoutingData, pendingEntries);
-				return;
-			} catch (bulkError) {
-				handleApiError('bulk scouting sync failed; falling back to per-entry', bulkError);
-			}
-			// Retrying every entry after a failed bulk call is safe even if the
-			// bulk call partially succeeded server-side: both /scouting and
-			// /scouting/bulk UPSERT by the client-generated entry id, so re-sending
-			// an already-stored entry updates it in place — it can never create a
-			// duplicate match record.
-			const results = await Promise.allSettled(
-				pendingEntries.map((entry) =>
-					apiPost('/scouting', withScoutingSeasonBody({ entry: normalizeScoutingEntry(entry) }), { timeoutMs: 30_000 })
-						.then(() => entry),
-				),
-			);
-			const successes: ScoutingEntryDB[] = [];
-			const failures: { entry: ScoutingEntryDB; reason: unknown }[] = [];
-			results.forEach((result, idx) => {
-				if (result.status === 'fulfilled') {
-					successes.push(pendingEntries[idx]);
-				} else {
-					failures.push({ entry: pendingEntries[idx], reason: result.reason });
-					handleApiError(
-						`failed to sync entry ${pendingEntries[idx].id} (team ${pendingEntries[idx].teamNumber} match ${pendingEntries[idx].matchNumber})`,
-						result.reason,
-					);
-				}
-			});
-			await markRowsSynced(db.scoutingData, successes);
-			if (failures.length > 0) {
-				const sample = failures[0];
-				const reason = sample.reason instanceof Error ? sample.reason.message : String(sample.reason);
-				const status = sample.reason && typeof sample.reason === 'object' && 'status' in sample.reason
-					? ` [HTTP ${(sample.reason as { status?: number }).status}]`
-					: '';
-				throw new Error(
-					`${failures.length} of ${pendingEntries.length} scouting entries failed: ${reason}${status} (entry ${sample.entry.id}, team ${sample.entry.teamNumber}, match ${sample.entry.matchNumber})`,
-				);
-			}
-		} catch (error) {
+	scoutingSyncPromise = uploadUnsyncedRows<ScoutingEntryDB>({
+		table: db.scoutingData,
+		label: 'Scouting',
+		bulkPath: '/scouting/bulk',
+		singlePath: '/scouting',
+		toPayload: normalizeScoutingEntry,
+		chunkSize: 50,
+		describe: (entry) => `entry ${entry.id} (team ${entry.teamNumber}, match ${entry.matchNumber})`,
+	})
+		.catch((error) => {
 			handleApiError('failed to sync cached scouting entries', error);
 			throw error;
-		} finally {
-			dismissSlowWarning?.();
+		})
+		.finally(() => {
 			scoutingSyncPromise = null;
-		}
-	})();
-
+		});
 	await scoutingSyncPromise;
 };
 
@@ -517,69 +538,27 @@ export const syncCachedPitScoutingEntries = async (): Promise<void> => {
 	if (typeof navigator !== 'undefined' && !navigator.onLine) {
 		return;
 	}
-
 	if (pitSyncPromise) {
 		await pitSyncPromise;
 		return;
 	}
-
-	pitSyncPromise = (async () => {
-		let dismissSlowWarning: (() => void) | null = null;
-		try {
-			const localEntries = await pitDB.pitScoutingData.toArray();
-			const pendingEntries = localEntries.filter((entry) => entry.synced === false);
-			if (!pendingEntries.length) return;
-			dismissSlowWarning = startSlowSyncWarning('Pit');
-			try {
-				await apiPost('/pit/bulk', withScoutingSeasonBody({
-					entries: pendingEntries.map(pitEntryPayload),
-				}), { timeoutMs: 45_000 });
-				await markRowsSynced(pitDB.pitScoutingData, pendingEntries);
-				return;
-			} catch (bulkError) {
-				handleApiError('bulk pit sync failed; falling back to per-entry', bulkError);
-			}
-			// Safe to retry per-entry after a failed bulk call: /pit and /pit/bulk
-			// both UPSERT by the client-generated id, so re-sends can't duplicate.
-			const results = await Promise.allSettled(
-				pendingEntries.map((entry) =>
-					apiPost('/pit', withScoutingSeasonBody({ entry: pitEntryPayload(entry) }), { timeoutMs: 30_000 })
-						.then(() => entry),
-				),
-			);
-			const successes: PitScoutingEntry[] = [];
-			const failures: { entry: PitScoutingEntry; reason: unknown }[] = [];
-			results.forEach((result, idx) => {
-				if (result.status === 'fulfilled') {
-					successes.push(pendingEntries[idx]);
-				} else {
-					failures.push({ entry: pendingEntries[idx], reason: result.reason });
-					handleApiError(
-						`failed to sync pit entry ${pendingEntries[idx].id} (team ${pendingEntries[idx].teamNumber})`,
-						result.reason,
-					);
-				}
-			});
-			await markRowsSynced(pitDB.pitScoutingData, successes);
-			if (failures.length > 0) {
-				const sample = failures[0];
-				const reason = sample.reason instanceof Error ? sample.reason.message : String(sample.reason);
-				const status = sample.reason && typeof sample.reason === 'object' && 'status' in sample.reason
-					? ` [HTTP ${(sample.reason as { status?: number }).status}]`
-					: '';
-				throw new Error(
-					`${failures.length} of ${pendingEntries.length} pit entries failed: ${reason}${status} (entry ${sample.entry.id}, team ${sample.entry.teamNumber})`,
-				);
-			}
-		} catch (error) {
+	pitSyncPromise = uploadUnsyncedRows<PitScoutingEntry>({
+		table: pitDB.pitScoutingData,
+		label: 'Pit',
+		bulkPath: '/pit/bulk',
+		singlePath: '/pit',
+		toPayload: pitEntryPayload,
+		// Pit entries can carry photos, so keep each request small.
+		chunkSize: 5,
+		describe: (entry) => `pit entry ${entry.id} (team ${entry.teamNumber})`,
+	})
+		.catch((error) => {
 			handleApiError('failed to sync cached pit entries', error);
 			throw error;
-		} finally {
-			dismissSlowWarning?.();
+		})
+		.finally(() => {
 			pitSyncPromise = null;
-		}
-	})();
-
+		});
 	await pitSyncPromise;
 };
 
@@ -601,10 +580,12 @@ const ensureGameSynced = async (): Promise<void> => {
 				gameDB.scoutAchievements.toArray(),
 			]);
 
+			let pushFailures = 0;
 			for (const scout of scouts) {
 				try {
 					await apiPost('/game/scouts', { scout });
 				} catch (error) {
+					pushFailures += 1;
 					handleApiError(`failed to push scout ${scout.name}`, error);
 				}
 			}
@@ -612,7 +593,8 @@ const ensureGameSynced = async (): Promise<void> => {
 			for (const prediction of predictions) {
 				try {
 					await apiPost('/game/predictions', { prediction });
-				} catch (error) {
+					} catch (error) {
+					pushFailures += 1;
 					handleApiError(`failed to push prediction ${prediction.id}`, error);
 				}
 			}
@@ -620,7 +602,8 @@ const ensureGameSynced = async (): Promise<void> => {
 			for (const achievement of achievements) {
 				try {
 					await apiPost('/game/achievements', { achievement });
-				} catch (error) {
+					} catch (error) {
+					pushFailures += 1;
 					handleApiError(
 						`failed to push achievement ${achievement.scoutName}/${achievement.achievementId}`,
 						error,
@@ -636,9 +619,13 @@ const ensureGameSynced = async (): Promise<void> => {
 				]);
 
 			await gameDB.transaction('rw', gameDB.scouts, gameDB.predictions, gameDB.scoutAchievements, async () => {
-				await gameDB.scouts.clear();
-				await gameDB.predictions.clear();
-				await gameDB.scoutAchievements.clear();
+				// Only mirror the server exactly when every local record made it up;
+				// otherwise clearing would delete the ones whose upload failed.
+				if (pushFailures === 0) {
+					await gameDB.scouts.clear();
+					await gameDB.predictions.clear();
+					await gameDB.scoutAchievements.clear();
+				}
 
 				if (remoteScouts.length) {
 					await gameDB.scouts.bulkPut(remoteScouts);
@@ -651,7 +638,7 @@ const ensureGameSynced = async (): Promise<void> => {
 				}
 			});
 
-			gameSynced = true;
+			gameSynced = pushFailures === 0;
 		} catch (error) {
 			handleApiError('game sync failed', error);
 		} finally {

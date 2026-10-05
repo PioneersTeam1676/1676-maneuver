@@ -163,7 +163,9 @@ app.use(compression())
 app.use(cors(corsOptions))
 app.options("*", cors(corsOptions))
 
-app.use(express.json({ limit: "5mb" }))
+// Pit entries carry photos as data URLs until the server turns them into
+// files; 5 MB rejected entries with a couple of photos forever (413).
+app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || "25mb" }))
 app.use(morgan("dev"))
 
 // Backward-compat alias:

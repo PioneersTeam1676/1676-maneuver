@@ -5,7 +5,7 @@ const { parseJsonValue, stringifyJsonValue, toMsBigInt, fromBigInt } = require("
 const { detectOutliers } = require("../services/outlierDetection")
 const { ensureEntryIdentitySchema, updateScoutingEntryEmail } = require("../utils/entryIdentity")
 const { ensureScoutRegistration } = require("../utils/userRegistration")
-const { requireLeadRole } = require("../utils/requireLeadRole")
+const { requireLeadRole, isLeadEmail } = require("../utils/requireLeadRole")
 
 const router = express.Router()
 
@@ -736,6 +736,11 @@ const normalizeIncomingScoutingEntry = (entry) => {
   const timestampMs = resolveTimestampMs(rebuiltData, entry?.timestamp)
   return {
     rebuiltData,
+    // What gets stored: every field the scout's form produced PLUS the
+    // normalized export columns. Storing only rebuiltData (as before) threw
+    // away any field not in this season's export sheet, and the device copy
+    // was then overwritten with that lossy version on the next refresh.
+    storedData: { ...sourceData, ...rebuiltData },
     timestampMs,
     scoutTeam: asString(rebuiltData["Scout Team"]),
     eventName: asString(rebuiltData.Event),
@@ -818,10 +823,17 @@ router.get(
   })
 )
 
+const seasonFromQuery = (req) =>
+  resolveSeasonSelector({
+    year: req.query?.year,
+    formId: req.query?.formId,
+    eventName: req.query?.eventName,
+  })
+
 router.get(
   "/stats",
-  asyncHandler(async (_req, res) => {
-    const { prisma } = await getSeasonPrisma()
+  asyncHandler(async (req, res) => {
+    const { prisma } = await getSeasonPrisma(seasonFromQuery(req))
     await ensureScoutingSchema(prisma)
 
     const rows = await prisma.scoutingEntry.findMany({
@@ -888,7 +900,7 @@ router.post(
       alliance: toNullableString(normalized.scoutTeam || entry.alliance),
       scoutName: toNullableString(normalized.scoutName),
       eventName: toNullableString(normalized.eventName),
-      data: stringifyJsonValue(normalized.rebuiltData, {}),
+      data: stringifyJsonValue(normalized.storedData, {}),
       timestamp: toMsBigInt(normalized.timestampMs)
     }
 
@@ -902,11 +914,43 @@ router.post(
       email: req.user?.email,
       displayName: req.user?.name,
       photoUrl: req.user?.picture,
+    }).catch((error) => {
+      console.warn("[scouting] scout registration after upload failed:", error?.message || error)
     })
 
     res.status(201).json({ success: true })
   })
 )
+
+// Entries in one upload can belong to different seasons (a device that
+// scouted a 2026 event syncing after the 2027 season DB was set up). Each
+// group is written to its own season database instead of all of them going
+// to whichever season the FIRST entry belonged to.
+const groupBySeason = (items, getEventName, body) => {
+  const groups = new Map()
+  for (const item of items) {
+    const selector = resolveSeasonSelector({
+      year: body?.year,
+      formId: body?.formId,
+      eventName: getEventName(item),
+    })
+    const key = `${selector.year || ""}|${selector.formId || ""}`
+    if (!groups.has(key)) groups.set(key, { selector, items: [] })
+    groups.get(key).items.push(item)
+  }
+  return Array.from(groups.values())
+}
+
+const toScoutingPayload = (id, normalized) => ({
+  clientId: id,
+  teamNumber: toNullableString(normalized.teamNumber),
+  matchNumber: toNullableString(normalized.matchNumber),
+  alliance: toNullableString(normalized.scoutTeam),
+  scoutName: toNullableString(normalized.scoutName),
+  eventName: toNullableString(normalized.eventName),
+  data: stringifyJsonValue(normalized.storedData, {}),
+  timestamp: toMsBigInt(normalized.timestampMs)
+})
 
 router.post(
   "/bulk",
@@ -922,48 +966,37 @@ router.post(
       id: entry.id,
       normalized: normalizeIncomingScoutingEntry(entry),
     }))
-    const firstEvent = normalizedEntries.find((item) => item.normalized.eventName)?.normalized.eventName
-    const selector = resolveSeasonSelector({
-      year: req.body?.year,
-      formId: req.body?.formId,
-      eventName: firstEvent,
-    })
-    const { prisma } = await getSeasonPrisma(selector)
 
-    await ensureScoutingSchema(prisma)
-    await resetAutoIncrementIfEmpty(prisma)
+    for (const group of groupBySeason(normalizedEntries, (item) => item.normalized.eventName, req.body)) {
+      const { prisma } = await getSeasonPrisma(group.selector)
+      await ensureScoutingSchema(prisma)
+      await resetAutoIncrementIfEmpty(prisma)
 
-    const operations = normalizedEntries.map(({ id, normalized }) => {
-      const payload = {
-        clientId: id,
-        teamNumber: toNullableString(normalized.teamNumber),
-        matchNumber: toNullableString(normalized.matchNumber),
-        alliance: toNullableString(normalized.scoutTeam),
-        scoutName: toNullableString(normalized.scoutName),
-        eventName: toNullableString(normalized.eventName),
-        data: stringifyJsonValue(normalized.rebuiltData, {}),
-        timestamp: toMsBigInt(normalized.timestampMs)
-      }
-
-      return prisma.scoutingEntry.upsert({
-        where: { clientId: payload.clientId },
-        create: payload,
-        update: payload,
+      const operations = group.items.map(({ id, normalized }) => {
+        const payload = toScoutingPayload(id, normalized)
+        return prisma.scoutingEntry.upsert({
+          where: { clientId: payload.clientId },
+          create: payload,
+          update: payload,
+        })
       })
-    })
-
-    if (operations.length) {
+      if (!operations.length) continue
       await prisma.$transaction(operations)
       if (req.user?.email) {
-        await Promise.all(
-          normalizedEntries.map(({ id }) => updateScoutingEntryEmail(prisma, id, req.user.email))
-        )
-        await ensureScoutRegistration({
-          email: req.user.email,
-          displayName: req.user?.name,
-          photoUrl: req.user?.picture,
-        })
+        await Promise.all(group.items.map(({ id }) => updateScoutingEntryEmail(prisma, id, req.user.email)))
       }
+    }
+
+    if (normalizedEntries.length && req.user?.email) {
+      await ensureScoutRegistration({
+        email: req.user.email,
+        displayName: req.user?.name,
+        photoUrl: req.user?.picture,
+      }).catch((error) => {
+        // The entries are already stored; a registration hiccup must not
+        // make the client think the upload failed.
+        console.warn("[scouting] scout registration after bulk upload failed:", error?.message || error)
+      })
     }
 
     res.status(201).json({ success: true, count: entries.length })
@@ -985,6 +1018,22 @@ router.delete(
       ? { OR: [{ clientId: id }, { id: parsedId }] }
       : { clientId: id }
     await ensureScoutingSchema(prisma)
+    // Scouts may delete only their own entries; leads may delete any.
+    // (Previously any signed-in account could delete anyone's match data.)
+    if (!(await isLeadEmail(req.user?.email))) {
+      const requester = String(req.user?.email || "").toLowerCase()
+      const owned = requester
+        ? await prisma.$queryRawUnsafe(
+            "SELECT id FROM scouting_entries WHERE (client_id = ? OR id = ?) AND scout_email = ? LIMIT 1",
+            String(id),
+            Number.isFinite(parsedId) ? parsedId : -1,
+            requester
+          )
+        : []
+      if (!Array.isArray(owned) || owned.length === 0) {
+        return res.status(403).json({ error: "Only leads can delete other scouts' entries" })
+      }
+    }
     const info = await prisma.scoutingEntry.deleteMany({ where })
     res.json({ success: info.count > 0 })
   })
@@ -995,8 +1044,8 @@ router.delete(
 router.delete(
   "/",
   requireLeadRole,
-  asyncHandler(async (_req, res) => {
-    const { prisma } = await getSeasonPrisma()
+  asyncHandler(async (req, res) => {
+    const { prisma } = await getSeasonPrisma(seasonFromQuery(req))
     await ensureScoutingSchema(prisma)
     await prisma.scoutingEntry.deleteMany({})
     res.json({ success: true })
@@ -1109,7 +1158,7 @@ router.get(
 router.get(
   "/export",
   asyncHandler(async (req, res) => {
-    const { prisma } = await getSeasonPrisma()
+    const { prisma } = await getSeasonPrisma(seasonFromQuery(req))
     await ensureScoutingSchema(prisma)
 
     const [rows, displayNames] = await Promise.all([
@@ -1183,7 +1232,7 @@ router.post(
         alliance: toNullableString(normalized.scoutTeam),
         scoutName: toNullableString(normalized.scoutName),
         eventName: toNullableString(normalized.eventName),
-        data: stringifyJsonValue(normalized.rebuiltData, {}),
+        data: stringifyJsonValue(normalized.storedData, {}),
         timestamp: toMsBigInt(normalized.timestampMs)
       }
 
@@ -1262,7 +1311,7 @@ router.post(
             alliance: toNullableString(normalized.scoutTeam),
             scoutName: toNullableString(normalized.scoutName),
             eventName: toNullableString(normalized.eventName),
-            data: stringifyJsonValue(normalized.rebuiltData, {}),
+            data: stringifyJsonValue(normalized.storedData, {}),
             timestamp: toMsBigInt(normalized.timestampMs),
           },
         })

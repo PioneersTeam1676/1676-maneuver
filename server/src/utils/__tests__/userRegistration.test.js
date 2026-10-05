@@ -110,3 +110,16 @@ describe('ensureScoutRegistration', () => {
     })
   })
 })
+
+describe('ensureScoutRegistration concurrency', () => {
+  beforeEach(() => jest.clearAllMocks())
+
+  it('adopts the existing role when a parallel request created it first', async () => {
+    prisma.role.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ role: 'scout' })
+    prisma.role.create.mockRejectedValue(Object.assign(new Error('Unique constraint'), { code: 'P2002' }))
+    upsertRecentUser.mockResolvedValue({})
+
+    await expect(ensureScoutRegistration({ email: 'a@pascack.org' })).resolves.toBe('scout')
+    expect(prisma.verifiedUser.create).not.toHaveBeenCalled()
+  })
+})
