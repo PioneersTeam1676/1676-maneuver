@@ -2,7 +2,11 @@ const express = require("express")
 const asyncHandler = require("../utils/asyncHandler")
 const { getStatus, startSync, stopSync, testSync } = require("../webhookSyncManager")
 
+const { requireLeadRole } = require("../utils/requireLeadRole")
+
 const router = express.Router()
+
+router.use(requireLeadRole)
 
 router.get(
   "/",

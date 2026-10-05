@@ -132,11 +132,23 @@ export const syncActiveFormConfig = async (): Promise<ActiveFormConfig> => {
       return remote
     }
     if (localStamp > remoteStamp && (local.match || local.pit || local.drive)) {
-      void pushActiveFormConfig(local).catch((error) => {
-        if (!shouldFallback(error)) {
-          console.warn("[activeForm] Failed to push local config", error)
-        }
-      })
+      // Only leads may change the active form. A scout device whose local
+      // copy merely LOOKS newer (clock skew, stale cache) gets a 403 here and
+      // must follow the server instead of keeping its own form forever.
+      try {
+        const pushed = await pushActiveFormConfig(local)
+        writeActiveFormConfig(pushed)
+        return pushed
+      } catch (error) {
+        const status = error instanceof ApiError ? error.status ?? 0 : 0
+        // Network trouble / server down: keep the local choice and retry later.
+        if (shouldFallback(error) || status >= 500 || (error as Error)?.name === "AbortError") return local
+        console.warn("[activeForm] Not allowed to push local config; using the server's", error)
+      }
+    }
+    if (remote.match || remote.pit || remote.drive) {
+      writeActiveFormConfig(remote)
+      return remote
     }
     return local
   } catch (error) {

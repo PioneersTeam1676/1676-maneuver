@@ -108,8 +108,8 @@ const HomePage = () => {
   }, [refreshSchedule, loadFromCache])
 
   const normalizedEmail = normalizeEmail(user?.email ?? "")
-  const assignments = schedule?.assignments ?? []
-  const matches = schedule?.matches ?? []
+  const assignments = useMemo(() => schedule?.assignments ?? [], [schedule])
+  const matches = useMemo(() => schedule?.matches ?? [], [schedule])
   const lastCompletedMatch = schedule?.lastCompletedMatch ?? null
 
   const upcomingShiftBlocks = useMemo(

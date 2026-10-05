@@ -6,6 +6,7 @@ const {
   getSubscriptionStatusByEmail,
 } = require("../services/scheduleNotifications")
 const asyncHandler = require("../utils/asyncHandler")
+const { requireLeadRole } = require("../utils/requireLeadRole")
 
 const router = express.Router()
 
@@ -52,8 +53,11 @@ router.delete(
   })
 )
 
+// Lead-only: otherwise any account could push arbitrary notifications to
+// any scout's phone.
 router.post(
   "/notify",
+  requireLeadRole,
   asyncHandler(async (req, res) => {
     const { email, title, body, url } = req.body || {}
     if (!email || typeof email !== "string") {
