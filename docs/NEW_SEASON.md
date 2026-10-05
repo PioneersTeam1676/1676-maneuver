@@ -83,4 +83,8 @@ queues uploads; the server upserts by entry id, so nothing is duplicated.
 npm test            # frontend (vitest)
 cd server && npm test   # backend (jest)
 npm run lint
+
+# full API smoke test against a RUNNING server with a TEST database
+# (creates/deletes data; see the header of the script for env vars)
+cd server && SMOKE_API=http://localhost:4000/api node scripts/smoke-test.js
 ```

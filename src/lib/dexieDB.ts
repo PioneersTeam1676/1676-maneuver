@@ -1147,6 +1147,8 @@ export const loadPitScoutingByTeamAndEvent = async (
 	eventName: string,
 ): Promise<PitScoutingEntry | undefined> => {
 	try {
+		// Offline: skip the request instead of stalling a pit save on its timeout.
+		if (typeof navigator !== 'undefined' && !navigator.onLine) throw new Error('offline');
 		const { entries } = await apiGet<{ entries: PitEntryWithData[] }>(
 			`/pit${toQueryString(withScoutingSeasonParams({ teamNumber, eventName }))}`,
 		);

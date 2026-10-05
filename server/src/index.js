@@ -234,6 +234,20 @@ const scoutWriteAuthMiddleware = (req, res, next) => {
   return scoutDataAuthMiddleware(req, res, next)
 }
 
+// Unverified (pending) accounts may UPLOAD entries, so nothing they scout
+// before approval is lost, but reading or deleting scouting data requires an
+// approved role. Previously GET /scouting and /pit served every entry to any
+// Google account that had merely signed in.
+const PENDING_WRITE_PATHS = new Set(["/", "/bulk"])
+const scoutDataReadGuard = (writeMiddleware) => (req, res, next) => {
+  if (req.method === "POST" && PENDING_WRITE_PATHS.has(req.path)) {
+    return writeMiddleware(req, res, next)
+  }
+  return apiAuthMiddleware(req, res, next)
+}
+const scoutingAuth = scoutDataReadGuard(scoutWriteAuthMiddleware)
+const pitAuth = scoutDataReadGuard(scoutDataAuthMiddleware)
+
 const registerRoutes = (prefix = "") => {
   const resolvePath = (suffix) => {
     if (!prefix) return suffix
@@ -255,8 +269,8 @@ const registerRoutes = (prefix = "") => {
   // Google token / refresh token itself).
   app.use(resolvePath("/auth"), authRouter)
   app.use(resolvePath("/roles"), rolesAuthMiddleware, rolesRouter)
-  app.use(resolvePath("/scouting"), scoutWriteAuthMiddleware, scoutingRouter)
-  app.use(resolvePath("/pit"), scoutDataAuthMiddleware, pitRouter)
+  app.use(resolvePath("/scouting"), scoutingAuth, scoutingRouter)
+  app.use(resolvePath("/pit"), pitAuth, pitRouter)
   app.use(resolvePath("/game"), apiAuthMiddleware, gameRouter)
   app.use(resolvePath("/events"), openGoogleAuthMiddleware, eventsRouter)
   app.use(resolvePath("/recent-users"), openGoogleAuthMiddleware, recentUsersRouter)
@@ -286,18 +300,29 @@ initWebhookSync().catch((error) => {
   console.error("Failed to initialize webhook sync", error)
 })
 
-const shutdown = async () => {
+const server = app.listen(PORT, () => {
+  console.log(`Maneuver API listening on port ${PORT}`)
+})
+
+// Installing these handlers replaces Node's default "exit on signal", so the
+// handler itself must exit. It used to only disconnect Prisma, which left the
+// process running after `docker stop` / `pm2 restart` / Ctrl-C until it was
+// force-killed.
+let shuttingDown = false
+const shutdown = async (signal) => {
+  if (shuttingDown) return
+  shuttingDown = true
+  console.log(`[server] ${signal} received, shutting down`)
+  const forceExit = setTimeout(() => process.exit(0), 5_000)
+  forceExit.unref()
+  server.close()
   try {
-    const { prisma } = require("./db")
     await prisma.$disconnect()
   } catch (error) {
     console.warn("Failed to disconnect Prisma", error)
   }
+  process.exit(0)
 }
 
-process.on("SIGINT", shutdown)
-process.on("SIGTERM", shutdown)
-
-app.listen(PORT, () => {
-  console.log(`Maneuver API listening on port ${PORT}`)
-})
+process.on("SIGINT", () => void shutdown("SIGINT"))
+process.on("SIGTERM", () => void shutdown("SIGTERM"))
