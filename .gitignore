@@ -74,3 +74,7 @@ coverage/
 
 # Hardcoded form data
 src/data/hardcodedMatchForm.json
+
+# Server-generated secrets and local data exports (never commit)
+server/data/.auth-jwt-secret
+server/data/backups/

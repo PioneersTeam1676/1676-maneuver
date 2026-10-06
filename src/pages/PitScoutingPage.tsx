@@ -323,7 +323,9 @@ const PitScoutingPage = () => {
           canvas.height = newHeight;
           ctx.drawImage(img, 0, 0, newWidth, newHeight);
           URL.revokeObjectURL(objectUrl);
-          resolve(canvas.toDataURL("image/png"));
+          // JPEG: a 1200px photo as PNG is ~3-4 MB of base64, enough for one
+          // pit entry to exceed the upload limit and never sync.
+          resolve(canvas.toDataURL("image/jpeg", 0.85));
         };
         img.onerror = () => {
           URL.revokeObjectURL(objectUrl);

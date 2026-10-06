@@ -28,6 +28,7 @@ import {
 import { splitSpecialChoiceOption } from "@/lib/specialChoiceOptions"
 import { cn } from "@/lib/utils"
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard"
+import { getActiveFormId, readCachedFormDefinition } from "@/lib/activeForm"
 import { coercePages, flattenFields, getPageFields, normalizeUiConfig } from "@/lib/formSchema"
 import type { FormDefinition, FormField, FormFloatingImage, FormPage } from "@/types/formBuilder"
 
@@ -1552,8 +1553,7 @@ const normalizeFloatingImage = (image: FormFloatingImage): FormFloatingImage => 
   showOnMobile: image.showOnMobile !== false,
 })
 
-const HARDCODED_MATCH_FORM = (() => {
-  const raw = HARD_CODED_MATCH_FORM_SOURCE
+const prepareMatchForm = (raw: FormDefinition) => {
   const pages = normalizeStratDefenseLabels(
     mergeStratRolesForPages(
       normalizePagesOptionLabels(
@@ -1568,11 +1568,34 @@ const HARDCODED_MATCH_FORM = (() => {
       pages,
     },
   }
-})()
+}
 
-const buildInitialMatchValues = () => {
+const BUILT_IN_MATCH_FORM = prepareMatchForm(HARD_CODED_MATCH_FORM_SOURCE)
+
+// Which match form to scout with. The built-in form above is this season's
+// game. Next season, a lead builds the new form in Form Maker and marks it
+// active: once that form (with a different year) is cached on the device it
+// is used automatically, with no code change. The active form is ignored
+// while it is for the same year as the built-in one, so this season's
+// behaviour is unchanged.
+const resolveMatchForm = () => {
+  try {
+    const active = readCachedFormDefinition<FormDefinition>(getActiveFormId("match"))
+    const builtInYear = String(HARD_CODED_MATCH_FORM_SOURCE.year || "")
+    if (active && active.id !== HARD_CODED_MATCH_FORM_SOURCE.id && active.schema && String(active.year || "") !== builtInYear) {
+      const prepared = prepareMatchForm(active)
+      if (prepared.schema.pages.length > 0) return prepared
+    }
+  } catch (error) {
+    console.warn("[ScoutFormPage] active match form unusable; using built-in form", error)
+  }
+  return BUILT_IN_MATCH_FORM
+}
+
+
+const buildInitialMatchValues = (form: ReturnType<typeof prepareMatchForm>) => {
   const nextValues: Record<string, unknown> = {}
-  HARDCODED_MATCH_FORM.schema.pages.forEach((page) => {
+  form.schema.pages.forEach((page) => {
     page.sections.forEach((section) => {
       section.fields.forEach((field) => {
         nextValues[field.id] = getInitialValue(field)
@@ -1595,10 +1618,11 @@ export default function ScoutFormPage() {
   const state = location.state as LocationState | null
   useUnsavedChangesGuard(true)
   const inputs = state?.inputs ?? getDraftScoutingInputs<ScoutInputs>() ?? undefined
-  const form = HARDCODED_MATCH_FORM
+  // Resolved once per visit so a newly activated form applies on the next match.
+  const [form] = useState(resolveMatchForm)
   const [values, setValues] = useState<Record<string, unknown>>(() => {
     const draft = getDraftScoutingFormValues<Record<string, unknown>>()
-    return draft && typeof draft === "object" ? { ...buildInitialMatchValues(), ...draft } : buildInitialMatchValues()
+    return draft && typeof draft === "object" ? { ...buildInitialMatchValues(form), ...draft } : buildInitialMatchValues(form)
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [loading] = useState(false)

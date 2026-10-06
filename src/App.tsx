@@ -54,6 +54,7 @@ import ScoutFormPage from "./pages/ScoutFormPage";
 import OutlierDetectionPage from "./pages/OutlierDetectionPage";
 import SchedulePage from "@/pages/SchedulePage";
 import RescouterPage from "@/pages/RescouterPage";
+import LocalBackupPage from "@/pages/LocalBackupPage";
 import { InstallPrompt } from '@/components/InstallPrompt';
 import { PWAUpdatePrompt } from '@/components/PWAUpdatePrompt';
 // import { StatusBarSpacer } from '@/components/StatusBarSpacer';
@@ -113,6 +114,7 @@ const router = createBrowserRouter(
       <Route path="/schedule" element={<SchedulePage />} />
       <Route path="/rescout" element={<RescouterPage />} />
       <Route path="/outliers" element={<OutlierDetectionPage />} />
+      <Route path="/device-backup" element={<LocalBackupPage />} />
       {/* Add more routes as needed */}
       <Route path="*" element={<NotFoundPage />} />
     </Route>

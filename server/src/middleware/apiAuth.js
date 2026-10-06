@@ -110,7 +110,16 @@ const respondAuthorizationFailure = (res, error) => {
   return res.status(500).json({ error: "Internal server error" })
 }
 
+// Every authenticated request used to do a read + write on recent_users,
+// tripling database load during a bulk sync. "Last seen" only needs minute
+// resolution, so write it at most once per interval per account.
+const RECENT_USER_TOUCH_INTERVAL_MS = 5 * 60 * 1000
+const lastTouchedAt = new Map()
+
 const touchRecentUser = async (user, explicitRole, skipDomainCheck) => {
+  const now = Date.now()
+  const key = `${user.email}|${explicitRole?.role || ""}`
+  if (now - (lastTouchedAt.get(key) || 0) < RECENT_USER_TOUCH_INTERVAL_MS) return
   try {
     await upsertRecentUser(prisma, {
       email: user.email,
@@ -119,6 +128,10 @@ const touchRecentUser = async (user, explicitRole, skipDomainCheck) => {
       photoUrl: user.picture || undefined,
       acknowledged: skipDomainCheck ? undefined : (explicitRole?.role && explicitRole.role !== "pending" ? true : undefined),
     })
+    // Only throttle after a successful write so a DB blip (or a failed first
+    // registration) is retried on the next request instead of 5 minutes later.
+    if (lastTouchedAt.size > 5000) lastTouchedAt.clear()
+    lastTouchedAt.set(key, now)
   } catch (error) {
     console.warn("Failed to auto-upsert recent user from authenticated request", error?.message || error)
   }
@@ -143,6 +156,7 @@ const createApiAuthMiddleware = ({ skipDomainCheck = false, allowBlocked = false
 
     const token = extractToken(req)
     if (token && tokens.has(token)) {
+      req.userRole = "api_token"
       return next()
     }
 
@@ -169,6 +183,7 @@ const createApiAuthMiddleware = ({ skipDomainCheck = false, allowBlocked = false
         name: appPayload.name ? String(appPayload.name) : null,
         picture: appPayload.picture ? String(appPayload.picture) : null,
       }
+      req.userRole = authz.explicitRole?.role || "pending"
       await touchRecentUser(req.user, authz.explicitRole, skipDomainCheck)
       return next()
     }
@@ -220,6 +235,7 @@ const createApiAuthMiddleware = ({ skipDomainCheck = false, allowBlocked = false
       name: payload?.name ? String(payload.name) : null,
       picture: payload?.picture ? String(payload.picture) : null,
     }
+    req.userRole = authz.explicitRole?.role || "pending"
     await touchRecentUser(req.user, authz.explicitRole, skipDomainCheck)
     return next()
   }

@@ -1,4 +1,6 @@
 import { toast } from "sonner";
+import { recordLocalBackup } from "@/lib/localBackup";
+import { generateEntryId } from "@/lib/utils";
 
 export interface DriveTeamEntry {
   id: string;
@@ -34,12 +36,15 @@ export const getDriveTeamData = (): DriveTeamEntry[] => {
 export const saveDriveTeamEntry = async (entry: DriveTeamEntryInput) => {
   const current = getDriveTeamData();
   const newEntry: DriveTeamEntry = {
-    id: crypto.randomUUID(),
+    // crypto.randomUUID is missing on plain-http LAN hosts (non-secure
+    // context) and threw, so drive team entries could not be saved there.
+    id: generateEntryId(),
     timestamp: Date.now(),
     ...entry,
   };
 
   const next = [...current, newEntry];
+  await recordLocalBackup("drive", newEntry);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   return newEntry;
 };

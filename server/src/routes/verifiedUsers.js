@@ -2,6 +2,7 @@ const express = require("express")
 const router = express.Router()
 const { prisma } = require("../db")
 const asyncHandler = require("../utils/asyncHandler")
+const { requireLeadRole } = require("../utils/requireLeadRole")
 
 const MAX_RESULTS = 200
 const SEVEN_DAYS_SECONDS = 7 * 24 * 60 * 60
@@ -15,6 +16,7 @@ const mapRow = (row) => ({
 
 router.get(
   "/",
+  requireLeadRole,
   asyncHandler(async (_req, res) => {
     const cutoff = Math.floor(Date.now() / 1000) - SEVEN_DAYS_SECONDS
     const rows = await prisma.verifiedUser.findMany({

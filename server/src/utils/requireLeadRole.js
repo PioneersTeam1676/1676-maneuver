@@ -22,4 +22,13 @@ const requireLeadRole = asyncHandler(async (req, res, next) => {
   next()
 })
 
-module.exports = { requireLeadRole, LEAD_ROLE_WEIGHTS }
+// True when the account is lead or tech lead. Throws on database errors so
+// callers answer 503 instead of silently denying.
+const isLeadEmail = async (email) => {
+  const normalized = String(email || "").trim().toLowerCase()
+  if (!normalized) return false
+  const row = await prisma.role.findUnique({ where: { email: normalized }, select: { role: true } })
+  return (LEAD_ROLE_WEIGHTS[row?.role] ?? 0) >= LEAD_ROLE_WEIGHTS.lead
+}
+
+module.exports = { requireLeadRole, isLeadEmail, LEAD_ROLE_WEIGHTS }

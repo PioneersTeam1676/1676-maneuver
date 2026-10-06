@@ -169,3 +169,29 @@ describe('importing', () => {
     expect((await db.scoutingData.get('imp'))?.synced).toBe(false)
   })
 })
+
+describe('chunked uploads', () => {
+  it('uploads a large backlog in several bulk requests', async () => {
+    await db.scoutingData.bulkPut(Array.from({ length: 120 }, (_, i) => entry(`e${i}`, 'n', false)))
+    api.apiPost.mockResolvedValue({ success: true })
+
+    await syncCachedScoutingEntries()
+
+    const bulkCalls = api.apiPost.mock.calls.filter(([path]) => path === '/scouting/bulk')
+    expect(bulkCalls.map(([, body]) => (body as { entries: unknown[] }).entries.length)).toEqual([50, 50, 20])
+    expect(await db.scoutingData.filter((row) => row.synced === false).count()).toBe(0)
+  })
+
+  it('keeps going past a chunk whose bulk call fails', async () => {
+    await db.scoutingData.bulkPut(Array.from({ length: 60 }, (_, i) => entry(`e${i}`, 'n', false)))
+    let bulkCount = 0
+    api.apiPost.mockImplementation(async (path: string) => {
+      if (path === '/scouting/bulk' && bulkCount++ === 0) throw new Error('413')
+      return { success: true }
+    })
+
+    await syncCachedScoutingEntries()
+
+    expect(await db.scoutingData.filter((row) => row.synced === false).count()).toBe(0)
+  })
+})

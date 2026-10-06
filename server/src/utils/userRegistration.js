@@ -18,15 +18,23 @@ const ensureScoutRegistration = async ({ email, displayName, photoUrl, firstName
 
   if (!existingRole) {
     const timestamp = nowSeconds()
-    await prisma.role.create({
-      data: {
-        email: normalizedEmail,
-        role,
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      },
-    })
-    changedRole = true
+    try {
+      await prisma.role.create({
+        data: {
+          email: normalizedEmail,
+          role,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        },
+      })
+      changedRole = true
+    } catch (error) {
+      // Parallel uploads from the same scout race to create the row; the
+      // loser just adopts whatever the winner wrote.
+      if (error?.code !== "P2002") throw error
+      const winner = await prisma.role.findUnique({ where: { email: normalizedEmail }, select: { role: true } })
+      role = winner?.role || role
+    }
   } else if (existingRole.role === "pending" && domainDefaultRole === "scout") {
     const timestamp = nowSeconds()
     await prisma.role.update({

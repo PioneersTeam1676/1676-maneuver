@@ -17,14 +17,24 @@ services:
       - DB_USER=${DB_USER:-root}
       - DB_PASSWORD=${DB_PASSWORD:-}
       - FORM_DB_SECRET=${FORM_DB_SECRET:-}
+      # Signs login sessions. If empty, a key is generated once and kept in
+      # ./server/data/.auth-jwt-secret so restarts do not sign everyone out.
+      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:-}
+      # Accounts that are always tech lead / lead on the server (comma-separated)
+      - VITE_GOOGLE_ADMIN_EMAIL=${VITE_GOOGLE_ADMIN_EMAIL:-}
+      - VITE_ULTRA_ADMIN_EMAIL=${VITE_ULTRA_ADMIN_EMAIL:-}
+      - ULTRA_ADMIN_EMAILS=${ULTRA_ADMIN_EMAILS:-}
+      - ADMIN_EMAILS=${ADMIN_EMAILS:-}
       - FORM_DB_PORT=${FORM_DB_PORT:-3306}
       - FORM_DB_HOST=${FORM_DB_HOST:-}
       - VITE_FORM_DB_HOST=${VITE_FORM_DB_HOST:-}
       - ALLOWED_EMAIL_DOMAIN=${VITE_ALLOWED_EMAIL_DOMAIN:-}
       - VITE_ALLOWED_EMAIL_DOMAIN=${VITE_ALLOWED_EMAIL_DOMAIN:-}
+      - VITE_ALLOWED_EMAIL_DOMAINS=${VITE_ALLOWED_EMAIL_DOMAINS:-}
       # Optional: override full Prisma connection string
       # - DATABASE_URL=${DATABASE_URL}
-      - CORS_ORIGIN=https://scouting.team1676.org,https://api.team1676.org,http://localhost:5173
+      - CORS_ORIGIN=${CORS_ORIGIN:-https://scouting.team1676.org,https://api.team1676.org,http://localhost:5173}
+      - VITE_APP_URL=${VITE_APP_URL:-}
       - API_BASE_PATH=/scouting
       - EXTRA_API_PREFIXES=/api
       - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
@@ -33,5 +43,6 @@ services:
       - MATCH_NOTIFICATION_LOOKAHEAD=${MATCH_NOTIFICATION_LOOKAHEAD:-5}
       - API_AUTH_TOKEN=${API_AUTH_TOKEN:-}
       - VITE_TBA_API_KEY=${VITE_TBA_API_KEY:-}
+      - TBA_API_KEY=${TBA_API_KEY:-}
       - SCOUTING_RESCUE_OPEN=${SCOUTING_RESCUE_OPEN:-}
     restart: unless-stopped

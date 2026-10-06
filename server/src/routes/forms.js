@@ -117,6 +117,19 @@ const mapSeasonDbConfig = (row) => ({
   updatedAt: toIso(row?.updatedAt),
 })
 
+// Scouts need to READ forms (to render them); everything that changes a
+// form, the active form, or a season's database connection is lead-only.
+// Without this any signed-in account could point a season at another
+// database or delete the live scouting form.
+const { requireLeadRole } = require("../utils/requireLeadRole")
+router.use((req, res, next) => {
+  if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") {
+    if (/^\/seasons\//.test(req.path)) return requireLeadRole(req, res, next)
+    return next()
+  }
+  return requireLeadRole(req, res, next)
+})
+
 router.use(
   asyncHandler(async (_req, _res, next) => {
     await ensureFormDefinitionWebhookColumns(prisma)
