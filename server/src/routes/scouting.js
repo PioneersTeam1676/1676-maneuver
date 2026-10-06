@@ -771,9 +771,15 @@ const sanitizeTsvCell = (value) =>
     .replace(/\r?\n/g, " ")
 
 const sanitizeCsvCell = (value) => {
-  const normalized = String(value ?? "").replace(/\r?\n/g, " ")
-  // Only quote cells that contain commas, quotes, or formula-trigger characters
-  if (/[,"\r\n]/.test(normalized) || /^[=+\-@]/.test(normalized)) {
+  let normalized = String(value ?? "").replace(/\r?\n/g, " ")
+  // Quoting alone does not stop Excel/Sheets evaluating "=HYPERLINK(...)", so
+  // neutralize formula triggers with a leading apostrophe. Plain numbers
+  // (e.g. -3, +1.5) are left alone so numeric columns stay numeric.
+  if (/^[=+\-@\t\r]/.test(normalized) && !/^[+-]?\d+(\.\d+)?(e[+-]?\d+)?$/i.test(normalized)) {
+    normalized = `'${normalized}`
+  }
+  // Only quote cells that contain commas or quotes
+  if (/[,"]/.test(normalized)) {
     const escaped = normalized.replace(/"/g, '""')
     return `"${escaped}"`
   }
@@ -955,12 +961,17 @@ const toScoutingPayload = (id, normalized) => ({
   timestamp: toMsBigInt(normalized.timestampMs)
 })
 
+const BULK_MAX_ENTRIES = Number(process.env.BULK_MAX_ENTRIES) > 0 ? Number(process.env.BULK_MAX_ENTRIES) : 500
+
 router.post(
   "/bulk",
   asyncHandler(async (req, res) => {
     const { entries } = req.body
     if (!Array.isArray(entries)) {
       return res.status(400).json({ error: "entries array required" })
+    }
+    if (entries.length > BULK_MAX_ENTRIES) {
+      return res.status(413).json({ error: `At most ${BULK_MAX_ENTRIES} entries per request` })
     }
     if (entries.some((item) => !item || !item.id)) {
       return res.status(400).json({ error: "Each entry must include an id" })

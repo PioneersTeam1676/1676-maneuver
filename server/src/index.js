@@ -166,7 +166,16 @@ app.options("*", cors(corsOptions))
 
 // Pit entries carry photos as data URLs until the server turns them into
 // files; 5 MB rejected entries with a couple of photos forever (413).
-app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || "25mb" }))
+//
+// Unverified (pending) accounts may upload, so they get a much smaller limit.
+// The role is only known after auth, so /scouting and /pit parse their bodies
+// after the auth middleware (see withRoleBodyLimit) and are skipped here.
+const jsonLarge = express.json({ limit: process.env.JSON_BODY_LIMIT || "25mb" })
+const jsonPending = express.json({ limit: process.env.PENDING_JSON_BODY_LIMIT || "2mb" })
+const AUTH_THEN_PARSE_PATH = /(^|\/)(scouting|pit)(\/|$)/
+app.use((req, res, next) =>
+  AUTH_THEN_PARSE_PATH.test(req.path) ? next() : jsonLarge(req, res, next)
+)
 app.use(morgan("dev"))
 
 // Backward-compat alias:
@@ -245,8 +254,14 @@ const scoutDataReadGuard = (writeMiddleware) => (req, res, next) => {
   }
   return apiAuthMiddleware(req, res, next)
 }
-const scoutingAuth = scoutDataReadGuard(scoutWriteAuthMiddleware)
-const pitAuth = scoutDataReadGuard(scoutDataAuthMiddleware)
+const withRoleBodyLimit = (authMiddleware) => (req, res, next) =>
+  authMiddleware(req, res, (err) => {
+    if (err) return next(err)
+    const parser = req.userRole === "pending" ? jsonPending : jsonLarge
+    return parser(req, res, next)
+  })
+const scoutingAuth = withRoleBodyLimit(scoutDataReadGuard(scoutWriteAuthMiddleware))
+const pitAuth = withRoleBodyLimit(scoutDataReadGuard(scoutDataAuthMiddleware))
 
 const registerRoutes = (prefix = "") => {
   const resolvePath = (suffix) => {
@@ -315,7 +330,12 @@ const shutdown = async (signal) => {
   console.log(`[server] ${signal} received, shutting down`)
   const forceExit = setTimeout(() => process.exit(0), 5_000)
   forceExit.unref()
-  server.close()
+  // Stop accepting connections and let in-flight requests (e.g. a sync upload
+  // mid-transaction) finish; the timer above is the fallback for stuck ones.
+  await new Promise((resolve) => {
+    server.close(() => resolve())
+    server.closeIdleConnections?.()
+  })
   try {
     await prisma.$disconnect()
   } catch (error) {

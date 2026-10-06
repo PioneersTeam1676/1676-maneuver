@@ -14,10 +14,18 @@ This is the one page to read before each season (or after a server rebuild).
      `ADMIN_EMAILS` (lead). The server writes these into the `roles` table at
      boot and on sign-in, so a brand-new database always has someone who can
      approve people.
+     These are read by the **API process**, so they must be in the
+     environment the server runs in (root `.env` via docker-compose, or
+     `server/.env`). If the API runs on a different host from the frontend
+     build, repeat them there or use `ADMIN_EMAILS` / `ULTRA_ADMIN_EMAILS`;
+     otherwise a fresh database has nobody who can approve users.
    - `AUTH_JWT_SECRET`: set it to a long random string and never change it
      mid-event. If it is missing the server generates one and stores it in
      `server/data/.auth-jwt-secret`; keep that file (it is in the Docker
-     volume). Losing or changing the secret signs every device out.
+     volume). Losing or changing the secret signs every device out. The file
+     is the login signing key: anyone holding a copy of `server/data` can mint
+     valid sessions, so do not share it or commit it, and exclude
+     `.auth-jwt-secret` from backups you hand to others.
    - `VITE_API_BASE_URL`: the API URL the app should call. When it is set,
      the app only ever talks to that URL (plus localhost during local dev).
 2. **Google Cloud.** The OAuth client must list the exact callback URL
@@ -58,6 +66,11 @@ This is the one page to read before each season (or after a server rebuild).
 | **Device backup** | IndexedDB `LocalBackupDB` on each device | **24 h** (`VITE_LOCAL_BACKUP_HOURS`) | Sidebar, **Device Backup**: Download JSON / CSV / Share. Works offline and with a broken login. |
 | Server database | MySQL | permanent | Data pages, exports |
 | **Server snapshots** | `server/data/backups/*.json` | **24 h** (`BACKUP_RETENTION_HOURS`), hourly (`BACKUP_INTERVAL_MINUTES`) | Leads: Device Backup page, "Server snapshots"; or copy the files off the server |
+
+Snapshots are streamed to disk in pages (`BACKUP_PAGE_SIZE`, default 200 rows),
+so memory stays flat; disk use is about the size of the stored entries times 24.
+Unverified accounts are limited to `PENDING_JSON_BODY_LIMIT` (default 2 MB) per
+upload and `/scouting/bulk` accepts at most `BULK_MAX_ENTRIES` (default 500).
 
 Every match, pit and drive-team save is written to the device backup first,
 before the normal save, and nothing else ever edits it. To move data from a

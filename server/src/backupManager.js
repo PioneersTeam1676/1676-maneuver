@@ -23,12 +23,40 @@ const FILE_PATTERN = /^snapshot-[0-9TZ-]+\.json$/
 const toPlain = (value) =>
   JSON.parse(JSON.stringify(value, (_key, nested) => (typeof nested === "bigint" ? Number(nested) : nested)))
 
-const readTables = async (prisma) => {
-  const [scouting, pit] = await Promise.all([
-    prisma.scoutingEntry.findMany({ orderBy: { timestamp: "asc" } }),
-    prisma.pitEntry.findMany({ orderBy: { timestamp: "asc" } }),
-  ])
-  return toPlain({ scoutingEntries: scouting, pitEntries: pit })
+// Rows are read in id-ordered pages and appended to the file as they arrive,
+// so memory stays at one page (pit rows can carry large payloads) rather than
+// the whole database, and nothing is stringified twice. On disk the snapshot
+// is roughly the size of the `data` columns plus ~10% JSON overhead, times the
+// 24 retained files.
+const PAGE_SIZE = positiveNumber(process.env.BACKUP_PAGE_SIZE, 200)
+
+const writeTable = async (handle, model) => {
+  let first = true
+  let cursor
+  await handle.write("[")
+  for (;;) {
+    const page = await model.findMany({
+      take: PAGE_SIZE,
+      orderBy: { id: "asc" },
+      ...(cursor !== undefined ? { cursor: { id: cursor }, skip: 1 } : {}),
+    })
+    if (!page.length) break
+    for (const row of toPlain(page)) {
+      await handle.write(`${first ? "" : ","}${JSON.stringify(row)}`)
+      first = false
+    }
+    if (page.length < PAGE_SIZE) break
+    cursor = page[page.length - 1].id
+  }
+  await handle.write("]")
+}
+
+const writeSource = async (handle, prisma) => {
+  await handle.write('{"scoutingEntries":')
+  await writeTable(handle, prisma.scoutingEntry)
+  await handle.write(',"pitEntries":')
+  await writeTable(handle, prisma.pitEntry)
+  await handle.write("}")
 }
 
 const pruneBackups = async (now = Date.now()) => {
@@ -51,21 +79,40 @@ const createBackupSnapshot = async () => {
   const { prisma: mainPrisma } = require("./db")
   const { getSeasonPrisma } = require("./seasonDb")
 
-  const sources = { main: await readTables(mainPrisma) }
+  const sources = [["main", mainPrisma]]
+  let seasonError = null
   try {
     const season = await getSeasonPrisma()
     if (season.source === "season") {
-      sources[`season-${season.config?.year || "active"}`] = await readTables(season.prisma)
+      sources.push([`season-${season.config?.year || "active"}`, season.prisma])
     }
   } catch (error) {
-    sources.seasonError = String(error?.message || error)
+    seasonError = String(error?.message || error)
   }
 
   await fs.mkdir(BACKUP_DIRECTORY, { recursive: true })
   const createdAt = new Date()
   const name = `snapshot-${createdAt.toISOString().replace(/[:.]/g, "-")}.json`
   const tmpPath = path.join(BACKUP_DIRECTORY, `.${name}.tmp`)
-  await fs.writeFile(tmpPath, JSON.stringify({ format: "maneuver-server-snapshot", version: 1, createdAt, sources }))
+  const handle = await fs.open(tmpPath, "w")
+  try {
+    await handle.write(
+      `{"format":"maneuver-server-snapshot","version":1,"createdAt":${JSON.stringify(createdAt)},"sources":{`
+    )
+    for (let i = 0; i < sources.length; i += 1) {
+      await handle.write(`${i ? "," : ""}${JSON.stringify(sources[i][0])}:`)
+      await writeSource(handle, sources[i][1])
+    }
+    if (seasonError) {
+      await handle.write(`${sources.length ? "," : ""}"seasonError":${JSON.stringify(seasonError)}`)
+    }
+    await handle.write("}}")
+  } catch (error) {
+    await handle.close().catch(() => {})
+    await fs.unlink(tmpPath).catch(() => {})
+    throw error
+  }
+  await handle.close()
   await fs.rename(tmpPath, path.join(BACKUP_DIRECTORY, name))
   await pruneBackups()
   return name
