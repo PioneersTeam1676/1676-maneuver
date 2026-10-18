@@ -81,8 +81,12 @@ export const clearPendingSubmissions = (): void => {
 }
 
 export interface ReplayResult {
+  /** Entries that left the queue: stored on the device and on the server. */
   recovered: number
+  /** Entries whose on-device save is still failing (queue is the only copy). */
   remaining: number
+  /** Entries stored on the device, still waiting for the server. */
+  waitingForSync: number
   failed: PendingSubmission[]
 }
 
@@ -95,14 +99,12 @@ export const replayPendingSubmissions = async (): Promise<ReplayResult> => {
     } catch {
       // ignore — surfaced via Dexie unsynced count elsewhere
     }
-    return { recovered: 0, remaining: 0, failed: [] }
+    return { recovered: 0, remaining: 0, waitingForSync: 0, failed: [] }
   }
 
   const { db, cacheScoutingEntryLocally, syncCachedScoutingEntries } = await import("./dexieDB")
 
-  const survivors: PendingSubmission[] = []
-  const failed: PendingSubmission[] = []
-  let recovered = 0
+  const failedSaves = new Map<string, PendingSubmission>()
 
   for (const item of queue) {
     try {
@@ -111,23 +113,15 @@ export const replayPendingSubmissions = async (): Promise<ReplayResult> => {
         data: item.entry.data,
         timestamp: item.entry.timestamp ?? Date.now(),
       })
-      recovered += 1
     } catch (error) {
       const e = error as Error
-      const nextAttempts = item.attempts + 1
-      const updated: PendingSubmission = {
+      failedSaves.set(item.entry.id, {
         ...item,
-        attempts: nextAttempts,
+        attempts: item.attempts + 1,
         lastError: { name: e?.name, message: e?.message },
-      }
-      if (nextAttempts >= MAX_ATTEMPTS) {
-        failed.push(updated)
-      }
-      survivors.push(updated)
+      })
     }
   }
-
-  writeQueue(survivors)
 
   try {
     await syncCachedScoutingEntries()
@@ -135,15 +129,32 @@ export const replayPendingSubmissions = async (): Promise<ReplayResult> => {
     // sync errors leave rows synced=false; banner picks them up
   }
 
-  // Drop queue entries that successfully synced to server
-  if (recovered > 0) {
-    const stillUnsynced = await db.scoutingData
-      .filter((entry) => entry.synced === false)
-      .toArray()
-    const unsyncedIds = new Set(stillUnsynced.map((entry) => entry.id))
-    const remainingQueue = readQueue().filter((item) => unsyncedIds.has(item.entry.id))
-    writeQueue(remainingQueue)
+  // An entry leaves the queue only once IndexedDB holds it AND the server has
+  // it. One that isn't in IndexedDB (its save failed again this pass) has the
+  // queue as its only copy. If IndexedDB can't even be read, keep everything.
+  const confirmedSynced = new Set<string>()
+  try {
+    const ids = queue.map((item) => item.entry.id)
+    const rows = await db.scoutingData.bulkGet(ids)
+    rows.forEach((row, idx) => {
+      if (row && row.synced !== false) confirmedSynced.add(ids[idx])
+    })
+  } catch {
+    // leave confirmedSynced empty
   }
 
-  return { recovered, remaining: survivors.length, failed }
+  // Re-read after the last await so a submission queued while this replay
+  // ran is kept; the read-modify-write below is synchronous.
+  const remaining = readQueue()
+    .filter((item) => !confirmedSynced.has(item.entry.id))
+    .map((item) => failedSaves.get(item.entry.id) ?? item)
+  writeQueue(remaining)
+
+  const stillFailing = remaining.filter((item) => failedSaves.has(item.entry.id))
+  return {
+    recovered: confirmedSynced.size,
+    remaining: stillFailing.length,
+    waitingForSync: remaining.length - stillFailing.length,
+    failed: stillFailing.filter((item) => item.attempts >= MAX_ATTEMPTS),
+  }
 }
