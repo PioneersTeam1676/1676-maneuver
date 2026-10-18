@@ -6,6 +6,7 @@ const { detectOutliers } = require("../services/outlierDetection")
 const { ensureEntryIdentitySchema, updateScoutingEntryEmail } = require("../utils/entryIdentity")
 const { ensureScoutRegistration } = require("../utils/userRegistration")
 const { requireLeadRole, isLeadEmail } = require("../utils/requireLeadRole")
+const { requireApprovedUser, refuseForeignOverwrite } = require("../utils/requireApprovedUser")
 
 const router = express.Router()
 
@@ -804,6 +805,7 @@ const toRebuiltCsv = (rows) => {
 
 router.get(
   "/",
+  requireApprovedUser,
   asyncHandler(async (req, res) => {
     const { teamNumber, matchNumber, eventName, scoutName, alliance } = req.query
     const scoutFilter = scoutName || req.query.scout_name
@@ -841,6 +843,7 @@ const seasonFromQuery = (req) =>
 
 router.get(
   "/stats",
+  requireApprovedUser,
   asyncHandler(async (req, res) => {
     const { prisma } = await getSeasonPrisma(seasonFromQuery(req))
     await ensureScoutingSchema(prisma)
@@ -900,6 +903,7 @@ router.post(
     const { prisma } = await getSeasonPrisma(selector)
 
     await ensureScoutingSchema(prisma)
+    if (await refuseForeignOverwrite(req, res, prisma, "scouting", [entry.id])) return
     await resetAutoIncrementIfEmpty(prisma)
 
     const payload = {
@@ -981,7 +985,16 @@ router.post(
       normalized: normalizeIncomingScoutingEntry(entry),
     }))
 
-    for (const group of groupBySeason(normalizedEntries, (item) => item.normalized.eventName, req.body)) {
+    const groups = groupBySeason(normalizedEntries, (item) => item.normalized.eventName, req.body)
+    // Check every season group before writing any, so a refused upload never
+    // leaves part of the batch stored.
+    for (const group of groups) {
+      const { prisma } = await getSeasonPrisma(group.selector)
+      await ensureScoutingSchema(prisma)
+      if (await refuseForeignOverwrite(req, res, prisma, "scouting", group.items.map(({ id }) => id))) return
+    }
+
+    for (const group of groups) {
       const { prisma } = await getSeasonPrisma(group.selector)
       await ensureScoutingSchema(prisma)
       await resetAutoIncrementIfEmpty(prisma)
@@ -1068,6 +1081,7 @@ router.delete(
 
 router.post(
   "/query",
+  requireApprovedUser,
   asyncHandler(async (req, res) => {
     const { filters = {} } = req.body
     const selector = resolveSeasonSelector({
@@ -1148,6 +1162,7 @@ router.get(
 
 router.get(
   "/export/rebuilt",
+  requireApprovedUser,
   asyncHandler(async (req, res) => {
     const { teamNumber, matchNumber, eventName, scoutName, alliance } = req.query
     const scoutFilter = scoutName || req.query.scout_name
@@ -1206,6 +1221,7 @@ router.get(
 
 router.get(
   "/export",
+  requireApprovedUser,
   asyncHandler(async (req, res) => {
     const { prisma } = await getSeasonPrisma(seasonFromQuery(req))
     await ensureScoutingSchema(prisma)

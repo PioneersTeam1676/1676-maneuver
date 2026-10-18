@@ -1,7 +1,10 @@
-import { useMemo, useEffect } from "react"
+import { lazy, Suspense, useMemo, useEffect } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { GlobalFooter } from "@/components/GlobalFooter"
-import LiquidEther from "@/components/LiquidEther"
+
+// three.js is ~120KB gzipped and only drives this decorative background, so
+// keep it out of the startup bundle signed-in scouts load.
+const LiquidEther = lazy(() => import("@/components/LiquidEther"))
 import { Button } from "@/components/ui/button"
 import { GoogleButton } from "@/components/ui/google-button"
 import { useAuth } from "@/contexts/AuthContext"
@@ -88,6 +91,7 @@ export default function LandingPage() {
   return (
     <div className="relative flex h-dvh min-h-dvh flex-col overflow-x-hidden overflow-y-auto bg-black text-white">
       <div className="absolute inset-0 -z-10" aria-hidden>
+        <Suspense fallback={null}>
         <LiquidEther
           colors={["#5227FF", "#FF9FFC", "#B19EEF"]}
           mouseForce={20}
@@ -107,6 +111,7 @@ export default function LandingPage() {
           className="h-full w-full opacity-90"
           style={{ width: "100%", height: "100%" }}
         />
+        </Suspense>
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,204,0,0.28),rgba(0,0,0,0.65))] mix-blend-screen opacity-70" />
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,rgba(82,39,255,0.25),rgba(0,0,0,0))] mix-blend-screen opacity-50" />
       </div>

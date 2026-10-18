@@ -31,6 +31,11 @@ const data = {
           minRole: "lead" as UserRole,
         },
         {
+          title: "Form Maker",
+          url: "/form-maker",
+          minRole: "lead" as UserRole,
+        },
+        {
           title: "Shift Generator",
           url: "/shift-generator",
           minRole: "lead" as UserRole,

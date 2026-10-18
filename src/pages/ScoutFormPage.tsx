@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
 import { toast } from "sonner"
 import { CircleHelp } from "lucide-react"
@@ -1627,6 +1627,9 @@ export default function ScoutFormPage() {
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [loading] = useState(false)
   const [saving, setSaving] = useState(false)
+  // Set synchronously, unlike `saving`: a fast double tap can fire a second
+  // submit before React re-renders the disabled button, creating a duplicate.
+  const submittingRef = useRef(false)
   const [pageIndex, setPageIndex] = useState(0)
 
   useEffect(() => {
@@ -1949,6 +1952,8 @@ export default function ScoutFormPage() {
       }
     }
 
+    if (submittingRef.current) return
+    submittingRef.current = true
     setSaving(true)
     try {
       let submissionValues: Record<string, unknown> | undefined
@@ -2020,6 +2025,7 @@ export default function ScoutFormPage() {
       const e = error as Error
       toast.error(`Could not submit match: ${e?.name ?? "Error"}${e?.message ? `: ${e.message}` : ""}`)
     } finally {
+      submittingRef.current = false
       setSaving(false)
     }
   }

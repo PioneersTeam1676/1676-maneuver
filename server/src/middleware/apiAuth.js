@@ -62,15 +62,17 @@ const authorizeEmail = async (email, { skipDomainCheck, allowBlocked, allowPendi
   if (explicitRole?.role === "blocked" && !allowBlocked) {
     return { ok: false, status: 403, error: "Forbidden" }
   }
-  if (!skipDomainCheck && allowedDomains.size) {
-    const domain = email.split("@")[1] || ""
-    if (!domain || !allowedDomains.has(domain)) {
-      if (!allowPendingRole && (!explicitRole || explicitRole.role === "pending")) {
-        return { ok: false, status: 403, error: "Forbidden" }
-      }
-    }
+  const domain = email.split("@")[1] || ""
+  const inAllowedDomain = !allowedDomains.size || Boolean(domain && allowedDomains.has(domain))
+  // Team-domain accounts, and outside accounts a lead has given a role.
+  // allowPendingRole lets the others through (so a scout signed in with a
+  // personal account can still submit), but routes use `approved` to keep
+  // them from reading or overwriting the team's data.
+  const domainApproved = inAllowedDomain || Boolean(explicitRole && explicitRole.role !== "pending")
+  if (!skipDomainCheck && !domainApproved && !allowPendingRole) {
+    return { ok: false, status: 403, error: "Forbidden" }
   }
-  return { ok: true, explicitRole }
+  return { ok: true, explicitRole, approved: domainApproved && explicitRole?.role !== "blocked" }
 }
 
 // Every 401 carries a machine-readable reason so an outage can be told apart
@@ -137,6 +139,14 @@ const touchRecentUser = async (user, explicitRole, skipDomainCheck) => {
   }
 }
 
+// Decides the upload body limit in index.js ("pending" gets the small one).
+// Based on approval, not on a stored role row: a team-domain scout has no
+// row until their first successful upload registers them, so keying on the
+// row gave a brand-new scout whose first upload was a photo-heavy pit entry
+// a 413 on every retry, and they could never get registered.
+const roleForBodyLimit = (authz) =>
+  authz.approved ? authz.explicitRole?.role || "scout" : "pending"
+
 const createApiAuthMiddleware = ({ skipDomainCheck = false, allowBlocked = false, allowPendingRole = false } = {}) => {
   const tokens = resolveAuthTokens()
   const disableGoogleAuth = normalizeToken(process.env.DISABLE_GOOGLE_ID_AUTH)
@@ -156,6 +166,7 @@ const createApiAuthMiddleware = ({ skipDomainCheck = false, allowBlocked = false
 
     const token = extractToken(req)
     if (token && tokens.has(token)) {
+      req.authz = { approved: true, serviceToken: true }
       req.userRole = "api_token"
       return next()
     }
@@ -183,7 +194,8 @@ const createApiAuthMiddleware = ({ skipDomainCheck = false, allowBlocked = false
         name: appPayload.name ? String(appPayload.name) : null,
         picture: appPayload.picture ? String(appPayload.picture) : null,
       }
-      req.userRole = authz.explicitRole?.role || "pending"
+      req.authz = { approved: authz.approved }
+      req.userRole = roleForBodyLimit(authz)
       await touchRecentUser(req.user, authz.explicitRole, skipDomainCheck)
       return next()
     }
@@ -235,10 +247,45 @@ const createApiAuthMiddleware = ({ skipDomainCheck = false, allowBlocked = false
       name: payload?.name ? String(payload.name) : null,
       picture: payload?.picture ? String(payload.picture) : null,
     }
-    req.userRole = authz.explicitRole?.role || "pending"
+    req.authz = { approved: authz.approved }
+    req.userRole = roleForBodyLimit(authz)
     await touchRecentUser(req.user, authz.explicitRole, skipDomainCheck)
     return next()
   }
 }
 
-module.exports = { createApiAuthMiddleware }
+// Rescue mode (SCOUTING_RESCUE_OPEN) lets match submissions through even when
+// sign-in itself is broken at an event. Callers are never "approved" here: a
+// valid app token still identifies the scout (so they own what they submit),
+// anything else is anonymous. Either way the routes only let them add new
+// entries or re-send their own; reading and overwriting stay closed.
+const SCOUT_RESCUE_PATHS = new Set(["/", "/bulk"])
+
+// A blocked account keeps no identity here (it is just anonymous), and since
+// rescue mode exists for when auth/the database is misbehaving, a failed role
+// lookup also falls back to anonymous rather than rejecting the submission.
+const rescueIdentity = async (token) => {
+  const payload = verifyAppToken(token || "")
+  if (!payload?.email) return undefined
+  const email = String(payload.email).toLowerCase()
+  try {
+    const row = await prisma.role.findUnique({ where: { email }, select: { role: true } })
+    return row?.role === "blocked" ? undefined : { email }
+  } catch {
+    return undefined
+  }
+}
+
+const createScoutWriteAuthMiddleware = (authMiddleware, { isRescueOpen }) => async (req, res, next) => {
+  if (isRescueOpen() && req.method === "POST" && SCOUT_RESCUE_PATHS.has(req.path)) {
+    req.user = await rescueIdentity(extractToken(req))
+    req.authz = { approved: false }
+    req.userRole = "pending"
+    // baseUrl + path, not originalUrl: the query string can carry ?api_key=.
+    console.warn(`[scouting-rescue] open POST ${req.baseUrl}${req.path} (${req.user ? "token" : "anonymous"})`)
+    return next()
+  }
+  return authMiddleware(req, res, next)
+}
+
+module.exports = { createApiAuthMiddleware, createScoutWriteAuthMiddleware }

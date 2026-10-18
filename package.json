@@ -1,12 +1,12 @@
 {
   "name": "pioneer-scouting",
   "private": true,
-  "version": "2025.1.0",
+  "version": "2026.10.17",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "host": "vite --host",
-    "build": "tsc -b && vite build && pm2 restart 1676-scouting-qe",
+    "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",

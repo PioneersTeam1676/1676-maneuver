@@ -23,7 +23,7 @@ const formsRouter = require("./routes/forms")
 const webhookSyncRouter = require("./routes/webhookSync")
 const rescoutRouter = require("./routes/rescout")
 const backupsRouter = require("./routes/backups")
-const { createApiAuthMiddleware } = require("./middleware/apiAuth")
+const { createApiAuthMiddleware, createScoutWriteAuthMiddleware } = require("./middleware/apiAuth")
 const { scheduleBackups } = require("./backupManager")
 const { prisma, databaseInfo } = require("./db")
 const { initWebhookSync } = require("./webhookSyncManager")
@@ -229,19 +229,15 @@ const rolesAuthMiddleware = (req, res, next) => {
 const SCOUT_RESCUE_OPEN = ["1", "true", "yes"].includes(
   String(process.env.SCOUTING_RESCUE_OPEN || "").trim().toLowerCase()
 )
-const SCOUT_RESCUE_PATHS = new Set(["/", "/bulk"])
-
-const scoutWriteAuthMiddleware = (req, res, next) => {
-  if (
-    SCOUT_RESCUE_OPEN &&
-    req.method === "POST" &&
-    SCOUT_RESCUE_PATHS.has(req.path)
-  ) {
-    console.warn(`[scouting-rescue] open POST ${req.originalUrl} bypassing auth`)
-    return next()
-  }
-  return scoutDataAuthMiddleware(req, res, next)
+if (SCOUT_RESCUE_OPEN) {
+  console.warn("[scouting-rescue] SCOUTING_RESCUE_OPEN is on: match submissions accepted without sign-in")
 }
+
+// Rescue callers are never approved: they may add entries but not read or
+// overwrite (see createScoutWriteAuthMiddleware and refuseForeignOverwrite).
+const scoutWriteAuthMiddleware = createScoutWriteAuthMiddleware(scoutDataAuthMiddleware, {
+  isRescueOpen: () => SCOUT_RESCUE_OPEN,
+})
 
 // Unverified (pending) accounts may UPLOAD entries, so nothing they scout
 // before approval is lost, but reading or deleting scouting data requires an
@@ -269,7 +265,16 @@ const registerRoutes = (prefix = "") => {
     return `${prefix}${suffix}`
   }
 
-  // Probes MySQL for real: a 503 here means "API up, database down".
+  // Liveness for the container healthcheck: answers as long as the process
+  // can serve requests, deliberately without touching MySQL. If this probed
+  // the database, a brief outage would make Swarm restart a healthy API in a
+  // loop — or roll back a good deploy that happened to overlap the outage.
+  app.get(resolvePath("/live"), (_req, res) => {
+    res.json({ status: "ok" })
+  })
+
+  // Probes MySQL for real: a 503 here means "API up, database down". For
+  // monitoring and humans, not for the container healthcheck (see /live).
   app.get(resolvePath("/health"), async (_req, res) => {
     const database = await checkDatabaseHealth(prisma)
     const healthy = database.status === "ok"

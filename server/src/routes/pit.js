@@ -6,6 +6,7 @@ const { replaceImageDataUrls } = require("../utils/imagePermalinkStore")
 const { ensureEntryIdentitySchema, updatePitEntryEmail } = require("../utils/entryIdentity")
 const { ensureScoutRegistration } = require("../utils/userRegistration")
 const { requireLeadRole, isLeadEmail } = require("../utils/requireLeadRole")
+const { requireApprovedUser, refuseForeignOverwrite } = require("../utils/requireApprovedUser")
 
 const router = express.Router()
 
@@ -38,6 +39,7 @@ const buildEntryData = (entry) => {
 
 router.get(
   "/",
+  requireApprovedUser,
   asyncHandler(async (req, res) => {
     const { teamNumber, eventName, scoutName } = req.query
     const scoutFilter = scoutName || req.query.scout_name
@@ -71,6 +73,7 @@ const seasonFromQuery = (req) =>
 
 router.get(
   "/stats",
+  requireApprovedUser,
   asyncHandler(async (req, res) => {
     const { prisma } = await getSeasonPrisma(seasonFromQuery(req))
     await ensureEntryIdentitySchema(prisma)
@@ -114,6 +117,8 @@ router.post(
     })
     const { prisma } = await getSeasonPrisma(selector)
     await ensureEntryIdentitySchema(prisma)
+    // Before any photo is written to disk.
+    if (await refuseForeignOverwrite(req, res, prisma, "pit", [entry.id])) return
     const data = await replaceImageDataUrls(buildEntryData(entry), {
       year: selector.year,
       eventCode: entry.eventName,
@@ -170,6 +175,13 @@ router.post(
       const key = `${selector.year || ""}|${selector.formId || ""}`
       if (!groups.has(key)) groups.set(key, { selector, items: [] })
       groups.get(key).items.push(entry)
+    }
+
+    // Check every season group before writing anything (rows or photos).
+    for (const { selector, items } of groups.values()) {
+      const { prisma } = await getSeasonPrisma(selector)
+      await ensureEntryIdentitySchema(prisma)
+      if (await refuseForeignOverwrite(req, res, prisma, "pit", items.map((entry) => entry.id))) return
     }
 
     for (const { selector, items } of groups.values()) {

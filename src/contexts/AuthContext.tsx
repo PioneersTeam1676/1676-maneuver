@@ -402,6 +402,7 @@ const routePermissions: Array<{ pattern: RegExp; minRole: UserRole | null }> = [
   { pattern: /^\/shift-generator$/, minRole: 'lead' },
   { pattern: /^\/achievements$/, minRole: 'lead' },
   { pattern: /^\/event-settings$/, minRole: 'lead' },
+  { pattern: /^\/form-maker(\/[^/]+)?$/, minRole: 'lead' },
   { pattern: /^\/scout-management$/, minRole: 'lead' },
   { pattern: /^\/admin$/, minRole: 'tech_lead' },
   { pattern: /^\/pi-panel$/, minRole: 'lead' },
