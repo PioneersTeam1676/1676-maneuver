@@ -162,6 +162,22 @@ describe('submitting scouting data', () => {
   })
 })
 
+describe('rescue mode identity', () => {
+  it('treats a blocked account as anonymous, so it cannot re-send entries it owned', async () => {
+    rescueOpen = true
+    const BLOCKED = 'kicked.out@pascack.org'
+    mockRoles.set(BLOCKED, 'blocked')
+    mockOwners.scouting_entries.set('blocked-own', BLOCKED)
+    expect(await request('POST', '/scouting', { as: BLOCKED, body: { entry: entry('blocked-own') } })).toBe(403)
+  })
+
+  it('keeps the identity of a normal scout, so they can re-send their own entry', async () => {
+    rescueOpen = true
+    mockOwners.scouting_entries.set('mine-2', SCOUT)
+    expect(await request('POST', '/scouting', { as: SCOUT, body: { entry: entry('mine-2') } })).toBe(201)
+  })
+})
+
 describe('deleting data', () => {
   it('a single scouting entry can only be deleted by a lead', async () => {
     expect(await request('DELETE', '/scouting/abc', { as: OUTSIDER })).toBe(403)

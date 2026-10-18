@@ -237,12 +237,27 @@ const createApiAuthMiddleware = ({ skipDomainCheck = false, allowBlocked = false
 // entries or re-send their own; reading and overwriting stay closed.
 const SCOUT_RESCUE_PATHS = new Set(["/", "/bulk"])
 
-const createScoutWriteAuthMiddleware = (authMiddleware, { isRescueOpen }) => (req, res, next) => {
+// A blocked account keeps no identity here (it is just anonymous), and since
+// rescue mode exists for when auth/the database is misbehaving, a failed role
+// lookup also falls back to anonymous rather than rejecting the submission.
+const rescueIdentity = async (token) => {
+  const payload = verifyAppToken(token || "")
+  if (!payload?.email) return undefined
+  const email = String(payload.email).toLowerCase()
+  try {
+    const row = await prisma.role.findUnique({ where: { email }, select: { role: true } })
+    return row?.role === "blocked" ? undefined : { email }
+  } catch {
+    return undefined
+  }
+}
+
+const createScoutWriteAuthMiddleware = (authMiddleware, { isRescueOpen }) => async (req, res, next) => {
   if (isRescueOpen() && req.method === "POST" && SCOUT_RESCUE_PATHS.has(req.path)) {
-    const payload = verifyAppToken(extractToken(req) || "")
-    req.user = payload?.email ? { email: String(payload.email).toLowerCase() } : undefined
+    req.user = await rescueIdentity(extractToken(req))
     req.authz = { approved: false }
-    console.warn(`[scouting-rescue] open POST ${req.originalUrl} (${req.user ? "token" : "anonymous"})`)
+    // baseUrl + path, not originalUrl: the query string can carry ?api_key=.
+    console.warn(`[scouting-rescue] open POST ${req.baseUrl}${req.path} (${req.user ? "token" : "anonymous"})`)
     return next()
   }
   return authMiddleware(req, res, next)
