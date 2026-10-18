@@ -1,0 +1,14 @@
+# Frontend image build context (repo root). The API builds from server/.
+node_modules
+dist
+dev-dist
+server
+.git
+.env
+.env.*
+!.env.example
+.playwright-mcp
+.claude
+docs
+backups
+*.log
