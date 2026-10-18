@@ -1045,23 +1045,29 @@ router.delete(
       ? { OR: [{ clientId: id }, { id: parsedId }] }
       : { clientId: id }
     await ensureScoutingSchema(prisma)
+    // The id can match one row by client id and ANOTHER by numeric primary
+    // key, and clients choose their own client ids. Resolve every matching
+    // row first, require a non-lead to own all of them, then delete exactly
+    // those rows. (Checking "owns any matching row" let a scout who submitted
+    // an entry with client id "42" delete someone else's row whose id is 42.)
+    const targets = await prisma.scoutingEntry.findMany({ where, select: { id: true } })
+    if (!targets.length) return res.json({ success: false })
+    const targetIds = targets.map((row) => Number(row.id))
     // Scouts may delete only their own entries; leads may delete any.
-    // (Previously any signed-in account could delete anyone's match data.)
     if (!(await isLeadEmail(req.user?.email))) {
       const requester = String(req.user?.email || "").toLowerCase()
       const owned = requester
         ? await prisma.$queryRawUnsafe(
-            "SELECT id FROM scouting_entries WHERE (client_id = ? OR id = ?) AND scout_email = ? LIMIT 1",
-            String(id),
-            Number.isFinite(parsedId) ? parsedId : -1,
+            `SELECT id FROM scouting_entries WHERE id IN (${targetIds.map(() => "?").join(",")}) AND scout_email = ?`,
+            ...targetIds,
             requester
           )
         : []
-      if (!Array.isArray(owned) || owned.length === 0) {
+      if (!Array.isArray(owned) || owned.length !== targetIds.length) {
         return res.status(403).json({ error: "Only leads can delete other scouts' entries" })
       }
     }
-    const info = await prisma.scoutingEntry.deleteMany({ where })
+    const info = await prisma.scoutingEntry.deleteMany({ where: { id: { in: targetIds } } })
     res.json({ success: info.count > 0 })
   })
 )
