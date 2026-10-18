@@ -736,6 +736,11 @@ const normalizeIncomingScoutingEntry = (entry) => {
   const timestampMs = resolveTimestampMs(rebuiltData, entry?.timestamp)
   return {
     rebuiltData,
+    // What gets persisted: every submitted field plus the REBUILT columns.
+    // Storing rebuiltData alone silently dropped any answer the hardcoded
+    // field-id mapping above doesn't know — i.e. all of a new season's form.
+    // Exports re-derive the REBUILT columns from this on read, unchanged.
+    storedData: { ...sourceData, ...rebuiltData },
     timestampMs,
     scoutTeam: asString(rebuiltData["Scout Team"]),
     eventName: asString(rebuiltData.Event),
@@ -888,7 +893,7 @@ router.post(
       alliance: toNullableString(normalized.scoutTeam || entry.alliance),
       scoutName: toNullableString(normalized.scoutName),
       eventName: toNullableString(normalized.eventName),
-      data: stringifyJsonValue(normalized.rebuiltData, {}),
+      data: stringifyJsonValue(normalized.storedData, {}),
       timestamp: toMsBigInt(normalized.timestampMs)
     }
 
@@ -941,7 +946,7 @@ router.post(
         alliance: toNullableString(normalized.scoutTeam),
         scoutName: toNullableString(normalized.scoutName),
         eventName: toNullableString(normalized.eventName),
-        data: stringifyJsonValue(normalized.rebuiltData, {}),
+        data: stringifyJsonValue(normalized.storedData, {}),
         timestamp: toMsBigInt(normalized.timestampMs)
       }
 
@@ -1183,7 +1188,7 @@ router.post(
         alliance: toNullableString(normalized.scoutTeam),
         scoutName: toNullableString(normalized.scoutName),
         eventName: toNullableString(normalized.eventName),
-        data: stringifyJsonValue(normalized.rebuiltData, {}),
+        data: stringifyJsonValue(normalized.storedData, {}),
         timestamp: toMsBigInt(normalized.timestampMs)
       }
 
@@ -1262,7 +1267,7 @@ router.post(
             alliance: toNullableString(normalized.scoutTeam),
             scoutName: toNullableString(normalized.scoutName),
             eventName: toNullableString(normalized.eventName),
-            data: stringifyJsonValue(normalized.rebuiltData, {}),
+            data: stringifyJsonValue(normalized.storedData, {}),
             timestamp: toMsBigInt(normalized.timestampMs),
           },
         })
