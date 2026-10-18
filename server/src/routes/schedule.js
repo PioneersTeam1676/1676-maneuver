@@ -161,6 +161,9 @@ const startWatch = async ({ eventKey, tbaApiKey }) => {
 router.post(
   "/watch",
   asyncHandler(async (req, res) => {
+    if (!(await requireScheduleManager(req, res))) {
+      return
+    }
     const { eventKey, tbaApiKey } = req.body || {}
     if (!eventKey?.trim()) return res.status(400).json({ error: "eventKey required" })
     const status = await startWatch({ eventKey: eventKey.trim(), tbaApiKey })
@@ -170,7 +173,10 @@ router.post(
 
 router.delete(
   "/watch",
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    if (!(await requireScheduleManager(req, res))) {
+      return
+    }
     stopWatch()
     watchState = {
       eventKey: null,
@@ -240,9 +246,14 @@ router.post(
   })
 )
 
+// Replacing the schedule (and optionally notifying every scout) is
+// lead-only, like the other schedule writes.
 router.post(
   "/assignments",
   asyncHandler(async (req, res) => {
+    if (!(await requireScheduleManager(req, res))) {
+      return
+    }
     const { eventKey, assignments, matches, aliases, notify } = req.body || {}
     if (!eventKey || typeof eventKey !== "string" || !eventKey.trim()) {
       return res.status(400).json({ error: "eventKey is required" })

@@ -132,11 +132,23 @@ export const syncActiveFormConfig = async (): Promise<ActiveFormConfig> => {
       return remote
     }
     if (localStamp > remoteStamp && (local.match || local.pit || local.drive)) {
-      void pushActiveFormConfig(local).catch((error) => {
-        if (!shouldFallback(error)) {
-          console.warn("[activeForm] Failed to push local config", error)
-        }
-      })
+      // Only leads may change the active form. A scout device whose local
+      // copy merely LOOKS newer (clock skew, stale cache) gets a 403 here and
+      // must follow the server instead of keeping its own form forever.
+      try {
+        const pushed = await pushActiveFormConfig(local)
+        writeActiveFormConfig(pushed)
+        return pushed
+      } catch (error) {
+        const status = error instanceof ApiError ? error.status ?? 0 : 0
+        // Network trouble / server down: keep the local choice and retry later.
+        if (shouldFallback(error) || status >= 500 || (error as Error)?.name === "AbortError") return local
+        console.warn("[activeForm] Not allowed to push local config; using the server's", error)
+      }
+    }
+    if (remote.match || remote.pit || remote.drive) {
+      writeActiveFormConfig(remote)
+      return remote
     }
     return local
   } catch (error) {
@@ -165,4 +177,17 @@ export const setActiveFormId = (type: FormType, id: string | null) => {
       console.warn("[activeForm] Failed to sync active form config", error)
     }
   })
+}
+
+// Synchronous read of a form definition from the local cache that
+// formBuilderApi.getForm fills (App syncs the active forms on every tick).
+export const readCachedFormDefinition = <T extends { id?: string }>(id: string | undefined): T | null => {
+  if (!id || typeof window === "undefined") return null
+  try {
+    const parsed = JSON.parse(localStorage.getItem("form_builder:forms") || "[]")
+    if (!Array.isArray(parsed)) return null
+    return (parsed.find((form: { id?: string }) => form?.id === id) as T | undefined) ?? null
+  } catch {
+    return null
+  }
 }

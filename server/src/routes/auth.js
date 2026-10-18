@@ -10,6 +10,7 @@ const {
   signRefreshToken,
   hashRefreshToken,
 } = require("../utils/appJwt")
+const { ensureConfiguredAdmins, getConfiguredRole } = require("../utils/configuredAdmins")
 
 // Backend session endpoints.
 //
@@ -179,6 +180,12 @@ router.post(
     // the per-request middleware (roles can change mid-session).
     if (await isBlocked(email)) {
       return res.status(403).json({ error: "Forbidden" })
+    }
+
+    // A configured admin signing in for the first time on a fresh database
+    // must not be stuck without a role (see configuredAdmins.js).
+    if (getConfiguredRole(email)) {
+      await failOpen("configured admin bootstrap", 0, () => ensureConfiguredAdmins(prisma))
     }
 
     const user = toUser({ email, name: payload?.name, picture: payload?.picture })

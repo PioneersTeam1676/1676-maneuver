@@ -73,7 +73,8 @@ const upsertRecentUser = async (
   const existing = await prisma.recentUser.findUnique({ where: { email: normalizedEmail } })
 
   if (!existing) {
-    return prisma.recentUser.create({
+    try {
+      return await prisma.recentUser.create({
       data: {
         email: normalizedEmail,
         firstSeenAt: firstSeen,
@@ -86,6 +87,14 @@ const upsertRecentUser = async (
         teamNumber: trimmedTeamNumber || null,
       },
     })
+    } catch (error) {
+      // Concurrent first requests from one account: another request created
+      // the row between our read and this insert. Retry as an update.
+      if (error?.code !== "P2002") throw error
+      return upsertRecentUser(prisma, {
+        email: normalizedEmail, firstSeenAt, lastSeenAt, acknowledged, displayName, photoUrl, firstName, lastName, teamNumber,
+      })
+    }
   }
 
   const existingFirst = parseIso(existing.firstSeenAt) || new Date(firstSeen)

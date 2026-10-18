@@ -14,6 +14,14 @@ const mockSeasonPrisma = {
   $queryRawUnsafe: jest.fn(async (sql, ...params) => {
     if (/^SHOW COLUMNS/i.test(sql)) return [{ Field: 'client_id' }]
     const table = /FROM (scouting_entries|pit_entries)/.exec(sql)?.[1]
+    // Delete routes' ownership check: "... WHERE <id match> AND scout_email = ?"
+    // (id is the first param, the requester's email the last).
+    if (table && /scout_email = \?/.test(sql)) {
+      const id = String(params[0])
+      const email = params[params.length - 1]
+      return mockOwners[table].get(id) === email ? [{ id }] : []
+    }
+    // Owner lookup: "SELECT <id> AS entry_id, scout_email ... IN (?, ...)".
     if (table && /scout_email/.test(sql)) {
       return params
         .filter((id) => mockOwners[table].has(id))

@@ -1,6 +1,6 @@
 const express = require("express")
 const router = express.Router()
-const { prisma } = require("../db")
+const { prisma: mainPrisma } = require("../db")
 const { getSeasonPrisma, resolveSeasonSelector } = require("../seasonDb")
 const asyncHandler = require("../utils/asyncHandler")
 const { nowSeconds } = require("../utils/dbUtils")
@@ -9,7 +9,7 @@ const LEAD_ROLES = new Set(["lead", "tech_lead"])
 
 const getRequesterRole = async (email) => {
   if (!email) return null
-  const row = await prisma.role.findUnique({
+  const row = await mainPrisma.role.findUnique({
     where: { email: String(email).trim().toLowerCase() },
     select: { role: true },
   })
@@ -154,22 +154,25 @@ router.put(
       }
     }
 
+    const settingsData = {
+      currentEvent: nextCurrent || null,
+      eventsJson: JSON.stringify(normalizedEvents),
+      eventDisplayNamesJson: JSON.stringify(prunedDisplayNames),
+      updatedAt: nowSeconds(),
+    }
     await prisma.eventSetting.upsert({
       where: { id: 1 },
-      create: {
-        id: 1,
-        currentEvent: nextCurrent || null,
-        eventsJson: JSON.stringify(normalizedEvents),
-        eventDisplayNamesJson: JSON.stringify(prunedDisplayNames),
-        updatedAt: nowSeconds(),
-      },
-      update: {
-        currentEvent: nextCurrent || null,
-        eventsJson: JSON.stringify(normalizedEvents),
-        eventDisplayNamesJson: JSON.stringify(prunedDisplayNames),
-        updatedAt: nowSeconds(),
-      }
+      create: { id: 1, ...settingsData },
+      update: settingsData,
     })
+    // Mirror into the main database: the server picks the default season from
+    // the main copy's current event (seasonDb.resolveDefaultYear), so GET
+    // /settings and every un-scoped request follow the event set here.
+    if (prisma !== mainPrisma) {
+      await mainPrisma.eventSetting
+        .upsert({ where: { id: 1 }, create: { id: 1, ...settingsData }, update: settingsData })
+        .catch((error) => console.warn("[events] could not mirror settings to main database:", error?.message || error))
+    }
 
     const updated = await ensureSettingsRow(prisma)
     return res.json(formatResponse(updated))

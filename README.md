@@ -15,20 +15,23 @@ A mobile-first scouting app for FRC teams, maintained by Team 1676 (the Pioneers
 You need Node.js and a MySQL database.
 
 ```bash
-# you do this for teh frontend
+# frontend (one .env at the repo root; the server reads it too)
 cp .env.example .env
 npm install
 npm run dev
 
-# then for the backend you do this
+# backend
 cd server
-cp .env.example .env
 npm install
 npx prisma db push
 npm run dev
 ```
 
-The frontend runs on port 4175 and the API on port 4000. Fill in both `.env` files before starting.
+The frontend dev server runs on port 4176 and the API on port 4000.
+
+**Before each season, read [docs/NEW_SEASON.md](docs/NEW_SEASON.md)**: setup
+checklist, how sign-in and roles work, where data is backed up (24-hour device
+backup and server snapshots) and how to pull it off, and troubleshooting.
 
 ## Stack
 

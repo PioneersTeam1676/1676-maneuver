@@ -1,4 +1,6 @@
 const crypto = require("crypto")
+const fs = require("fs")
+const path = require("path")
 
 // App-issued JWTs (HS256) replace per-request Google ID token verification.
 // Google tokens expire after ~1 hour with no way to refresh offline, which
@@ -14,23 +16,46 @@ const ACCESS_TOKEN_TTL_SECONDS = 5 * 24 * 60 * 60 // 5 days
 
 let cachedSecret = null
 
+// Where the generated fallback secret is kept when AUTH_JWT_SECRET is unset.
+// server/data is the Docker volume, so the key survives container rebuilds.
+const SECRET_FILE = process.env.AUTH_JWT_SECRET_FILE
+  ? path.resolve(process.env.AUTH_JWT_SECRET_FILE)
+  : path.resolve(__dirname, "../../data/.auth-jwt-secret")
+
+const loadOrCreateSecretFile = () => {
+  try {
+    const existing = fs.readFileSync(SECRET_FILE, "utf8").trim()
+    if (existing.length >= 32) return existing
+  } catch {
+    // missing or unreadable: create below
+  }
+  const generated = crypto.randomBytes(48).toString("hex")
+  try {
+    fs.mkdirSync(path.dirname(SECRET_FILE), { recursive: true })
+    fs.writeFileSync(SECRET_FILE, generated, { mode: 0o600 })
+    console.warn(
+      `[appJwt] AUTH_JWT_SECRET not set: generated a signing key and saved it to ${SECRET_FILE}. ` +
+        "Sessions survive restarts as long as that file is kept."
+    )
+    return generated
+  } catch (error) {
+    console.warn(
+      "[appJwt] AUTH_JWT_SECRET not set and the key file could not be written " +
+        `(${error?.message || error}). Using a random per-boot secret: every server restart will sign everyone out. ` +
+        "Set AUTH_JWT_SECRET in the environment to fix this."
+    )
+    return null
+  }
+}
+
 const resolveJwtSecret = () => {
   if (cachedSecret) return cachedSecret
   const configured =
     process.env.AUTH_JWT_SECRET || process.env.APP_SECRET || process.env.FORM_DB_SECRET
-  if (configured && String(configured).trim()) {
-    cachedSecret = crypto.createHash("sha256").update(String(configured).trim()).digest()
-    return cachedSecret
-  }
-  // No secret configured: generate a random one for this process. Tokens
-  // survive until the server restarts, then clients silently re-auth via
-  // their refresh token / Google. Warn so ops can set AUTH_JWT_SECRET.
-  console.warn(
-    "[appJwt] AUTH_JWT_SECRET not set — using a random per-boot secret. " +
-      "Access tokens will be invalidated on every server restart. " +
-      "Set AUTH_JWT_SECRET in the environment to fix this."
-  )
-  cachedSecret = crypto.randomBytes(32)
+  const material = configured && String(configured).trim() ? String(configured).trim() : loadOrCreateSecretFile()
+  cachedSecret = material
+    ? crypto.createHash("sha256").update(material).digest()
+    : crypto.randomBytes(32)
   return cachedSecret
 }
 

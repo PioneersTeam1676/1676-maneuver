@@ -7,6 +7,7 @@ const { sanitizeString, upsertRecentUser } = require("../utils/recentUserUtils")
 const { ensureEntryIdentitySchema, normalizeEmail } = require("../utils/entryIdentity")
 const { ensureScoutRegistration } = require("../utils/userRegistration")
 const { emailMatchesAllowedDomain } = require("../utils/authDomains")
+const { getConfiguredRole } = require("../utils/configuredAdmins")
 
 const router = express.Router()
 
@@ -163,6 +164,10 @@ router.put(
     }
 
     const normalizedEmail = email.trim().toLowerCase()
+    const configuredRole = getConfiguredRole(normalizedEmail)
+    if (configuredRole && roleRank[role] < roleRank[configuredRole]) {
+      return res.status(409).json({ error: "This account is configured as an admin on the server and cannot be demoted here." })
+    }
     const existingTarget = await prisma.role.findUnique({
       where: { email: normalizedEmail },
       select: { role: true },
@@ -224,6 +229,9 @@ router.delete(
 
     const { email } = req.params
     const normalizedEmail = email.trim().toLowerCase()
+    if (getConfiguredRole(normalizedEmail)) {
+      return res.status(409).json({ error: "This account is configured as an admin on the server and cannot be removed here." })
+    }
     const existingTarget = await prisma.role.findUnique({
       where: { email: normalizedEmail },
       select: { role: true },

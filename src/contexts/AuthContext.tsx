@@ -402,6 +402,7 @@ const routePermissions: Array<{ pattern: RegExp; minRole: UserRole | null }> = [
   { pattern: /^\/shift-generator$/, minRole: 'lead' },
   { pattern: /^\/achievements$/, minRole: 'lead' },
   { pattern: /^\/event-settings$/, minRole: 'lead' },
+  { pattern: /^\/form-maker(\/[^/]+)?$/, minRole: 'lead' },
   { pattern: /^\/scout-management$/, minRole: 'lead' },
   { pattern: /^\/admin$/, minRole: 'tech_lead' },
   { pattern: /^\/pi-panel$/, minRole: 'lead' },
@@ -416,6 +417,7 @@ const routePermissions: Array<{ pattern: RegExp; minRole: UserRole | null }> = [
   { pattern: /^\/schedule$/, minRole: 'scout' },
   { pattern: /^\/rescout$/, minRole: 'scout_plus' },
   { pattern: /^\/outliers$/, minRole: 'lead' },
+  { pattern: /^\/device-backup$/, minRole: null }, // Device-local data; must stay reachable even when sign-in is broken
   { pattern: /^\/alliance-onboarding$/, minRole: null }, // Accessible to anyone, including pending/unverified
   { pattern: /^\/auth\/google\/callback$/, minRole: null }, // Accessible to anyone for OAuth flow
 ]
@@ -1399,6 +1401,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(() => {
     clearStoredAuthSession()
+    // Shared devices: the next person to sign in must not inherit this
+    // account's cached role map (it is re-fetched from the server anyway).
+    localStorage.removeItem(ROLE_STORAGE_KEY)
+    localStorage.removeItem(RECENT_STORAGE_KEY)
     // Full navigation (not a router push) so no in-memory state from the
     // signed-in session survives.
     window.location.assign(SIGN_OUT_REDIRECT_URL)

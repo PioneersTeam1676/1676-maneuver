@@ -7,44 +7,44 @@ const normalizeBaseUrl = (value: string | undefined | null): string | null => {
   return trimmed.replace(/\/+$/, '')
 }
 
-const resolveBaseUrlCandidates = (): string[] => {
-  const candidates: string[] = []
+const isLocalHostname = (hostname: string): boolean =>
+  hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '[::1]'
 
-  const configuredRaw = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? ''
+// Exported for tests. When VITE_API_BASE_URL is configured, ONLY those URLs
+// are used (plus localhost while developing on localhost). The old list
+// always appended same-origin /api and localhost:4000 as fallbacks; on the
+// production host one network blip moved every request to
+// https://<app-host>/api, which is the static app server, and the client
+// stayed stuck there for the rest of the session: GETs returned index.html
+// and uploads failed until the page was reloaded.
+export const resolveBaseUrlCandidates = (
+  configuredRaw: string = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? '',
+  location: { protocol: string; hostname: string; port: string } | null =
+    typeof window !== 'undefined' && window.location ? window.location : null,
+): string[] => {
+  const candidates: string[] = []
+  const add = (value: string | null) => {
+    if (value && !candidates.includes(value)) candidates.push(value)
+  }
+
   configuredRaw
     .split(',')
     .map((segment) => normalizeBaseUrl(segment))
-    .filter((segment): segment is string => Boolean(segment))
-    .forEach((segment) => {
-      if (!candidates.includes(segment)) {
-        candidates.push(segment)
-      }
-    })
+    .forEach(add)
 
-  if (typeof window !== 'undefined') {
-    const { protocol, hostname, port } = window.location
+  const configured = candidates.length > 0
+  const onLocalhost = location ? isLocalHostname(location.hostname) : true
+
+  if (!configured && location) {
+    const { protocol, hostname, port } = location
     const currentPort = port ? `:${port}` : ''
-    const sameOriginApi = normalizeBaseUrl(`${protocol}//${hostname}${currentPort}/api`)
-    const sameOriginScouting = normalizeBaseUrl(`${protocol}//${hostname}${currentPort}/scouting`)
-    if (sameOriginApi && !candidates.includes(sameOriginApi)) {
-      candidates.push(sameOriginApi)
-    }
-    if (sameOriginScouting && !candidates.includes(sameOriginScouting)) {
-      candidates.push(sameOriginScouting)
-    }
+    add(normalizeBaseUrl(`${protocol}//${hostname}${currentPort}/api`))
+    add(normalizeBaseUrl(`${protocol}//${hostname}${currentPort}/scouting`))
   }
 
-  const localApi = normalizeBaseUrl('http://localhost:4000/api')
-  const loopbackApi = normalizeBaseUrl('http://127.0.0.1:4000/api')
-  if (localApi && !candidates.includes(localApi)) {
-    candidates.push(localApi)
-  }
-  if (loopbackApi && !candidates.includes(loopbackApi)) {
-    candidates.push(loopbackApi)
-  }
-
-  if (candidates.length === 0) {
-    candidates.push('http://localhost:4000/api')
+  if (!configured || onLocalhost) {
+    add(normalizeBaseUrl('http://localhost:4000/api'))
+    add(normalizeBaseUrl('http://127.0.0.1:4000/api'))
   }
 
   return candidates
@@ -101,10 +101,28 @@ const FETCH_TIMEOUT_MS = 8_000
 
 export type ApiRequestInit = RequestInit & { timeoutMs?: number }
 
+// After failing over to a secondary base URL, go back to trying the primary
+// once this much time has passed, so a short outage of the primary doesn't
+// pin the whole session to the fallback.
+const PRIMARY_RETRY_AFTER_MS = 60_000
+let failedOverAt = 0
+
+// A 2xx/4xx HTML page from an API path means we hit a web server that is not
+// the API (SPA fallback, captive portal, proxy error page).
+const looksLikeWrongHost = (response: Response): boolean => {
+  const contentType = response.headers.get('content-type') || ''
+  return contentType.includes('text/html')
+}
+
 const fetchWithFallback = async (path: string, init: ApiRequestInit): Promise<Response> => {
   let lastError: unknown
+  let wrongHostResponse: Response | null = null
   const { timeoutMs, ...fetchInit } = init
   const effectiveTimeout = typeof timeoutMs === 'number' && timeoutMs > 0 ? timeoutMs : FETCH_TIMEOUT_MS
+
+  if (activeBaseIndex !== 0 && Date.now() - failedOverAt > PRIMARY_RETRY_AFTER_MS) {
+    activeBaseIndex = 0
+  }
 
   for (let offset = 0; offset < BASE_URL_CANDIDATES.length; offset += 1) {
     const index = (activeBaseIndex + offset) % BASE_URL_CANDIDATES.length
@@ -114,6 +132,17 @@ const fetchWithFallback = async (path: string, init: ApiRequestInit): Promise<Re
     try {
       const response = await fetch(`${base}${path}`, { ...fetchInit, signal: controller.signal })
       clearTimeout(timeoutId)
+      if (looksLikeWrongHost(response)) {
+        if (!reportedFailures.has(`${base}#html`)) {
+          console.warn(`[apiClient] ${base} answered with an HTML page, not the API. Trying next fallback…`)
+          reportedFailures.add(`${base}#html`)
+        }
+        wrongHostResponse = wrongHostResponse ?? response
+        continue
+      }
+      if (index !== activeBaseIndex) {
+        failedOverAt = Date.now()
+      }
       activeBaseIndex = index
       return response
     } catch (error) {
@@ -131,6 +160,8 @@ const fetchWithFallback = async (path: string, init: ApiRequestInit): Promise<Re
     }
   }
 
+  // handleResponse turns this into a "server unavailable" error.
+  if (wrongHostResponse) return wrongHostResponse
   if (lastError instanceof Error) {
     throw lastError
   }
@@ -238,9 +269,27 @@ class ApiError extends Error {
 }
 
 async function handleResponse<T>(response: Response): Promise<T> {
-  const contentType = response.headers.get("content-type")
-  const isJson = contentType && contentType.includes("application/json")
-  const body = isJson ? await response.json() : await response.text()
+  const contentType = response.headers.get("content-type") || ""
+  if (contentType.includes("text/html")) {
+    // Never report an HTML page as a successful API call: callers would mark
+    // uploads as synced that never reached the database.
+    reportApiUnavailable(502, "wrong_host")
+    throw new ApiError("The scouting API could not be reached (got a web page instead)", 502)
+  }
+  const isJson = contentType.includes("application/json")
+  const text = await response.text()
+  let body: unknown = text
+  if (isJson) {
+    try {
+      body = text ? JSON.parse(text) : null
+    } catch {
+      if (response.ok) {
+        throw new ApiError("The scouting API sent a malformed response", 502)
+      }
+      body = null
+    }
+  }
+  const errorBody = (isJson && body && typeof body === "object" ? body : {}) as { error?: string; reason?: string }
   if (!response.ok) {
     if (response.status === 401 && typeof window !== "undefined") {
       // Authenticated requests already tried silent renewal and a retry.
@@ -251,9 +300,9 @@ async function handleResponse<T>(response: Response): Promise<T> {
       }
     }
     if (UNAVAILABLE_STATUSES.has(response.status)) {
-      reportApiUnavailable(response.status, isJson ? body?.reason : undefined)
+      reportApiUnavailable(response.status, errorBody.reason)
     }
-    const message = isJson && body?.error ? body.error : `Request failed with ${response.status}`
+    const message = errorBody.error ? errorBody.error : `Request failed with ${response.status}`
     throw new ApiError(message, response.status)
   }
   reportApiReachable()
@@ -286,12 +335,22 @@ const authEndpointPost = async (
     body: JSON.stringify(body),
     keepalive,
   })
+  const isJson = (response.headers.get("content-type") || "").includes("application/json")
+  if (!isJson) {
+    // Not our API (captive portal, proxy error page). Must never be read as
+    // a 401/403 verdict, which would delete a perfectly good refresh token.
+    throw new ApiError(`Auth request reached a non-API server (${response.status})`, 502)
+  }
   if (!response.ok) {
     const status = response.status
     // 401/403 mean the credential itself is bad — caller should discard it.
     throw new ApiError(`Auth request failed with ${status}`, status)
   }
-  return (await response.json()) as SessionResponse
+  try {
+    return (await response.json()) as SessionResponse
+  } catch {
+    throw new ApiError("Auth request returned a malformed response", 502)
+  }
 }
 
 // Exchange a Google id_token for a backend session. Called once after each

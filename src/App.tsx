@@ -53,6 +53,7 @@ import ScoutFormPage from "./pages/ScoutFormPage";
 import OutlierDetectionPage from "./pages/OutlierDetectionPage";
 import SchedulePage from "@/pages/SchedulePage";
 import RescouterPage from "@/pages/RescouterPage";
+import LocalBackupPage from "@/pages/LocalBackupPage";
 import { InstallPrompt } from '@/components/InstallPrompt';
 import { PWAUpdatePrompt } from '@/components/PWAUpdatePrompt';
 // import { StatusBarSpacer } from '@/components/StatusBarSpacer';
@@ -64,6 +65,10 @@ import { AuthProvider } from '@/contexts/AuthContext';
 // phones unless someone opens the dev page. Workbox still precaches the
 // chunk, so the page keeps working offline.
 const DevUtilitiesPage = lazy(() => import("./pages/DevUtilitiesPage"));
+// Form Maker: how next season's match/pit forms get built (docs/NEW_SEASON.md).
+// Its routes went missing when the 2026 forms were hardcoded.
+const FormMakerPage = lazy(() => import("./pages/FormMakerPage"));
+const FormBuilderPage = lazy(() => import("./pages/FormBuilderPage"));
 
 
 // Built once at module scope: creating it inside App() made every App
@@ -109,6 +114,9 @@ const router = createBrowserRouter(
       <Route path="/scout-management" element={<ScoutManagementDashboardPage />} />
       <Route path="/achievements" element={<AchievementsPage />} />
       <Route path="/dev-utilities" element={<Suspense fallback={null}><DevUtilitiesPage /></Suspense>} />
+      <Route path="/form-maker" element={<Suspense fallback={null}><FormMakerPage /></Suspense>} />
+      <Route path="/form-maker/new" element={<Suspense fallback={null}><FormBuilderPage /></Suspense>} />
+      <Route path="/form-maker/:formId" element={<Suspense fallback={null}><FormBuilderPage /></Suspense>} />
       <Route path="/tos" element={<TOSPage />} />
       <Route path="/terms" element={<TOSPage />} />
       <Route path="/privacy" element={<PrivacyPolicyPage />} />
@@ -116,6 +124,7 @@ const router = createBrowserRouter(
       <Route path="/schedule" element={<SchedulePage />} />
       <Route path="/rescout" element={<RescouterPage />} />
       <Route path="/outliers" element={<OutlierDetectionPage />} />
+      <Route path="/device-backup" element={<LocalBackupPage />} />
       {/* Add more routes as needed */}
       <Route path="*" element={<NotFoundPage />} />
     </Route>

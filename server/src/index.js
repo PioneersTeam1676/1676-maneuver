@@ -22,6 +22,7 @@ const pushRouter = require("./routes/push")
 const formsRouter = require("./routes/forms")
 const webhookSyncRouter = require("./routes/webhookSync")
 const rescoutRouter = require("./routes/rescout")
+const backupsRouter = require("./routes/backups")
 const { createApiAuthMiddleware, createScoutWriteAuthMiddleware } = require("./middleware/apiAuth")
 const { scheduleBackups } = require("./backupManager")
 const { prisma, databaseInfo } = require("./db")
@@ -30,6 +31,7 @@ const { imageStorageDir } = require("./utils/imagePermalinkStore")
 const { ensureRecentUserProfileSchema } = require("./utils/recentUserUtils")
 const { resolveErrorResponse } = require("./utils/serviceErrors")
 const { checkDatabaseHealth } = require("./utils/healthCheck")
+const { ensureConfiguredAdmins } = require("./utils/configuredAdmins")
 
 const compression = require("compression")
 
@@ -65,6 +67,21 @@ const routePrefixes = Array.from(prefixSet)
 ensureRecentUserProfileSchema(prisma).catch((error) => {
   console.warn("Failed to ensure recent user profile columns", error?.message || error)
 })
+
+// Make the env-configured admins real server-side roles. Retries until the
+// database answers so a server that boots before MySQL still bootstraps.
+const bootstrapConfiguredAdmins = (attempt = 0) => {
+  ensureConfiguredAdmins(prisma)
+    .then((count) => {
+      if (count) console.log(`[auth] ensured ${count} configured admin account(s)`)
+    })
+    .catch((error) => {
+      const delay = Math.min(60_000, 5_000 * (attempt + 1))
+      console.warn(`[auth] could not ensure configured admins (retry in ${delay / 1000}s):`, error?.message || error)
+      setTimeout(() => bootstrapConfiguredAdmins(attempt + 1), delay).unref()
+    })
+}
+bootstrapConfiguredAdmins()
 
 const parseCorsOrigins = (value) => {
   if (!value) return true
@@ -147,7 +164,18 @@ app.use(compression())
 app.use(cors(corsOptions))
 app.options("*", cors(corsOptions))
 
-app.use(express.json({ limit: "5mb" }))
+// Pit entries carry photos as data URLs until the server turns them into
+// files; 5 MB rejected entries with a couple of photos forever (413).
+//
+// Unverified (pending) accounts may upload, so they get a much smaller limit.
+// The role is only known after auth, so /scouting and /pit parse their bodies
+// after the auth middleware (see withRoleBodyLimit) and are skipped here.
+const jsonLarge = express.json({ limit: process.env.JSON_BODY_LIMIT || "25mb" })
+const jsonPending = express.json({ limit: process.env.PENDING_JSON_BODY_LIMIT || "2mb" })
+const AUTH_THEN_PARSE_PATH = /(^|\/)(scouting|pit)(\/|$)/
+app.use((req, res, next) =>
+  AUTH_THEN_PARSE_PATH.test(req.path) ? next() : jsonLarge(req, res, next)
+)
 app.use(morgan("dev"))
 
 // Backward-compat alias:
@@ -205,9 +233,31 @@ if (SCOUT_RESCUE_OPEN) {
   console.warn("[scouting-rescue] SCOUTING_RESCUE_OPEN is on: match submissions accepted without sign-in")
 }
 
+// Rescue callers are never approved: they may add entries but not read or
+// overwrite (see createScoutWriteAuthMiddleware and refuseForeignOverwrite).
 const scoutWriteAuthMiddleware = createScoutWriteAuthMiddleware(scoutDataAuthMiddleware, {
   isRescueOpen: () => SCOUT_RESCUE_OPEN,
 })
+
+// Unverified (pending) accounts may UPLOAD entries, so nothing they scout
+// before approval is lost, but reading or deleting scouting data requires an
+// approved role. Previously GET /scouting and /pit served every entry to any
+// Google account that had merely signed in.
+const PENDING_WRITE_PATHS = new Set(["/", "/bulk"])
+const scoutDataReadGuard = (writeMiddleware) => (req, res, next) => {
+  if (req.method === "POST" && PENDING_WRITE_PATHS.has(req.path)) {
+    return writeMiddleware(req, res, next)
+  }
+  return apiAuthMiddleware(req, res, next)
+}
+const withRoleBodyLimit = (authMiddleware) => (req, res, next) =>
+  authMiddleware(req, res, (err) => {
+    if (err) return next(err)
+    const parser = req.userRole === "pending" ? jsonPending : jsonLarge
+    return parser(req, res, next)
+  })
+const scoutingAuth = withRoleBodyLimit(scoutDataReadGuard(scoutWriteAuthMiddleware))
+const pitAuth = withRoleBodyLimit(scoutDataReadGuard(scoutDataAuthMiddleware))
 
 const registerRoutes = (prefix = "") => {
   const resolvePath = (suffix) => {
@@ -239,8 +289,8 @@ const registerRoutes = (prefix = "") => {
   // Google token / refresh token itself).
   app.use(resolvePath("/auth"), authRouter)
   app.use(resolvePath("/roles"), rolesAuthMiddleware, rolesRouter)
-  app.use(resolvePath("/scouting"), scoutWriteAuthMiddleware, scoutingRouter)
-  app.use(resolvePath("/pit"), scoutDataAuthMiddleware, pitRouter)
+  app.use(resolvePath("/scouting"), scoutingAuth, scoutingRouter)
+  app.use(resolvePath("/pit"), pitAuth, pitRouter)
   app.use(resolvePath("/game"), apiAuthMiddleware, gameRouter)
   app.use(resolvePath("/events"), openGoogleAuthMiddleware, eventsRouter)
   app.use(resolvePath("/recent-users"), openGoogleAuthMiddleware, recentUsersRouter)
@@ -250,6 +300,7 @@ const registerRoutes = (prefix = "") => {
   app.use(resolvePath("/forms"), apiAuthMiddleware, formsRouter)
   app.use(resolvePath("/webhook-sync"), apiAuthMiddleware, webhookSyncRouter)
   app.use(resolvePath("/rescout"), apiAuthMiddleware, rescoutRouter)
+  app.use(resolvePath("/backups"), apiAuthMiddleware, backupsRouter)
 }
 
 for (const prefix of routePrefixes) {
@@ -273,33 +324,30 @@ const server = app.listen(PORT, () => {
   console.log(`Maneuver API listening on port ${PORT}`)
 })
 
-// Docker/Dokploy stop the container with SIGTERM and SIGKILL it 10 s later.
-// Installing a signal handler disables Node's default exit, and the old
-// handler only disconnected Prisma — so the process never exited and every
-// restart ended in a hard kill that could cut off a match upload mid-write.
-// Now: stop accepting connections, let in-flight requests finish, then exit,
-// with a forced exit just before Docker's deadline.
-const SHUTDOWN_DRAIN_MS = 8000
+// Installing these handlers replaces Node's default "exit on signal", so the
+// handler itself must exit. It used to only disconnect Prisma, which left the
+// process running after `docker stop` / `pm2 restart` / Ctrl-C until it was
+// force-killed.
 let shuttingDown = false
-const shutdown = (signal) => {
+const shutdown = async (signal) => {
   if (shuttingDown) return
   shuttingDown = true
-  console.log(`[shutdown] ${signal} received; draining in-flight requests`)
-  setTimeout(() => {
-    console.warn(`[shutdown] requests still open after ${SHUTDOWN_DRAIN_MS}ms; exiting anyway`)
-    process.exit(1)
-  }, SHUTDOWN_DRAIN_MS).unref()
-  server.close(async () => {
-    try {
-      await prisma.$disconnect()
-    } catch (error) {
-      console.warn("Failed to disconnect Prisma", error)
-    }
-    process.exit(0)
+  console.log(`[server] ${signal} received, shutting down`)
+  const forceExit = setTimeout(() => process.exit(0), 5_000)
+  forceExit.unref()
+  // Stop accepting connections and let in-flight requests (e.g. a sync upload
+  // mid-transaction) finish; the timer above is the fallback for stuck ones.
+  await new Promise((resolve) => {
+    server.close(() => resolve())
+    server.closeIdleConnections?.()
   })
-  // Idle keep-alive sockets would otherwise hold server.close() open.
-  server.closeIdleConnections()
+  try {
+    await prisma.$disconnect()
+  } catch (error) {
+    console.warn("Failed to disconnect Prisma", error)
+  }
+  process.exit(0)
 }
 
-process.on("SIGINT", () => shutdown("SIGINT"))
-process.on("SIGTERM", () => shutdown("SIGTERM"))
+process.on("SIGINT", () => void shutdown("SIGINT"))
+process.on("SIGTERM", () => void shutdown("SIGTERM"))
