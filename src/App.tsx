@@ -4,7 +4,7 @@ import {
   RouterProvider,
   Route,
 } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { ThemeProvider } from "@/components/theme-provider"
 import { analytics } from '@/lib/analytics';
 import { syncEventSettings } from '@/lib/eventSettingsClient'
@@ -40,7 +40,6 @@ import StrategyOverviewPage from "./pages/StrategyOverviewPage";
 import ScoutManagementDashboardPage from "./pages/ScoutManagementDashboardPage";
 import AchievementsPage from "./pages/AchievementsPage";
 import VerificationCenterPage from "./pages/VerificationCenterPage";
-import DevUtilitiesPage from "./pages/DevUtilitiesPage";
 import TOSPage from "./pages/TOSPage";
 import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 import ShiftGeneratorPage from "./pages/ShiftGeneratorPage";
@@ -61,6 +60,10 @@ import { SplashScreen } from '@/components/SplashScreen';
 import { FullscreenProvider } from '@/contexts/FullscreenContext';
 import { AuthProvider } from '@/contexts/AuthContext';
 
+// Lazy so the bundled test datasets (testDataGenerator) never load on scouts'
+// phones unless someone opens the dev page. Workbox still precaches the
+// chunk, so the page keeps working offline.
+const DevUtilitiesPage = lazy(() => import("./pages/DevUtilitiesPage"));
 
 
 // Built once at module scope: creating it inside App() made every App
@@ -105,7 +108,7 @@ const router = createBrowserRouter(
 <Route path="/verification-center" element={<VerificationCenterPage />} />
       <Route path="/scout-management" element={<ScoutManagementDashboardPage />} />
       <Route path="/achievements" element={<AchievementsPage />} />
-      <Route path="/dev-utilities" element={<DevUtilitiesPage />} />
+      <Route path="/dev-utilities" element={<Suspense fallback={null}><DevUtilitiesPage /></Suspense>} />
       <Route path="/tos" element={<TOSPage />} />
       <Route path="/terms" element={<TOSPage />} />
       <Route path="/privacy" element={<PrivacyPolicyPage />} />
