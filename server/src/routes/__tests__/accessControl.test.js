@@ -6,6 +6,8 @@
 const mockRoles = new Map()
 // Who submitted each stored entry: table -> id -> scout_email
 const mockOwners = { scouting_entries: new Map(), pit_entries: new Map() }
+// Stored scouting rows by numeric primary key: id -> { clientId, scout_email }
+const mockScoutingRows = new Map()
 
 const mockSeasonPrisma = {
   scoutingEntry: { upsert: jest.fn(), findMany: jest.fn(), deleteMany: jest.fn() },
@@ -14,6 +16,19 @@ const mockSeasonPrisma = {
   $queryRawUnsafe: jest.fn(async (sql, ...params) => {
     if (/^SHOW COLUMNS/i.test(sql)) return [{ Field: 'client_id' }]
     const table = /FROM (scouting_entries|pit_entries)/.exec(sql)?.[1]
+    // Scouting delete: "... WHERE id IN (?, ...) AND scout_email = ?" over
+    // resolved primary keys (email is the last param).
+    if (table === 'scouting_entries' && /WHERE id IN \(/.test(sql)) {
+      const email = params[params.length - 1]
+      return params.slice(0, -1).filter((id) => mockScoutingRows.get(Number(id))?.scout_email === email).map((id) => ({ id }))
+    }
+    // "(client_id = ? OR id = ?) AND scout_email = ?" evaluated like SQL would.
+    if (table === 'scouting_entries' && /client_id = \? OR id = \?/.test(sql)) {
+      const [clientId, numericId, email] = params
+      return [...mockScoutingRows.entries()]
+        .filter(([id, row]) => (row.clientId === clientId || id === numericId) && row.scout_email === email)
+        .map(([id]) => ({ id }))
+    }
     // Delete routes' ownership check: "... WHERE <id match> AND scout_email = ?"
     // (id is the first param, the requester's email the last).
     if (table && /scout_email = \?/.test(sql)) {
@@ -97,6 +112,7 @@ beforeEach(() => {
   mockRoles.set(PARTNER, 'scout')
   mockOwners.scouting_entries.clear()
   mockOwners.pit_entries.clear()
+  mockScoutingRows.clear()
   mockSeasonPrisma.scoutingEntry.findMany.mockResolvedValue([])
   mockSeasonPrisma.scoutingEntry.upsert.mockResolvedValue({})
   mockSeasonPrisma.scoutingEntry.deleteMany.mockResolvedValue({ count: 1 })
@@ -187,10 +203,38 @@ describe('rescue mode identity', () => {
 })
 
 describe('deleting data', () => {
-  it('a single scouting entry can only be deleted by a lead', async () => {
+  // findMany({ where: { clientId } | { OR: [{ clientId }, { id }] } }) over mockScoutingRows.
+  const resolveRows = ({ where }) => {
+    const clauses = where.OR || [where]
+    return [...mockScoutingRows.entries()]
+      .filter(([id, row]) => clauses.some((c) => (c.clientId !== undefined && c.clientId === row.clientId) || (c.id !== undefined && c.id === id)))
+      .map(([id]) => ({ id }))
+  }
+
+  it("a scout cannot delete another scout's entry; a lead can", async () => {
+    mockScoutingRows.set(5, { clientId: 'abc', scout_email: OTHER_SCOUT })
+    mockSeasonPrisma.scoutingEntry.findMany.mockImplementation(async (args) => resolveRows(args))
     expect(await request('DELETE', '/scouting/abc', { as: OUTSIDER })).toBe(403)
     expect(await request('DELETE', '/scouting/abc', { as: SCOUT })).toBe(403)
+    expect(mockSeasonPrisma.scoutingEntry.deleteMany).not.toHaveBeenCalled()
     expect(await request('DELETE', '/scouting/abc', { as: LEAD })).toBe(200)
+  })
+
+  it('a scout can delete their own entry, and only that row is deleted', async () => {
+    mockScoutingRows.set(9, { clientId: 'mine-9', scout_email: SCOUT })
+    mockSeasonPrisma.scoutingEntry.findMany.mockImplementation(async (args) => resolveRows(args))
+    expect(await request('DELETE', '/scouting/mine-9', { as: SCOUT })).toBe(200)
+    expect(mockSeasonPrisma.scoutingEntry.deleteMany).toHaveBeenCalledWith({ where: { id: { in: [9] } } })
+  })
+
+  it("owning client id \"42\" does not let a scout delete someone else's row with numeric id 42", async () => {
+    // The id in the URL matches the attacker's own row by client id AND the
+    // victim's row by numeric primary key.
+    mockScoutingRows.set(42, { clientId: 'victim-entry', scout_email: OTHER_SCOUT })
+    mockScoutingRows.set(77, { clientId: '42', scout_email: SCOUT })
+    mockSeasonPrisma.scoutingEntry.findMany.mockImplementation(async (args) => resolveRows(args))
+    expect(await request('DELETE', '/scouting/42', { as: SCOUT })).toBe(403)
+    expect(mockSeasonPrisma.scoutingEntry.deleteMany).not.toHaveBeenCalled()
   })
 
   it('a pit entry can be deleted by the scout who submitted it or a lead', async () => {

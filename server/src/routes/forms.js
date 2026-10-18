@@ -124,7 +124,9 @@ const mapSeasonDbConfig = (row) => ({
 const { requireLeadRole } = require("../utils/requireLeadRole")
 router.use((req, res, next) => {
   if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") {
-    if (/^\/seasons\//.test(req.path)) return requireLeadRole(req, res, next)
+    // Case-insensitive: Express routes match case-insensitively, so
+    // /SEASONS/2026/db reached the handler while skipping this check.
+    if (/^\/seasons(\/|$)/i.test(req.path)) return requireLeadRole(req, res, next)
     return next()
   }
   return requireLeadRole(req, res, next)
