@@ -26,8 +26,10 @@ RUN mkdir -p /app/data/images && chown -R node:node /app/data
 USER node
 EXPOSE 4000
 
-# /health returns 503 when MySQL is unreachable, so this reports a DB outage too.
+# /live, not /health: /health returns 503 while MySQL is unreachable, and an
+# unhealthy container gets restarted (or a deploy rolled back) for an outage
+# a restart can't fix.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
-  CMD curl -fsS "http://127.0.0.1:${PORT}/health" || exit 1
+  CMD curl -fsS "http://127.0.0.1:${PORT}/live" || exit 1
 
 CMD ["node", "src/index.js"]

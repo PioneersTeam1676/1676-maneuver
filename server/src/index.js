@@ -215,7 +215,16 @@ const registerRoutes = (prefix = "") => {
     return `${prefix}${suffix}`
   }
 
-  // Probes MySQL for real: a 503 here means "API up, database down".
+  // Liveness for the container healthcheck: answers as long as the process
+  // can serve requests, deliberately without touching MySQL. If this probed
+  // the database, a brief outage would make Swarm restart a healthy API in a
+  // loop — or roll back a good deploy that happened to overlap the outage.
+  app.get(resolvePath("/live"), (_req, res) => {
+    res.json({ status: "ok" })
+  })
+
+  // Probes MySQL for real: a 503 here means "API up, database down". For
+  // monitoring and humans, not for the container healthcheck (see /live).
   app.get(resolvePath("/health"), async (_req, res) => {
     const database = await checkDatabaseHealth(prisma)
     const healthy = database.status === "ok"
