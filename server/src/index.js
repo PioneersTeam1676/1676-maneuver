@@ -260,18 +260,37 @@ initWebhookSync().catch((error) => {
   console.error("Failed to initialize webhook sync", error)
 })
 
-const shutdown = async () => {
-  try {
-    const { prisma } = require("./db")
-    await prisma.$disconnect()
-  } catch (error) {
-    console.warn("Failed to disconnect Prisma", error)
-  }
-}
-
-process.on("SIGINT", shutdown)
-process.on("SIGTERM", shutdown)
-
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Maneuver API listening on port ${PORT}`)
 })
+
+// Docker/Dokploy stop the container with SIGTERM and SIGKILL it 10 s later.
+// Installing a signal handler disables Node's default exit, and the old
+// handler only disconnected Prisma — so the process never exited and every
+// restart ended in a hard kill that could cut off a match upload mid-write.
+// Now: stop accepting connections, let in-flight requests finish, then exit,
+// with a forced exit just before Docker's deadline.
+const SHUTDOWN_DRAIN_MS = 8000
+let shuttingDown = false
+const shutdown = (signal) => {
+  if (shuttingDown) return
+  shuttingDown = true
+  console.log(`[shutdown] ${signal} received; draining in-flight requests`)
+  setTimeout(() => {
+    console.warn(`[shutdown] requests still open after ${SHUTDOWN_DRAIN_MS}ms; exiting anyway`)
+    process.exit(1)
+  }, SHUTDOWN_DRAIN_MS).unref()
+  server.close(async () => {
+    try {
+      await prisma.$disconnect()
+    } catch (error) {
+      console.warn("Failed to disconnect Prisma", error)
+    }
+    process.exit(0)
+  })
+  // Idle keep-alive sockets would otherwise hold server.close() open.
+  server.closeIdleConnections()
+}
+
+process.on("SIGINT", () => shutdown("SIGINT"))
+process.on("SIGTERM", () => shutdown("SIGTERM"))
