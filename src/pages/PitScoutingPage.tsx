@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { CircleHelp } from "lucide-react";
 
@@ -123,6 +123,9 @@ const PitScoutingPage = () => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [baseErrors, setBaseErrors] = useState<BaseErrors>({});
   const [saving, setSaving] = useState(false);
+  // Set synchronously, unlike `saving`: a fast double tap can fire a second
+  // submit before React re-renders the disabled button, creating a duplicate.
+  const submittingRef = useRef(false);
   const [pageIndex, setPageIndex] = useState(0);
 
   const [teamNumber, setTeamNumber] = useState("");
@@ -398,6 +401,8 @@ const PitScoutingPage = () => {
       return;
     }
 
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setSaving(true);
     try {
       const submission = buildSubmission(form, currentEvent, currentScout);
@@ -411,6 +416,7 @@ const PitScoutingPage = () => {
       console.error("Failed to save pit scouting entry", error);
       toast.error("Failed to save pit scouting entry.");
     } finally {
+      submittingRef.current = false;
       setSaving(false);
     }
   };
