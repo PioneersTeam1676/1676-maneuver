@@ -5,7 +5,9 @@ const { parseJsonValue, stringifyJsonValue, toMsBigInt, fromBigInt } = require("
 const { replaceImageDataUrls } = require("../utils/imagePermalinkStore")
 const { ensureEntryIdentitySchema, updatePitEntryEmail } = require("../utils/entryIdentity")
 const { ensureScoutRegistration } = require("../utils/userRegistration")
-const { requireLeadRole } = require("../utils/requireLeadRole")
+const { requireLeadRole, isLeadEmail } = require("../utils/requireLeadRole")
+const { requireApprovedUser, refuseForeignOverwrite } = require("../utils/requireApprovedUser")
+const { findEntriesOwnedByOthers } = require("../utils/entryIdentity")
 
 const router = express.Router()
 
@@ -38,6 +40,7 @@ const buildEntryData = (entry) => {
 
 router.get(
   "/",
+  requireApprovedUser,
   asyncHandler(async (req, res) => {
     const { teamNumber, eventName, scoutName } = req.query
     const scoutFilter = scoutName || req.query.scout_name
@@ -64,6 +67,7 @@ router.get(
 
 router.get(
   "/stats",
+  requireApprovedUser,
   asyncHandler(async (_req, res) => {
     const { prisma } = await getSeasonPrisma()
     await ensureEntryIdentitySchema(prisma)
@@ -107,6 +111,7 @@ router.post(
     })
     const { prisma } = await getSeasonPrisma(selector)
     await ensureEntryIdentitySchema(prisma)
+    if (await refuseForeignOverwrite(req, res, prisma, "pit", [entry.id])) return
     const data = await replaceImageDataUrls(buildEntryData(entry), {
       year: selector.year,
       eventCode: entry.eventName,
@@ -157,6 +162,7 @@ router.post(
     })
     const { prisma } = await getSeasonPrisma(selector)
     await ensureEntryIdentitySchema(prisma)
+    if (await refuseForeignOverwrite(req, res, prisma, "pit", entries.map((entry) => entry.id))) return
 
     const preparedEntries = await Promise.all(
       entries.map(async (entry) => {
@@ -212,6 +218,12 @@ router.delete(
     })
     const { prisma } = await getSeasonPrisma(selector)
     await ensureEntryIdentitySchema(prisma)
+    // The scout who submitted it, or a lead. Previously any signed-in
+    // account could delete any pit entry.
+    const ownedByOthers = await findEntriesOwnedByOthers(prisma, "pit", [id], req.user?.email)
+    if (ownedByOthers.length && !(await isLeadEmail(req.user?.email))) {
+      return res.status(403).json({ error: "insufficient permissions" })
+    }
     const info = await prisma.pitEntry.deleteMany({ where: { id } })
     res.json({ success: info.count > 0 })
   })

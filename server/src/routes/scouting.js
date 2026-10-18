@@ -6,6 +6,7 @@ const { detectOutliers } = require("../services/outlierDetection")
 const { ensureEntryIdentitySchema, updateScoutingEntryEmail } = require("../utils/entryIdentity")
 const { ensureScoutRegistration } = require("../utils/userRegistration")
 const { requireLeadRole } = require("../utils/requireLeadRole")
+const { requireApprovedUser, refuseForeignOverwrite } = require("../utils/requireApprovedUser")
 
 const router = express.Router()
 
@@ -795,6 +796,7 @@ const toRebuiltCsv = (rows) => {
 
 router.get(
   "/",
+  requireApprovedUser,
   asyncHandler(async (req, res) => {
     const { teamNumber, matchNumber, eventName, scoutName, alliance } = req.query
     const scoutFilter = scoutName || req.query.scout_name
@@ -825,6 +827,7 @@ router.get(
 
 router.get(
   "/stats",
+  requireApprovedUser,
   asyncHandler(async (_req, res) => {
     const { prisma } = await getSeasonPrisma()
     await ensureScoutingSchema(prisma)
@@ -884,6 +887,7 @@ router.post(
     const { prisma } = await getSeasonPrisma(selector)
 
     await ensureScoutingSchema(prisma)
+    if (await refuseForeignOverwrite(req, res, prisma, "scouting", [entry.id])) return
     await resetAutoIncrementIfEmpty(prisma)
 
     const payload = {
@@ -936,6 +940,7 @@ router.post(
     const { prisma } = await getSeasonPrisma(selector)
 
     await ensureScoutingSchema(prisma)
+    if (await refuseForeignOverwrite(req, res, prisma, "scouting", normalizedEntries.map(({ id }) => id))) return
     await resetAutoIncrementIfEmpty(prisma)
 
     const operations = normalizedEntries.map(({ id, normalized }) => {
@@ -975,8 +980,11 @@ router.post(
   })
 )
 
+// Lead+ only: the app never deletes single match entries, so this was
+// an open door for any signed-in account.
 router.delete(
   "/:id",
+  requireLeadRole,
   asyncHandler(async (req, res) => {
     const { id } = req.params
     const selector = resolveSeasonSelector({
@@ -1010,6 +1018,7 @@ router.delete(
 
 router.post(
   "/query",
+  requireApprovedUser,
   asyncHandler(async (req, res) => {
     const { filters = {} } = req.body
     const selector = resolveSeasonSelector({
@@ -1055,6 +1064,7 @@ router.post(
 
 router.get(
   "/export/rebuilt",
+  requireApprovedUser,
   asyncHandler(async (req, res) => {
     const { teamNumber, matchNumber, eventName, scoutName, alliance } = req.query
     const scoutFilter = scoutName || req.query.scout_name
@@ -1113,6 +1123,7 @@ router.get(
 
 router.get(
   "/export",
+  requireApprovedUser,
   asyncHandler(async (req, res) => {
     const { prisma } = await getSeasonPrisma()
     await ensureScoutingSchema(prisma)

@@ -75,7 +75,36 @@ const updatePitEntryEmail = async (prisma, entryId, scoutEmail) => {
   )
 }
 
+const ENTRY_TABLES = {
+  scouting: { table: "scouting_entries", idColumn: "client_id" },
+  pit: { table: "pit_entries", idColumn: "id" },
+}
+const OWNER_LOOKUP_CHUNK = 500
+
+// Of `ids`, the ones that are already stored and were NOT submitted by
+// `email` (including legacy rows with no recorded submitter). Used to stop
+// callers who aren't approved from overwriting someone else's entry via the
+// id-keyed upserts.
+const findEntriesOwnedByOthers = async (prisma, kind, ids, email) => {
+  const { table, idColumn } = ENTRY_TABLES[kind]
+  const owner = normalizeEmail(email)
+  const unique = [...new Set(ids.map(String))]
+  const foreign = []
+  for (let i = 0; i < unique.length; i += OWNER_LOOKUP_CHUNK) {
+    const chunk = unique.slice(i, i + OWNER_LOOKUP_CHUNK)
+    const rows = await prisma.$queryRawUnsafe(
+      `SELECT ${idColumn} AS entry_id, scout_email FROM ${table} WHERE ${idColumn} IN (${chunk.map(() => "?").join(",")})`,
+      ...chunk,
+    )
+    rows.forEach((row) => {
+      if (!owner || normalizeEmail(row.scout_email) !== owner) foreign.push(String(row.entry_id))
+    })
+  }
+  return foreign
+}
+
 module.exports = {
+  findEntriesOwnedByOthers,
   ensureEntryIdentitySchema,
   normalizeEmail,
   updateScoutingEntryEmail,

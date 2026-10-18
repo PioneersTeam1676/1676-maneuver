@@ -62,15 +62,17 @@ const authorizeEmail = async (email, { skipDomainCheck, allowBlocked, allowPendi
   if (explicitRole?.role === "blocked" && !allowBlocked) {
     return { ok: false, status: 403, error: "Forbidden" }
   }
-  if (!skipDomainCheck && allowedDomains.size) {
-    const domain = email.split("@")[1] || ""
-    if (!domain || !allowedDomains.has(domain)) {
-      if (!allowPendingRole && (!explicitRole || explicitRole.role === "pending")) {
-        return { ok: false, status: 403, error: "Forbidden" }
-      }
-    }
+  const domain = email.split("@")[1] || ""
+  const inAllowedDomain = !allowedDomains.size || Boolean(domain && allowedDomains.has(domain))
+  // Team-domain accounts, and outside accounts a lead has given a role.
+  // allowPendingRole lets the others through (so a scout signed in with a
+  // personal account can still submit), but routes use `approved` to keep
+  // them from reading or overwriting the team's data.
+  const domainApproved = inAllowedDomain || Boolean(explicitRole && explicitRole.role !== "pending")
+  if (!skipDomainCheck && !domainApproved && !allowPendingRole) {
+    return { ok: false, status: 403, error: "Forbidden" }
   }
-  return { ok: true, explicitRole }
+  return { ok: true, explicitRole, approved: domainApproved && explicitRole?.role !== "blocked" }
 }
 
 // Every 401 carries a machine-readable reason so an outage can be told apart
@@ -143,6 +145,7 @@ const createApiAuthMiddleware = ({ skipDomainCheck = false, allowBlocked = false
 
     const token = extractToken(req)
     if (token && tokens.has(token)) {
+      req.authz = { approved: true, serviceToken: true }
       return next()
     }
 
@@ -169,6 +172,7 @@ const createApiAuthMiddleware = ({ skipDomainCheck = false, allowBlocked = false
         name: appPayload.name ? String(appPayload.name) : null,
         picture: appPayload.picture ? String(appPayload.picture) : null,
       }
+      req.authz = { approved: authz.approved }
       await touchRecentUser(req.user, authz.explicitRole, skipDomainCheck)
       return next()
     }
@@ -220,9 +224,28 @@ const createApiAuthMiddleware = ({ skipDomainCheck = false, allowBlocked = false
       name: payload?.name ? String(payload.name) : null,
       picture: payload?.picture ? String(payload.picture) : null,
     }
+    req.authz = { approved: authz.approved }
     await touchRecentUser(req.user, authz.explicitRole, skipDomainCheck)
     return next()
   }
 }
 
-module.exports = { createApiAuthMiddleware }
+// Rescue mode (SCOUTING_RESCUE_OPEN) lets match submissions through even when
+// sign-in itself is broken at an event. Callers are never "approved" here: a
+// valid app token still identifies the scout (so they own what they submit),
+// anything else is anonymous. Either way the routes only let them add new
+// entries or re-send their own; reading and overwriting stay closed.
+const SCOUT_RESCUE_PATHS = new Set(["/", "/bulk"])
+
+const createScoutWriteAuthMiddleware = (authMiddleware, { isRescueOpen }) => (req, res, next) => {
+  if (isRescueOpen() && req.method === "POST" && SCOUT_RESCUE_PATHS.has(req.path)) {
+    const payload = verifyAppToken(extractToken(req) || "")
+    req.user = payload?.email ? { email: String(payload.email).toLowerCase() } : undefined
+    req.authz = { approved: false }
+    console.warn(`[scouting-rescue] open POST ${req.originalUrl} (${req.user ? "token" : "anonymous"})`)
+    return next()
+  }
+  return authMiddleware(req, res, next)
+}
+
+module.exports = { createApiAuthMiddleware, createScoutWriteAuthMiddleware }

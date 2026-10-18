@@ -22,7 +22,7 @@ const pushRouter = require("./routes/push")
 const formsRouter = require("./routes/forms")
 const webhookSyncRouter = require("./routes/webhookSync")
 const rescoutRouter = require("./routes/rescout")
-const { createApiAuthMiddleware } = require("./middleware/apiAuth")
+const { createApiAuthMiddleware, createScoutWriteAuthMiddleware } = require("./middleware/apiAuth")
 const { scheduleBackups } = require("./backupManager")
 const { prisma, databaseInfo } = require("./db")
 const { initWebhookSync } = require("./webhookSyncManager")
@@ -201,19 +201,13 @@ const rolesAuthMiddleware = (req, res, next) => {
 const SCOUT_RESCUE_OPEN = ["1", "true", "yes"].includes(
   String(process.env.SCOUTING_RESCUE_OPEN || "").trim().toLowerCase()
 )
-const SCOUT_RESCUE_PATHS = new Set(["/", "/bulk"])
-
-const scoutWriteAuthMiddleware = (req, res, next) => {
-  if (
-    SCOUT_RESCUE_OPEN &&
-    req.method === "POST" &&
-    SCOUT_RESCUE_PATHS.has(req.path)
-  ) {
-    console.warn(`[scouting-rescue] open POST ${req.originalUrl} bypassing auth`)
-    return next()
-  }
-  return scoutDataAuthMiddleware(req, res, next)
+if (SCOUT_RESCUE_OPEN) {
+  console.warn("[scouting-rescue] SCOUTING_RESCUE_OPEN is on: match submissions accepted without sign-in")
 }
+
+const scoutWriteAuthMiddleware = createScoutWriteAuthMiddleware(scoutDataAuthMiddleware, {
+  isRescueOpen: () => SCOUT_RESCUE_OPEN,
+})
 
 const registerRoutes = (prefix = "") => {
   const resolvePath = (suffix) => {

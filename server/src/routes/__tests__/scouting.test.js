@@ -38,7 +38,9 @@ const createApp = () => {
   const app = express()
   app.use(express.json())
   app.use((req, _res, next) => {
+    // What apiAuth sets for a signed-in team scout.
     req.user = { email: 'scout@example.com', name: 'Scout' }
+    req.authz = { approved: true }
     next()
   })
   app.use('/scouting', scoutingRouter)
